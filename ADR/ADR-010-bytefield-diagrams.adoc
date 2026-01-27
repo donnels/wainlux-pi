@@ -100,7 +100,7 @@ Flatpak users: Uses `host-spawn podman` to access host system's podman. No exten
 [source,bash]
 ----
 protocol "Opcode:8,Size:16,Depth:8,Power:16,Data:320"
----
+----
 
 === Bytefield-SVG (npm)
 
