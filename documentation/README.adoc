@@ -40,6 +40,8 @@ include::option-camera.adoc[leveloffset=+1]
 
 include::option-ghidra-mcp-setup.adoc[leveloffset=+1]
 
+include::Laser-examples.adoc[leveloffset=+1]
+
 include::reference-k3_commands.adoc[leveloffset=+1]
 
 include::doing-debugging.adoc[leveloffset=+1]

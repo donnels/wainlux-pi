@@ -1,0 +1,59 @@
+= Laser Engraving Experiments
+ifdef::flag-book[]
+:imagesdir-saved: {imagesdir}
+:localdir-saved: {localdir}
+:imagesdir: ./images
+:localdir: ./documentation
+endif::flag-book[]
+ifndef::flag-book[]
+:toc: right
+:toclevels: 5
+:sectnums:
+:sectnumlevels: 5
+ifdef::github-env[]
+:icons: font
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::github-env[]
+:imagesdir: ../images
+:localdir: .
+endif::flag-book[]
+
+Test results and experiments with various materials under the K6 laser.
+
+== Cork Material
+
+Cork marks easily where paper does not at the same settings.
+
+The pulsed nature of the beam is visible in close-up shots. The following image shows a test QR code pattern.
+
+.Close view of laser engraving a test pattern on cork material
+image::capture_20260127_124112.jpg[]
+
+The pattern is functional but not optimal at low power settings. Text and lines at higher settings show less spotty, more burnt appearance. Initial scale experiments resulted in smaller-than-expected output.
+
+.slightly zoomed out view of laser engraving a test pattern on cork material
+image::capture_20260127_124223.jpg[]
+
+
+== PLA Material
+
+PLA filament responds differently to laser engraving than cork. The pulsed line structure is visible in close-up shots of the tiger test image.
+
+.pulsed line detail on PLA
+image::capture_20260127_124337.jpg[]
+
+In the above image you can clearly see the pulsed nature of the laser and how it melted the PLA.
+
+.Tiger test pattern on PLA
+image::capture.2426611769506763096.jpg[]
+
+The tiger image shows good detail at low to medium power settings. The melted areas have a shiny finish.
+
+ifdef::flag-book[]
+:imagesdir: {imagesdir-saved}
+:localdir: {localdir-saved}
+endif::flag-book
