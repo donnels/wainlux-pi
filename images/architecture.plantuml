@@ -1,0 +1,27 @@
+@startuml
+skinparam backgroundColor #fff/aaf
+skinparam cardbackgroundColor #fff/aaf
+skinparam Shadowing 1
+
+rectangle "Pi Zero W" {
+  card docker
+  card usb
+  rectangle "Container" as container {
+    card app
+    card serial
+  }
+}
+
+card k6
+
+rectangle "Network" {
+  card browser
+}
+
+docker -> container : provides
+browser --> app : HTTP/8080
+app --> serial
+serial --> usb : /dev/ttyUSB0
+usb --> k6 : CP210x
+
+@enduml

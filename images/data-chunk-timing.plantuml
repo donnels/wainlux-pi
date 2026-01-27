@@ -1,0 +1,152 @@
+@startuml
+skinparam backgroundColor #fff/aaf
+skinparam activitybackgroundColor #fff/aaf
+skinparam Shadowing 1
+
+title K6 Data Chunk Timing Loop (Measured)
+
+start
+
+:offset = 0\nchunk_num = 0\nstart_time = now();
+
+while (offset < payload_size?) is (yes)
+  :Extract chunk\n(≤1900 bytes);
+  
+  :Build 0x22 packet\n+ checksum;
+  note right
+    Total: chunk + 4 bytes
+    (opcode + len + payload + chk)
+  end note
+  
+  :**ser.reset_input_buffer()**;
+  note right
+    Flush any status frames
+    (0xFF 0xFF 0x00 XX)
+  end note
+  
+  :retries = 0;
+  
+  repeat
+    :t_start = now();
+    
+    :ser.write(packet);
+    
+    :ser.read(10)\ntimeout=**0.1s**;
+    
+    :elapsed = now() - t_start;
+    note right
+      **MEASURED: 208-210ms**
+      (99% of chunks)
+    end note
+    
+    if (ACK 0x09 received?) then (yes)
+      :offset += 1900;
+      :chunk_num += 1;
+      :Calculate rate & %age;
+      :Print progress **immediately**;
+      note right
+        **OPTIMIZATION:**
+        Progress shown on ACK
+        (was: after retry loop)
+      end note
+      :Break retry loop;
+    else (no)
+      :retries += 1;
+      :sleep(0.2s);
+      note right: Rare: only 1 outlier @ 215ms
+    endif
+  repeat while (retries < 5?) is (yes)
+  -> no;
+  
+  if (retries >= 5?) then (yes)
+    :ERROR: Send STOP;
+    stop
+  endif
+  
+endwhile (no)
+
+:sleep(0.2s);
+
+:0x24 INIT #1\n(2.0s);
+note right
+  Response: **FF FF 00 63**
+  (status frame mixed with ACK)
+end note
+
+:sleep(0.2s);
+
+:0x24 INIT #2\n(2.0s);
+note right
+  Response: **FF FF 00 0A**
+  (status frame debris)
+end note
+
+:sleep(0.5s);
+
+:**START LISTENING**;
+note right
+  **PROBLEM:**
+  Device already burning
+  for 4.9 seconds
+  
+  First status: **37%**
+  (missed 0-36%)
+end note
+
+:wait_for_completion();
+
+stop
+
+legend right
+  **MEASURED TIMING (1600×1600 circle)**
+  
+  Total payload: 320,000 bytes (169 chunks)
+  Upload time: 35.8 seconds
+  Throughput: **8.7 KB/s** (rock solid)
+  
+  **Per chunk breakdown:**
+  • Buffer flush: instant
+  • Write: <1ms
+  • Wait for ACK: **208-210ms** (stable)
+  • Progress print: immediate
+  • Inter-chunk gap: 0ms
+  
+  **Post-data delays:**
+  • 0.2s sleep
+  • INIT #1: 2.0s
+  • 0.2s sleep  
+  • INIT #2: 2.0s
+  • 0.5s sleep
+  • **Total blind time: 4.9s → 0-37% missed**
+  
+  **Serial bottleneck proven:**
+  1900 bytes / 0.209s = 9.09 KB/s theoretical
+  Observed: 8.7 KB/s (95.7% efficiency)
+  115200 baud = 14.4 KB/s max
+  
+  **Optimizations applied:**
+  ✓ Timeout: 5s → 0.1s (50x faster)
+  ✓ Buffer flush: prevents 0x09 0x09 debris
+  ✓ Progress: immediate on ACK receipt
+  ✓ Timestamps: millisecond precision
+  ✓ CSV logging: full timing data
+  
+  **Remaining issue:**
+  Device starts burning during POST-INITs
+  → Miss first 37% of status frames
+  
+  **Fix:** Start listener immediately after
+  last chunk, skip POST-INITs or run async
+endlegend
+
+@enduml
+    waiting for previous ACK?
+  • Reduce timeout if ACKs
+    arrive quickly (<100ms?)
+  • Remove post-data sleeps
+    if device doesn't need them
+  • Batch small chunks
+    (if protocol allows)
+end legend
+
+@enduml

@@ -1,0 +1,85 @@
+= ADR-007: Documentation Format
+
+== Status
+
+Accepted
+
+== Context
+
+.Need documentation that works for
+* GitHub viewing
+* PDF generation
+* Multi-format output
+* Technical diagrams
+
+.Options
+* Markdown
+* AsciiDoc
+* reStructuredText
+* LaTeX
+* Plain text (.txt)
+* HTML/Wiki
+* Word (.docx)
+
+== Decision
+
+Use AsciiDoc.
+
+== Rationale
+
+*GitHub rendering:* Native support. Clean display.
+
+*Multi-format:* Single source → HTML, PDF, EPUB.
+
+*Includes:* Can split large docs into modules. Compose via `include::`.
+
+*Diagrams:* PlantUML integration.
+
+*Book publishing:* Proper chapters, TOC, cross-refs.
+
+*Technical writing:* Callouts, admonitions, source blocks with syntax.
+
+*Alternatives rejected:*
+
+* *Markdown:* Too limited. No includes. Poor PDF output.
+* *LaTeX:* Overkill. Hard to read plain text.
+* *reStructuredText:* Python-centric. Less common.
+* *Plain text:* No formatting. No diagrams. No output formats.
+* *HTML/Wiki:* Hard to version control. Poor plain text readability. Not portable.
+* *Word (.docx):* Proprietary. Microsoft format. Poor Git diffs. Best kept in SharePoint, not Git repos.
+
+== Consequences
+
+=== Positive
+
+* Single source for multiple formats
+* Clean GitHub rendering
+* Professional PDF output
+* Modular documentation structure
+* PlantUML diagrams in-line (possible but not used)
+
+=== Negative
+
+* Less common than Markdown
+* Requires asciidoctor for PDF
+* Steeper learning curve
+
+=== Convention
+
+* Main docs: `.asciidoc`
+* Includes: `.adoc`
+* Images: PlantUML in `images/` dir
+* Formatting: `include-formatting-book-header.adoc`
+
+== Implementation
+
+.Files
+* `README.asciidoc` - Entry point
+* `documentation/*.adoc` - Modular sections
+* `images/*.plantuml` - Diagrams
+* `ADR/*.adoc` - This file and others
+
+.Build
+* GitHub renders automatically
+* Local: `asciidoctor README.asciidoc`
+* PDF: `asciidoctor-pdf README.asciidoc`

@@ -1,0 +1,15 @@
+;; K6 Reset MCU (0xFE)
+;; 5-byte command to reset MCU and enter IAP bootloader mode
+
+(defattrs :bg-cmd {:fill "#e8f4f8"})
+
+(draw-column-headers)
+
+(draw-box "0xFE (Opcode)" [:box-first {:span 8} :bg-cmd])
+(draw-box "0x00" [:box-related {:span 8} :bg-cmd])
+(draw-box "0x05 (Len)" [:box-related {:span 8} :bg-cmd])
+(draw-box "0x00" [:box-related {:span 8} :bg-cmd])
+
+(next-row)
+(draw-box "Checksum" [{:span 8} :bg-cmd])
+(draw-gap 24)

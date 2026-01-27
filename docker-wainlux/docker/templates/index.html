@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wainlux K6</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: monospace;
+            background: #000;
+            color: #fff;
+            padding: 20px;
+        }
+        .container { max-width: 600px; margin: 0 auto; }
+        h1 { margin-bottom: 20px; border-bottom: 1px solid #fff; padding-bottom: 10px; }
+        .status {
+            margin: 20px 0;
+            padding: 10px;
+            border: 1px solid #fff;
+        }
+        .status.disconnected { border: 3px solid #fff; font-weight: bold; }
+        .section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #fff;
+        }
+        .section h2 {
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+        .section a {
+            color: #fff;
+            text-decoration: none;
+        }
+        .section a:hover { text-decoration: underline; }
+        button {
+            background: #000;
+            color: #fff;
+            border: 1px solid #fff;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            font-family: monospace;
+        }
+        button:hover { background: #fff; color: #000; }
+        button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        input[type="file"] {
+            display: block;
+            margin: 10px 0;
+            color: #fff;
+        }
+        #message {
+            margin: 10px 0;
+            padding: 10px;
+            display: none;
+        }
+        #message.show { display: block; }
+        #message.error { border: 3px solid #fff; font-weight: bold; }
+        #message.success { border: 1px solid #fff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WAINLUX K6</h1>
+        
+        <div class="section">
+            <a href="/calibration">→ CALIBRATION &amp; TESTING</a>
+        </div>
+        
+        <div id="status" class="status disconnected">
+            DISCONNECTED
+        </div>
+        
+        <div class="section">
+            <h2>CONNECTION</h2>
+            <button id="btnConnect">CONNECT</button>
+            <button id="btnDisconnect" disabled>DISCONNECT</button>
+        </div>
+        
+        <div class="section">
+            <h2>TEST</h2>
+            <button id="btnBounds" disabled>DRAW BOUNDS</button>
+            <button id="btnHome" disabled>HOME</button>
+            <button id="btnStop">EMERGENCY STOP</button>
+        </div>
+        
+        <div class="section">
+            <h2>ENGRAVE</h2>
+            <input type="file" id="imageFile" accept="image/*" disabled>
+            <button id="btnEngrave" disabled>BURN</button>
+        </div>
+        
+        <div id="message"></div>
+    </div>
+    
+    <script>
+        // Main app code
+        let connected = false;
+        
+        const status = document.getElementById('status');
+        const btnConnect = document.getElementById('btnConnect');
+        const btnDisconnect = document.getElementById('btnDisconnect');
+        const btnBounds = document.getElementById('btnBounds');
+        const btnHome = document.getElementById('btnHome');
+        const btnStop = document.getElementById('btnStop');
+        const btnEngrave = document.getElementById('btnEngrave');
+        const imageFile = document.getElementById('imageFile');
+        const message = document.getElementById('message');
+        
+        function showMessage(text, isError = false) {
+            message.textContent = text;
+            message.className = isError ? 'show error' : 'show success';
+            setTimeout(() => message.className = '', 3000);
+        }
+        
+        let k6Version = '';
+        
+        function updateUI() {
+            btnConnect.disabled = connected;
+            btnDisconnect.disabled = !connected;
+            btnBounds.disabled = !connected;
+            btnHome.disabled = !connected;
+            btnEngrave.disabled = !connected;
+            imageFile.disabled = !connected;
+            
+            if (connected) {
+                status.textContent = k6Version ? `CONNECTED TO K6 ${k6Version}` : 'CONNECTED';
+                status.className = 'status';
+            } else {
+                status.textContent = 'DISCONNECTED';
+                status.className = 'status disconnected';
+            }
+        }
+        
+        async function apiCall(endpoint, method = 'POST', body = null) {
+            try {
+                const opts = { method };
+                if (body) opts.body = body;
+                
+                const res = await fetch(endpoint, opts);
+                const data = await res.json();
+                
+                if (!res.ok || !data.success) {
+                    throw new Error(data.error || 'Request failed');
+                }
+                
+                return data;
+            } catch (err) {
+                showMessage(err.message, true);
+                throw err;
+            }
+        }
+        
+        btnConnect.addEventListener('click', async () => {
+            const data = await apiCall('/api/connect');
+            connected = data.connected;
+            k6Version = data.version || '';
+            updateUI();
+            showMessage(`Connected to K6 ${k6Version}`);
+        });
+        
+        btnDisconnect.addEventListener('click', async () => {
+            await apiCall('/api/disconnect');
+            connected = false;
+            k6Version = '';
+            updateUI();
+            showMessage('Disconnected');
+        });
+        
+        btnBounds.addEventListener('click', async () => {
+            showMessage('Drawing bounds...');
+            await apiCall('/api/test/bounds');
+            showMessage('Bounds drawn');
+        });
+        
+        btnHome.addEventListener('click', async () => {
+            await apiCall('/api/test/home');
+            showMessage('Homed');
+        });
+        
+        btnStop.addEventListener('click', async () => {
+            // EMERGENCY STOP - no confirmation, immediate action
+            try {
+                await apiCall('/api/test/stop');
+                showMessage('STOP command sent');
+            } catch (err) {
+                showMessage('Stop failed: ' + err.message, true);
+            }
+        });
+        
+        btnEngrave.addEventListener('click', async () => {
+            if (!imageFile.files[0]) {
+                showMessage('Select an image', true);
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('image', imageFile.files[0]);
+            
+            showMessage('Engraving...');
+            await apiCall('/api/engrave', 'POST', formData);
+            showMessage('Engraved');
+        });
+        
+        // Initial state
+        updateUI();
+    </script>
+</body>
+</html>

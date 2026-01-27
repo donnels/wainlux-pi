@@ -1,0 +1,170 @@
+= Documentation Structure
+ifdef::flag-book[]
+:imagesdir-saved: {imagesdir}
+:localdir-saved: {localdir}
+:imagesdir: ./images
+:localdir: ./includes
+endif::flag-book[]
+ifndef::flag-book[]
+:toc: right
+:toclevels: 5
+:sectnums:
+:sectnumlevels: 5
+ifdef::github-env[]
+:icons: font
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::github-env[]
+:imagesdir: ../images
+:localdir: .
+endif::flag-book[]
+
+== AI executive summary
+This document explains the project's documentation structure using AsciiDoc. It starts with why AsciiDoc over Markdown (flexibility for multiple formats, GitHub rendering), what AsciiDoc offers (includes, multi-format output, editing tools), and how to structure docs by splitting into main .asciidoc and included .adoc files with conditional formatting via flag-book. It covers directory handling (imagesdir, localdir) with save/restore patterns for standalone vs. included viewing, including code examples for setup (directly under title headings) and restore (at file end). The goal is coherent, near-code docs following standards like TOGAF DevOps guides. All statements are verified as true or defensible.
+
+== Why AsciiDoc?
+Why not Markdown? It is the default for READMEs.
+To default means to fail. If no other is there then use this is what it means. it means we've failed if we use MD. My personal interpretation that is true for github.
+
+Markdown is GitHub's default for READMEs. AsciiDoc is superior for complex docs. GitHub renders .adoc if present.
+
+I prefer AsciiDoc for its ability to convert to PDF, standalone HTML, or other formats. GitHub displays .adoc over .md if both exist.
+
+Asciidoctor supports multiple outputs. GitHub prioritizes .adoc over .md.
+
+AsciiDoc supports structured documents with includes, images, and links.
+
+== What is AsciiDoc?
+AsciiDoc allows includes like `include::filename[leveloffset=+2]`. Split documents into multiple files for easier editing near code, following standards like TOGAF for DevOps.
+
+TOGAF has DevOps guides, such as "Using TOGAF to Define and Govern a DevOps Environment," recommending docs near code.
+
+It supports images, links, and parsing into formats via Asciidoctor and Asciidoctor-PDF. Even DOCX if needed.
+
+Edit in VS Code with preview. Parse in GitHub Actions for Pages.
+
+Extensions like AsciiDoc available. Actions can use asciidoctor.
+
+Add templates for styling. Focus on content, less mouse use.
+
+In the end the distributed docs become one coherent document.
+
+== Structure
+Split into files. Main file as .asciidoc, includes as .adoc.
+
+Set `:flag-book: true` in main doc.
+
+Use `ifdef` and `ifndef` in includes for standalone viewing with proper formatting.
+
+.Overview of doc structure logic
+image::documentation-structure.png[]
+
+== Handling Directories in Includes
+Save and restore `imagesdir` and `localdir` in each .adoc.
+
+Set based on `flag-book` and `github-env`.
+
+=== Setup for included docs (chapters, sections)
+
+.At top of included .adoc file
+[source,asciidoc]
+----
+// Directly under = title heading, no blank lines
+\ifdef::flag-book[]
+// Save variables and adjust for building from main doc
+// Save current
+:imagesdir-saved: {imagesdir}
+:localdir-saved: {localdir}
+// set in context from main doc
+:localdir: ./subdir
+:imagesdir: ./subdir/images
+\endif::flag-book[]
+\ifndef::flag-book[]
+//add standalone formatting here
+:toc: right
+:toclevels: 5
+:sectnums:
+:sectnumlevels: 5
+// GitHub emoji icons for admonition blocks
+\ifdef::github-env[]
+:icons: font
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+\endif::github-env[]
+\ifdef::github-env[]
+//Add github formatting like icons and stuff here
+\endif::github-env[]
+\endif::flag-book[]
+// leave a blank line here:
+
+// Content starts here
+....
+----
+
+=== Restore at End
+
+.At end of included .adoc file
+[source,asciidoc]
+----
+// END of File
+// leave a blank line here:
+
+\ifdef::flag-book[]
+// At end of file   
+// Restore
+:imagesdir: {imagesdir-saved}
+:localdir: {localdir-saved}
+\endif::flag-book[]
+----
+
+== Main Document Setup
+The main .asciidoc file sets `:flag-book: true` and includes sub-docs.
+
+GitHub formatting must be inline, as GitHub does not load includes. Add GitHub-specific attributes or content directly in the main file.
+
+HTML/PDF/etc styles can be as includes, since processing tools handle them.
+
+
+
+=== Example Main doc Styling
+
+.Top of main .asciidoc file
+[source,asciidoc]
+----
+// directly under = title heading, no blank lines
+// Main document styling
+:flag-book: true
+//PDF styling
+:pdf-theme: custom
+:pdf-fontsdir: fonts/
+:pdf-style: theme.yml
+//Example HTML Styling
+:stylesheet: custom.css
+:linkcss:
+// Example GitHub Formatting with emoji icons for admonition blocks
+\ifdef::github-env[]
+:icons: font
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+\endif::[]
+// leave a blank line here:
+
+// Content starts here
+....
+----
+
+The emoji icon captions customize how NOTE, TIP, IMPORTANT, CAUTION, and WARNING admonition blocks render on GitHub. See https://github.com/jmriff/asciidoc for reference.
+
+ifdef::flag-book[]
+:imagesdir: {imagesdir-saved}
+:localdir: {localdir-saved}
+endif::flag-book[]

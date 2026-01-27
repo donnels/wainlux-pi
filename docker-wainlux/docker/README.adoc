@@ -1,0 +1,34 @@
+= Wainlux K6 Application
+
+Flask app for K6 control.
+
+== Structure
+
+----
+docker/
+├── Dockerfile
+├── requirements.txt
+├── app/
+│   ├── main.py      # Flask + routes
+│   └── k6.py        # Protocol driver
+├── templates/
+│   └── index.html   # Web UI
+└── static/
+----
+
+== Dependencies
+
+----
+include::requirements.txt[]
+----
+
+== API
+
+* `GET /` - UI
+* `POST /api/connect` - Connect
+* `POST /api/disconnect` - Disconnect
+* `POST /api/test/home` - Home
+* `POST /api/test/bounds` - Test pattern
+* `POST /api/engrave` - Engrave image
+* `GET /api/status` - Status
+

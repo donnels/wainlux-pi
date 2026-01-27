@@ -1,0 +1,108 @@
+= Camera Setup
+ifdef::flag-book[]
+:imagesdir-saved: {imagesdir}
+:localdir-saved: {localdir}
+:imagesdir: ./images
+:localdir: ./documentation
+endif::flag-book[]
+ifndef::flag-book[]
+:toc: right
+:toclevels: 5
+:sectnums:
+:sectnumlevels: 5
+ifdef::github-env[]
+:icons: font
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::github-env[]
+:imagesdir: ../images
+:localdir: .
+endif::flag-book[]
+//SWD
+
+Camera documentation for visual verification of laser tests.
+
+[NOTE]
+====
+This is just an optional part of the setup. The camera is not required for laser operation.
+While I attached the camera I then decided to put it on the YAGNI list.
+It's here because I will use it later so might as well keep the notes.
+Consider it an unverified bonus feature that could be more but isn't anything yet.
+I'm mostly peed off with the fiddly camera and cable and now you see it now you don't so it's out for lunch.
+====
+
+== Hardware
+
+Camera: OV5647 (Pi Camera Module v1, 5MP)
+Connection: CSI ribbon cable to Pi Zero W camera port
+
+== Verify Camera
+
+[source,bash]
+----
+# Check detection
+rpicam-still --list-cameras
+----
+
+[source,console]
+----
+Available cameras
+-----------------
+0 : ov5647 [2592x1944 10-bit GBRG] (/base/soc/i2c0mux/i2c@1/ov5647@36)
+    Modes: 'SGBRG10_CSI2P' : 640x480 [58.92 fps - (16, 0)/2560x1920 crop]
+                             1296x972 [46.34 fps - (0, 0)/2592x1944 crop]
+                             1920x1080 [32.81 fps - (348, 434)/1928x1080 crop]
+                             2592x1944 [15.63 fps - (0, 0)/2592x1944 crop]
+----
+
+== Capture Test Image
+
+[source,bash]
+----
+# Local capture on Pi
+rpicam-still -n -t 1 --rotation 180 -o test.jpg
+
+# Remote capture via SSH (no preview)
+ssh user@pi-ip "rpicam-still -n -t 1 --rotation 180 -o test.jpg"
+
+# Download to local machine
+scp user@pi-ip:test.jpg ./
+----
+
+Key flags:
+
+* `-n` / `--nopreview`: No display window (required for SSH)
+* `-t 1`: 1ms timeout (instant capture)
+* `--rotation 180`: Camera mounted upside-down
+* `--width 1296 --height 972`: Lower resolution for faster transfer
+
+== Test Images
+
+.Original camera orientation (upside-down)
+image::camera_test.jpg[Camera test - original orientation]
+
+.Corrected with 180° rotation
+image::camera_test_rotated.jpg[Camera test - rotated 180°]
+
+Camera is physically mounted upside-down. Use `--rotation 180` flag for correct orientation.
+
+== Use Camera for Laser Testing
+
+[source,bash]
+----
+# Capture before/after images
+ssh user@pi-ip "rpicam-still -n -t 1 --rotation 180 -o before.jpg"
+# Run laser test here
+ssh user@pi-ip "rpicam-still -n -t 1 --rotation 180 -o after.jpg"
+
+# Or timestamped captures
+ssh user@pi-ip "rpicam-still -n -t 1 --rotation 180 -o test_\$(date +%Y%m%d_%H%M%S).jpg"
+----
+
+ifdef::flag-book[]
+:imagesdir: {imagesdir-saved}
+:localdir: {localdir-saved}
+endif::flag-book[]

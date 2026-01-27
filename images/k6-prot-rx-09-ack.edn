@@ -1,0 +1,8 @@
+;; K6 ACK Response (0x09)
+;; Single-byte success acknowledgment
+
+(defattrs :bg-ack {:fill "#d0ffd0"})
+
+(draw-column-headers)
+
+(draw-box "0x09 (ACK)" [{:span 8} :bg-ack])

@@ -1,0 +1,54 @@
+= ADR-001: Base Image Selection
+
+== Status
+
+Accepted
+
+== Context
+
+Pi Zero W is ARMv6. *Not a choice - it's what we have.* Hardware constraint, not decision.
+
+Given Pi Zero W, need Docker base image.
+
+.Options considered
+* Alpine Linux
+* Official Raspberry Pi images (raspbian/bullseye)
+* Balena IoT images
+* Debian slim
+* Ubuntu (if ARMv7+ available)
+
+== Decision
+
+Use `balenalib/raspberry-pi:bullseye`.
+
+== Rationale
+
+*ARMv6 support:* Pi Zero W requirement. Alpine dropped ARMv6 in 3.13+. Ubuntu doesn't support ARMv6.
+
+*Size:* 120MB vs 200MB+ official Raspberry Pi images. Debian slim 180MB.
+
+*Tested:* Balena production-tested for IoT. Official images stable but heavier.
+
+*Build time:* Pre-built layers save hours on first build vs building from scratch.
+
+*Maintenance:* Balena actively maintains ARMv6 images for IoT fleet.
+
+Considered Alpine (smallest) but ARMv6 support dropped. Would need to pin old version (risky).
+
+Official Raspberry Pi images work fine but 80MB larger for minimal gain.
+
+Debian slim is middle ground but not IoT-optimized.
+
+== Consequences
+
+.*Positive*
+* Stable ARMv6 platform
+* Smaller image = faster builds
+* IoT-optimized base
+* Active maintenance
+
+.*Negative*
+* Balena-specific (less common than Alpine/Debian)
+* Locked to Balena update schedule
+
+*Trade-off accepted:* ARMv6 support and size win outweigh platform specificity.

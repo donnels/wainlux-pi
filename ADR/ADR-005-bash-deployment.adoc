@@ -1,0 +1,115 @@
+= ADR-005: Bash Scripts for Deployment
+
+== Status
+
+Accepted
+
+== Context
+
+Single Pi Zero W. One Docker container. Need deployment automation?
+Furher background.: IF someone else wants to use this simplicity will be better.
+
+Options considered:
+
+* OpenTofu/Terraform
+* Ansible
+* Balena
+* Bash scripts
+* Make
+
+== Decision
+
+Use bash scripts.
+
+== Rationale
+
+=== Requirements
+* Deploy code to one device
+* keep it standalone
+* Build Docker image
+* Start container
+* View logs
+* Low complexity
+
+=== Why Bash
+
+Simple. Direct. Fast.
+
+50 lines does the job. No dependencies. Easy to debug. Runs anywhere.
+
+OpenTofu adds 500+ lines. Needs state management. Overkill for one device.
+
+Ansible better than Tofu. Still too much for one device.
+
+Balena for fleets. We have one Pi.
+
+Make just wraps bash. No gain.
+
+=== Trade-offs
+
+*Pros:*
+
+* Zero dependencies
+* Fast execution
+* Easy debugging
+* Self-contained
+* Works in Flatpak
+* Clear error messages
+* No state files
+* No abstractions
+
+*Cons:*
+
+* Manual for multiple devices
+* No drift detection
+* No declarative model
+* Harder to test
+
+=== When to Reconsider
+
+Switch to Ansible at 3+ devices.
+
+Never use Terraform/OpenTofu for this.
+
+== Consequences
+
+=== Positive
+
+* Deployment works now
+* Anyone can read the script
+* Easy to modify
+* No new tools to learn
+* Follows KISS principle
+
+=== Negative
+
+* Manual sync for multi-device
+* Script must handle errors
+* No automatic rollback
+
+=== Mitigation
+
+* Add error handling to scripts
+* Keep scripts short
+* Document commands
+* Use systemd for auto-restart
+
+== Implementation
+
+Scripts in `scripts/`:
+
+* `deploy_to_pi.sh` - Full deployment
+* `sync_with_pi.sh` - Bidirectional code sync (push/pull)
+* `quick_deploy.sh` - Skip sync
+
+All use standard tools: `ssh`, `scp`, `tar`, `docker`.
+
+== Notes
+
+This is the right tool for the job. Simple problem. Simple solution.
+
+IaC tools solve different problems: multi-region cloud deployments, hundreds of resources, team coordination.
+
+We have: one Pi, one container, one person.
+
+Bash wins.

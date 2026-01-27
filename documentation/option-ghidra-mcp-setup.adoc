@@ -1,0 +1,189 @@
+= Ghidra MCP Setup
+ifdef::flag-book[]
+:imagesdir-saved: {imagesdir}
+:localdir-saved: {localdir}
+:imagesdir: ./images
+:localdir: ./documentation
+endif::flag-book[]
+ifndef::flag-book[]
+:toc: right
+:toclevels: 5
+:sectnums:
+:sectnumlevels: 5
+ifdef::github-env[]
+:icons: font
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::github-env[]
+:imagesdir: ../images
+:localdir: .
+endif::flag-book[]
+//SWD
+
+Connect Ghidra reverse engineering (in a container) to GitHub Copilot in VS Code via the network as opposed to stdio.
+
+== AIM
+The main aim here is to avoid looking at vendor code directly (clean room principle).
+A local installation of Ghidra was considered but would imply that the user sees the vendors code through ghidra.
+In this case the user asks an LLM to interact with ghidra to answer questions like "what is used as ACK?".
+No code is directly viewed by the user. The LLM instructions forbid showing vendor code.
+
+[NOTE]
+====
+I'd love to say that I'm an amazing reverse engineer... BUT!
+In this case I cannot as I really didn't have to decipher *ANY* code at all.
+Yes I spent time interacting with an LLM... and I suppose that's cool in itself.
+I now know that ghidra plus MCP plus LLM is quite a potent mix.
+I don't have a clue what the Vendor put in the java apart that from using it showed a lot of badly translated and not translated chinese.
+====
+
+As an aside the cost for the LLM use was something like 2-6$ for the entire protocol extraction and that number is rough because I forgot to check until half way through.
+
+== Requirements
+
+* VS Code 1.102+
+* GitHub Copilot access
+* Podman or Docker (I used podman on a steamdeck)
+
+== Run Server
+
+[source,bash]
+----
+podman run -d --name ghidra-mcp -p 8000:8000 \
+  -v /path/to/binaries:/binaries:ro \
+  ghcr.io/clearbluejar/pyghidra-mcp \
+  -t sse -o 0.0.0.0 \
+  /binaries/your_binary
+----
+
+Server analyzes binary on startup. Wait 30-60s for large binaries.
+
+== Configure VS Code
+
+.Create `.vscode/mcp.json`:
+[source,json]
+----
+{
+  "servers": {
+    "pyghidra-mcp": {
+      "type": "sse",
+      "url": "http://127.0.0.1:8000/sse"
+    }
+  }
+}
+----
+
+.Optional: 
+* Enable autostart in `.vscode/settings.json`:
+
+[source,json]
+----
+{
+  "chat.mcp.autostart": true
+}
+----
+
+== Verify
+
+1. Reload VS Code: `Ctrl+Shift+P` → "Developer: Reload Window"
+2. Open Chat: `Ctrl+Alt+I`
+3. Click Tools button
+4. Look for `pyghidra-mcp` tools
+
+== Available Tools
+
+* `decompile_function` - Show pseudo-C code
+* `search_symbols` - Find function/variable names
+* `list_imports` - Show imported functions
+* `list_exports` - Show exported functions
+* `search_strings` - Find text in binary
+* `gen_callgraph` - Generate call graphs
+* `import_binary` - Add more binaries
+
+== Troubleshoot
+
+.Check server logs:
+[source,bash]
+----
+podman logs ghidra-mcp
+----
+
+.Check VS Code logs: 
+* `Ctrl+Shift+P` → "Developer: Toggle Developer Tools" → Console tab
+
+.Restart server:
+[source,bash]
+----
+podman restart ghidra-mcp
+----
+
+== Configuration Keys
+
+[options="header"]
+|===
+| Key | Value | Purpose
+| `servers` | Object | MCP server definitions (NOT `mcpServers`)
+| `type` | `"sse"` or `"stdio"` or `"http"` | Transport protocol
+| `url` | `"http://..."` | Server endpoint for HTTP/SSE
+| `command` | String | Executable for stdio transport
+| `args` | Array | Command arguments for stdio
+|===
+
+== Stop Server
+
+[source,bash]
+----
+podman stop ghidra-mcp
+podman rm ghidra-mcp
+----
+
+== References
+
+* link:https://code.visualstudio.com/docs/copilot/customization/mcp-servers[VS Code MCP User Guide]
+* link:https://code.visualstudio.com/api/extension-guides/ai/mcp[VS Code MCP Developer Guide]
+* link:https://github.com/clearbluejar/pyghidra-mcp[PyGhidra MCP Server]
+* link:https://modelcontextprotocol.io/[Model Context Protocol Specification]
+
+
+== Discovery Methodology
+
+.These opcodes were discovered through:
+* **Ghidra decompilation** of vendor Java binaries
+* **MCP (Model Context Protocol)** for automated binary analysis
+* **LLM interaction** with Ghidra (no direct code viewing by user)
+* **Clean-room principles** maintained throughout
+
+=== Opcodes Discovered
+
+.The following opcodes were found via Ghidra analysis and added to the main protocol documentation:
+* **0x06/0x07** - Crosshair toggle (positioning laser on/off)
+* **0x16** - Stop/Cancel (emergency stop)
+* **0x20** - Set Bounding Box (11 bytes with centering formula)
+* **0x25** - Set Speed/Power (11 bytes, precedence vs header unknown)
+* **0x28** - Set Focus/Angle (11 bytes, "weak light power" parameter)
+
+=== Key Findings
+
+* **Centering formula confirmed:** `center_x = x + 67 + width/2`, `center_y = y + height/2`
+* **Focus parameter scaling:** UI value × 2 (default 10 → transmitted as 20)
+* **All commands use ACK protocol** except job header (0x23)
+* **11-byte commands** follow pattern: opcode, 0x00, 0x0B, parameters, trailing zeros
+
+=== Discovery Process Documentation
+
+.The Ghidra/MCP approach allowed protocol extraction without viewing vendor source:
+. Import vendor binaries to Ghidra project
+. Use MCP tools to query Ghidra via LLM
+. Extract protocol patterns, opcodes, parameter structures
+. Verify findings against USB captures where possible
+. Document observed behavior, not implementation
+
+This maintained clean-room compliance while accelerating protocol discovery.
+
+ifdef::flag-book[]
+:imagesdir: {imagesdir-saved}
+:localdir: {localdir-saved}
+endif::flag-book[]

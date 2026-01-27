@@ -1,0 +1,11 @@
+;; K6 Heartbeat Frame (Processing)
+;; 4-byte frame sent every ~4s during job header processing
+
+(defattrs :bg-heartbeat {:fill "#f0e8ff"})
+
+(draw-column-headers)
+
+(draw-box "0xFF (Marker)" [:box-first {:span 8} :bg-heartbeat])
+(draw-box "0xFF (Marker)" [:box-related {:span 8} :bg-heartbeat])
+(draw-box "0xFF (Marker)" [:box-related {:span 8} :bg-heartbeat])
+(draw-box "0xFE (Busy)" [:box-last {:span 8} :bg-heartbeat])

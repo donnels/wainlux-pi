@@ -1,0 +1,80 @@
+= WAINLUX K6 Web abstraction on Pi Zero W
+// Repository configuration - set these base variables to generate all URLs
+:repo-org: donnels
+:repo-name: wainlux-pi
+:repo-file: README
+// Derived URLs from base variables
+:repo-url: https://github.com/{repo-org}/{repo-name}
+:pages-url: https://{repo-org}.github.io/{repo-name}
+:html-docs-url: {pages-url}/{repo-file}.html
+:pdf-docs-url: {pages-url}/{repo-file}.pdf
+ifdef::github-env[]
+:icons: font
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::github-env[]
+:imagesdir: ./images
+:localdir: .
+include::includes/include-formatting-book-header.adoc[]
+
+ifdef::github-env[]
+// Table of Contents placement (manual for both GitHub and PDF)
+toc::[]
+image::../includes/laser-warning.svg[align=center,pdfwidth=20%]
+
+*Other formats:* icon:html5[] {html-docs-url}[HTML] | icon:file-pdf-o[] {pdf-docs-url}[PDF]
+endif::github-env[]
+ifndef::github-env[]
+include::includes/include-formatting-content-html-pdf.adoc[]
+endif::github-env[]
+
+== Summary
+
+Open-source host software for operating Wainlux K-series laser engravers using an independently developed protocol implementation.
+
+[NOTE]
+====
+This project is an independently developed, clean-room implementation created through analysis of publicly observable behavior and legally obtained software.
+It is not affiliated with or endorsed by Wainlux.
+====
+
+.Is:
+* Host-side control software
+* Protocol implementation
+* Interoperability tool
+
+.*Is not*:
+* [line-through]#Firmware replacement#
+* [line-through]#Vendor software redistribution#
+* [line-through]#Reverse-engineered source release#
+
+Pi Zero W controls Wainlux K6 laser via USB serial. Docker containerized Flask app. Web UI. Binary protocol.
+
+== WARNINGS
+
+[WARNING]
+====
+* Laser safety: *always* wear appropriate laser safety glasses.
+* Fire hazard: do not run unattended; have a fire-safe surface.
+** Keep a fire extinguisher handy, or a fire blanket.
+* Use a smoke detector.
+====
+
+// Documentation - Main content
+include::documentation/README.adoc[leveloffset=+1]
+
+[appendix]
+include::ADR/README.adoc[leveloffset=+1]
+
+[appendix]
+include::includes/include-structure-documentation.adoc[leveloffset=+1]
+
+[appendix]
+include::includes/include-glossary.adoc[leveloffset=+1]
+
+[appendix]
+include::includes/include-license.adoc[leveloffset=+1]
+

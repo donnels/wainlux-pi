@@ -1,0 +1,61 @@
+= Architecture Decision Records
+ifdef::flag-book[]
+:imagesdir-saved: {imagesdir}
+:localdir-saved: {localdir}
+:imagesdir: ./images
+:localdir: ./ADR
+endif::flag-book[]
+ifndef::flag-book[]
+:toc: right
+:toclevels: 5
+:sectnums:
+:sectnumlevels: 5
+ifdef::github-env[]
+:icons: font
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::github-env[]
+:imagesdir: ../images
+:localdir: .
+endif::flag-book[]
+
+All ADRs for the Wainlux K6 project.
+
+== Format
+
+.Each ADR follows standard structure
+* Status (Proposed/Accepted/Deprecated/Superseded)
+* Context (the problem)
+* Decision (what we chose)
+* Rationale (why)
+* Consequences (trade-offs)
+
+== Records
+
+include::ADR-001-base-image.adoc[leveloffset=+2]
+
+include::ADR-002-serial-communication.adoc[leveloffset=+2]
+
+include::ADR-003-flask.adoc[leveloffset=+2]
+
+include::ADR-004-no-database.adoc[leveloffset=+2]
+
+include::ADR-005-bash-deployment.adoc[leveloffset=+2]
+
+include::ADR-006-clean-room.adoc[leveloffset=+2]
+
+include::ADR-007-asciidoc.adoc[leveloffset=+2]
+
+include::ADR-008-ghidra-mcp.adoc[leveloffset=+2]
+
+include::ADR-009-docker-containerization.adoc[leveloffset=+2]
+
+include::ADR-010-bytefield-diagrams.adoc[leveloffset=+2]
+
+ifdef::flag-book[]
+:imagesdir: {imagesdir-saved}
+:localdir: {localdir-saved}
+endif::flag-book[]

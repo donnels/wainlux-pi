@@ -1,0 +1,104 @@
+name: Build Documentation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'images/*.plantuml'
+      - 'images/*.edn'
+      - '**.adoc'
+      - '**.asciidoc'
+      - '.github/workflows/build-docs.yml'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-docs:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Set up Java for PlantUML
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      
+      - name: Install PlantUML and Graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+          wget https://github.com/plantuml/plantuml/releases/download/v1.2024.8/plantuml-1.2024.8.jar -O plantuml.jar
+          echo "PLANTUML_JAR=$PWD/plantuml.jar" >> $GITHUB_ENV
+      
+      - name: Generate PlantUML diagrams
+        run: |
+          for file in images/*.plantuml; do
+            if [ -f "$file" ]; then
+              basename="${file%.plantuml}"
+              echo "Generating $basename.png"
+              java -jar $PLANTUML_JAR "$file"
+            fi
+          done
+      
+      - name: Set up Node.js for bytefield-svg
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install bytefield-svg
+        run: npm install -g bytefield-svg
+      
+      - name: Set up Python for gradient script
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Generate bytefield diagrams
+        run: |
+          # Copy gradient script
+          cp docker-bytefield/add_svg_background.py /tmp/
+          
+          # Generate SVG diagrams in images/ directory
+          for file in images/k6-prot-*.edn; do
+            if [ -f "$file" ]; then
+              basename=$(basename "$file" .edn)
+              echo "Generating $basename.svg"
+              bytefield-svg "$file" -o "images/$basename.svg"
+              python3 /tmp/add_svg_background.py "images/$basename.svg"
+            fi
+          done
+      
+      - name: Build AsciiDoc HTML
+        uses: docker://asciidoctor/docker-asciidoctor:latest
+        with:
+          entrypoint: asciidoctor
+          args: >
+            -a allow-uri-read
+            -a data-uri
+            -o docs/README.html
+            README.asciidoc
+      
+      - name: Build AsciiDoc PDF
+        uses: docker://asciidoctor/docker-asciidoctor:latest
+        with:
+          entrypoint: asciidoctor-pdf
+          args: >
+            -a allow-uri-read
+            -a data-uri
+            -o docs/README.pdf
+            README.asciidoc
+      
+      - name: Deploy to GitHub Pages
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
+          keep_files: false

@@ -1,0 +1,79 @@
+= ADR-008: Ghidra via MCP for Analysis
+
+== Status
+
+Accepted
+
+== Context
+
+Need to verify protocol understanding without directly reading vendor code.
+
+.Options
+* Manual Ghidra analysis (direct code reading)
+* IDA Pro decompilation
+* Ghidra via MCP with LLM intermediary
+* Skip verification entirely
+
+== Decision
+
+Use Ghidra via Model Context Protocol (MCP) with Claude as intermediary.
+
+== Rationale
+
+*Separation:* LLM reads decompiled code. User gets structured answers.
+
+*Specific queries:* "What's the max value for depth parameter?" vs reading full source.
+
+*No direct exposure:* User doesn't read vendor code line-by-line.
+
+*Verification only:* Confirms observed behavior, doesn't drive implementation.
+
+=== Clean Room Advantage
+
+Traditional clean room: two teams, one reads source, one implements.
+
+MCP approach: LLM reads, user implements. Similar separation.
+
+User can't accidentally copy code patterns from unseen source.
+
+=== Alternatives Rejected
+
+*Manual Ghidra:* Too much direct code exposure.
+
+*Skip verification:* Higher risk of protocol errors and potential to brick device.
+
+*IDA Pro:* found ghidra mcp quicker.
+
+== Consequences
+
+=== Positive
+
+* Verify protocol understanding
+* Reduce implementation errors
+* Maintain clean room separation
+* Answer specific questions quickly
+* Legal defensibility
+
+=== Negative
+
+* Not strict two-team clean room
+* Requires MCP server setup
+* LLM costs for queries
+* User could read files directly if desired
+
+=== Protocol
+
+. Observe protocol via USB/serial
+. Implement from observations
+. Query MCP: "Does decompiled code show depth range 1-255?"
+. LLM answers from Ghidra output
+. User validates answer against hardware
+. Adjust implementation if needed
+
+== Implementation
+
+See link:../documentation/option-ghidra-mcp-setup.adoc[] for setup.
+
+MCP server: pyghidra-mcp
+
+Used during protocol development. Not required for running the software.

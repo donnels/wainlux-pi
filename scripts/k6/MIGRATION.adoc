@@ -1,0 +1,371 @@
+= K6 Library Migration Status
+:toc:
+
+== Overview
+
+This document tracks the migration from the legacy monolithic `k6_burn_image.py` script to the new clean library architecture in `scripts/k6/`.
+
+== Architecture
+
+=== New Structure
+
+```
+scripts/k6/
+├── __init__.py         # Package exports (WainluxK6)
+├── transport.py        # Serial abstraction (SerialTransport, MockTransport)
+├── protocol.py         # Protocol helpers, checksum, packet builders, exceptions
+├── driver.py           # High-level WainluxK6 class with connect/engrave methods
+├── processing.py       # Image processing utilities
+├── logger.py           # Config/CSV logging
+└── cli.py             # CLI interface
+```
+
+=== Key Principles
+
+* *Hemingway Style*: Clear, minimal, no magic
+* *KISS*: Simple solutions over complex ones
+* *DRY*: Shared protocol logic in reusable functions
+* *Early Failure Detection*: Exceptions on protocol errors, fail fast
+* *Testability*: MockTransport for fast unit tests
+
+== Transport Abstraction
+
+=== TransportBase Interface
+
+[source,python]
+----
+class TransportBase:
+    def read(self, n: int) -> bytes: pass
+    def write(self, data: bytes): pass
+    def close(self): pass
+----
+
+=== Implementations
+
+* *SerialTransport*: Production wrapper around pyserial
+* *MockTransport*: Test double with queue-based response simulation
+
+== Protocol Module
+
+=== Core Functions
+
+* `checksum(packet)` - Two's complement 8-bit checksum
+* `build_data_packet(payload)` - DATA (0x22) packet builder
+* `build_job_header_raster(w, h, depth, power)` - JOB_HEADER (0x23) for raster burns
+* `build_job_header_custom(...)` - Full JOB_HEADER with vector support
+* `send_cmd(transport, name, data, ...)` - Send command, read response
+* `send_cmd_checked(transport, name, data, ...)` - Send command, raise on errors
+* `wait_for_completion(transport, max_wait_s, idle_s)` - Wait for FF FF 00 XX status frames
+* `burn_payload(transport, payload_lines, max_retries)` - Chunked burn with retry/backoff
+
+=== Exception Hierarchy
+
+* `K6Error` (base)
+** `K6TimeoutError` - Timeout waiting for response
+** `K6DeviceError` - Missing ACK, device error
+
+=== Constants
+
+* `ACK = 0x09`
+* `HEARTBEAT = b"\xff\xff\xff\xfe"`
+* `STATUS_PREFIX = b"\xff\xff\x00"`
+* `DATA_CHUNK = 1900` bytes
+
+== Driver Methods
+
+=== Transport-Based (New)
+
+* `connect_transport(transport)` → bool
+** Sequence: STOP → VERSION → CONNECT×2 → HOME
+** Raises K6TimeoutError/K6DeviceError on failure
+** Returns True on success
+
+* `connect_serial(port)` → bool
+** Helper that creates SerialTransport and calls connect_transport
+
+* `engrave_transport(transport, image_path, power, depth)` → Dict
+** Full burn sequence with early failure detection
+** Returns `{'ok': bool, 'total_time': float, 'chunks': int, 'message': str}`
+** Raises exceptions on protocol errors
+
+=== Legacy (Subprocess-Based)
+
+* `connect()` → bool
+* `disconnect()` → bool
+* `home()` → bool
+* `draw_bounds(...)` → bool
+* `engrave(image_path, ...)` → Dict
+
+Legacy methods call `k6_burn_image.py` via subprocess. They remain for backward compatibility until parity is proven.
+
+== CSV Logging
+
+=== CSVLogger Class
+
+[source,python]
+----
+from scripts.k6.csv_logger import CSVLogger
+
+with CSVLogger("path/to/log.csv") as logger:
+    driver.connect_transport(transport, csv_logger=logger)
+    driver.engrave_transport(transport, image_path, csv_logger=logger)
+----
+
+=== CSV Format
+
+Matches legacy k6_burn_image.py format:
+
+```
+burn_start,timestamp,elapsed_s,phase,operation,duration_ms,
+bytes_transferred,cumulative_bytes,throughput_kbps,status_pct,
+state,response_type,retry_count,device_state
+```
+
+=== Phases
+
+* `connect` - STOP, VERSION, CONNECT, HOME
+* `setup` - FRAMING, JOB_HEADER, pre-burn CONNECT
+* `burn` - DATA chunks with retry logging
+* `finalize` - post-burn INIT commands
+* `wait` - STATUS frame monitoring
+
+=== Response Types
+
+* `ACK` - Command acknowledged
+* `HEARTBEAT` - Heartbeat frame received
+* `HEARTBEAT+ACK` - Both received
+* `STATUS` - Burn progress status
+* `TIMEOUT` - No response
+* `OTHER` - Unknown response
+
+=== Usage Example
+
+[source,python]
+----
+from scripts.k6.driver import WainluxK6
+from scripts.k6.transport import SerialTransport
+from scripts.k6.csv_logger import CSVLogger
+
+driver = WainluxK6()
+transport = SerialTransport("/dev/ttyUSB0", baudrate=115200)
+
+with CSVLogger("burn_log.csv") as logger:
+    # Connect logs: VERSION, CONNECT x2, HOME
+    driver.connect_transport(transport, csv_logger=logger)
+    
+    # Engrave logs: FRAMING, JOB_HEADER, CONNECT x2, 
+    # DATA chunks (with retries), INIT x2, STATUS updates
+    result = driver.engrave_transport(
+        transport, 
+        "image.png",
+        power=1000,
+        depth=100,
+        csv_logger=logger
+    )
+
+# CSV file now contains timestamped log of all operations
+----
+
+== Testing
+
+=== Test Coverage (34 tests, all passing)
+
+* `test_protocol.py` - checksum, build_data_packet, send_cmd, parse_response_frames (5 tests)
+* `test_protocol_wait.py` - wait_for_completion, send_cmd_checked (5 tests)
+* `test_protocol_burn.py` - burn_payload chunking, retry, backoff (7 tests)
+* `test_driver_transport.py` - connect_transport success/failure scenarios (3 tests)
+* `test_driver_engrave.py` - engrave_transport full sequence (6 tests)
+* `test_csv_logging.py` - CSVLogger, integration with protocol/driver (5 tests)
+* `test_processing.py` - mm/px conversion (2 tests)
+* `test_logger.py` - config save (1 test)
+
+=== MockTransport Usage
+
+All protocol and driver tests use MockTransport for fast, deterministic testing:
+
+[source,python]
+----
+transport = MockTransport()
+transport.queue_response(bytes([protocol.ACK]))  # Queue expected response
+driver.connect_transport(transport)
+assert len(transport.writes) == 4  # Verify commands sent
+----
+
+=== Running Tests
+
+[source,bash]
+----
+# All tests
+./scripts/venv/bin/python -m pytest tests/ -v
+
+# Specific module
+./scripts/venv/bin/python -m pytest tests/test_protocol.py -v
+
+# With coverage (if pytest-cov installed)
+./scripts/venv/bin/python -m pytest tests/ --cov=scripts/k6 --cov-report=term
+----
+
+== Migration Path
+
+=== Phase 1: Protocol Extraction ✅ COMPLETE
+
+* [x] Extract transport abstraction
+* [x] Extract protocol helpers (checksum, packet builders)
+* [x] Add exception-based error handling
+* [x] Unit tests for protocol module
+* [x] Early failure detection (send_cmd_checked)
+
+=== Phase 2: Driver Migration ✅ COMPLETE
+
+* [x] Implement connect_transport with exception handling
+* [x] Implement burn_payload with chunking + retry
+* [x] Implement engrave_transport with full sequence
+* [x] Unit tests for driver methods
+* [x] Add build_job_header_raster helper
+
+=== Phase 3: Integration & Validation ✅ CSV LOGGING COMPLETE, ✅ FLASK INTEGRATION COMPLETE
+
+* [x] Add CSV logging hooks to protocol functions
+* [x] CSVLogger class with legacy-compatible format
+* [x] Integration tests for CSV logging
+* [x] Wire engrave_transport into Flask API
+* [ ] Add parity tests (compare legacy vs new outputs)
+* [ ] Hardware validation on Pi Zero W
+
+=== Phase 4: Deprecation (FUTURE)
+
+* [ ] Remove legacy subprocess methods from driver
+* [ ] Archive k6_burn_image.py as reference
+* [ ] Update documentation
+* [ ] CI/CD setup (GitHub Actions)
+
+== Flask API Integration
+
+The Flask web interface now uses the new transport-based driver with full CSV logging support.
+
+=== API Endpoints
+
+* `POST /api/connect` - Connect to K6 via SerialTransport
+* `POST /api/disconnect` - Close transport and disconnect
+* `POST /api/test/home` - Send HOME command via protocol
+* `POST /api/test/bounds` - Draw boundary frame (legacy method)
+* `POST /api/engrave` - Engrave image with CSV logging
+* `GET /api/status` - Get connection status
+
+=== Connect Flow
+
+[source,python]
+----
+# On /api/connect
+k6_transport = SerialTransport(port='/dev/ttyUSB0', baudrate=115200)
+k6_driver.connect_transport(k6_transport)
+# Runs: STOP → VERSION → CONNECT×2 → HOME
+----
+
+=== Engrave Flow
+
+[source,python]
+----
+# On /api/engrave (with file upload)
+# 1. Save uploaded file temporarily
+# 2. Create CSV logger with timestamp
+# 3. Call engrave_transport with csv_logger
+# 4. Return results with CSV path
+
+with CSVLogger(f"burn-{timestamp}.csv") as logger:
+    result = k6_driver.engrave_transport(
+        k6_transport, image_path,
+        power=power, depth=depth,
+        csv_logger=logger
+    )
+----
+
+=== Data Directory
+
+CSV logs stored in: `docker-wainlux/docker/data/burn-YYYYMMDDHHMMSS.csv`
+
+Volume mounted in compose.yaml: `./data:/app/data`
+
+=== Testing Flask Integration
+
+[source,bash]
+----
+# Build and run container
+cd docker-wainlux
+docker compose build
+docker compose up -d
+
+# View logs
+docker compose logs -f
+
+# Access UI
+# http://<pi-ip>:8080
+----
+
+== Protocol Sequence Reference
+
+=== Connect Sequence
+
+```
+STOP      [0x16 00 04 00]         (write-only, best-effort)
+VERSION   [0xFF 00 04 00]         → 3-byte response
+CONNECT   [0x0A 00 04 00]         → ACK (0x09)
+CONNECT   [0x0A 00 04 00]         → ACK (0x09)
+HOME      [0x17 00 04 00]         → ACK (0x09)
+```
+
+=== Engrave Sequence
+
+```
+FRAMING     [0x0B 00 04 00]       → ACK
+JOB_HEADER  [0x23 ... 38 bytes]   → ACK
+CONNECT     [0x0A 00 04 00]       → ACK
+CONNECT     [0x0A 00 04 00]       → ACK
+DATA        [0x22 ... chunks]     → ACK per chunk
+INIT        [0x0E 00 04 00]       → ACK
+INIT        [0x0E 00 04 00]       → ACK
+(wait for FF FF 00 XX status frames until 100%)
+```
+
+== Error Handling Strategy
+
+=== Early Failure Detection
+
+All critical commands use `send_cmd_checked()` which raises exceptions immediately on:
+
+* Timeout (no response within timeout period)
+* Missing ACK (when expect_ack=True)
+
+This ensures the system stops on first error rather than continuing with partial state.
+
+=== Retry Strategy
+
+`burn_payload()` implements exponential backoff retry:
+
+* Initial attempt
+* Retry #1: 0.1s delay
+* Retry #2: 0.2s delay
+* Retry #3: 0.4s delay
+* After max_retries: raise K6DeviceError
+
+=== Timeout Values
+
+* VERSION: 1.0s (fast response expected)
+* CONNECT: 1.0s
+* HOME: 10.0s (motion takes time)
+* DATA chunk: 2.0s
+* Burn completion: 600s max, 90s idle timeout
+
+== Next Steps
+
+. Add CSV logging integration (protocol.send_cmd optional csv_writer parameter)
+. Wire engrave_transport into Flask API (docker-wainlux/docker/app/main.py)
+. Test on actual hardware (Pi Zero W + K6)
+. Add parity tests comparing legacy vs new outputs
+. Document performance metrics (burn time, retry counts)
+
+== References
+
+* Protocol spec: link:../../documentation/reference-k6_protocol.adoc[]
+* Legacy script: link:../k6_burn_image.py[]
+* Package docs: link:README.adoc[]

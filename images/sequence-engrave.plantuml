@@ -1,0 +1,44 @@
+@startuml
+skinparam backgroundColor #fff/aaf
+skinparam participantbackgroundColor #fff/aaf
+skinparam Shadowing 1
+
+actor User
+participant Browser
+participant Flask
+participant K6Driver
+participant K6Device
+
+User -> Browser: Upload image
+Browser -> Flask: POST /api/engrave
+Flask -> Flask: Resize to 1066x1066 max
+Flask -> Flask: Grayscale → 1-bit
+Flask -> K6Driver: engrave_image(img, depth)
+
+K6Driver -> K6Device: 0xFF VERSION
+K6Device --> K6Driver: 3 bytes
+
+K6Driver -> K6Device: 0x0A CONNECT (2x)
+K6Device --> K6Driver: ACK 0x09 (2x)
+
+K6Driver -> K6Device: 0x17 HOME
+K6Device --> K6Driver: ACK 0x09
+
+K6Driver -> K6Device: 0x24 INIT (2x)
+K6Device --> K6Driver: Status FF FF 00 XX
+
+K6Driver -> K6Driver: Build 38-byte header\n(size, power, depth, center+67)
+K6Driver -> K6Device: 0x23 JOB HEADER
+note right: No ACK wait
+
+K6Driver -> K6Driver: Pack pixels 8/byte
+loop Chunks (≤1900 bytes)
+  K6Driver -> K6Device: 0x22 DATA + checksum
+  K6Device --> K6Driver: ACK 0x09
+end
+
+K6Driver --> Flask: Success
+Flask --> Browser: {"success": true}
+Browser --> User: Complete
+
+@enduml

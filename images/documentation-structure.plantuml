@@ -1,0 +1,101 @@
+@startuml
+title Documentation Structure
+footer ©2025 Sean Donnellan
+
+skinparam Shadowing 1
+skinparam BackgroundColor #fff/aaf
+skinparam fileBackgroundColor #fff/orange
+skinparam folderBackgroundColor #fff/aaf
+skinparam cardBackgroundColor #fff/green
+skinparam cardBackgroundColor<<include::>> #fff/blue
+
+folder repo {
+    file "README.asciidoc" as mainfile {
+        card "head" as mainhead
+        card "folder1/section1.adoc[]" as inc1 <<include::>>
+        card "folder2/section2.adoc[]" as inc2 <<include::>>
+        card "includes/glossary.adoc[]" as incGlos <<include::>>
+        card "includes/copyright.adoc[]" as incCopy <<include::>>
+        card "content" as maincontent
+        note top of mainhead
+          :flag-book: true
+          GitHub formatting (inline)
+          PDF/HTML styling
+        end note
+    }
+    mainhead --> inc1
+    inc1 --> inc2
+    inc2 --> maincontent
+    maincontent --> incGlos
+    incGlos --> incCopy
+    
+    folder folder1 {
+        file "app1.py" as code1
+        file "script.sh" as script1
+        file "config.yml" as config1
+        file "chapter1.adoc" as chap1 {
+            card "head" as head1
+            card "content" as content1
+            card "app1.py[]" as inc_code1 <<include::>>
+            card "script.sh[]" as inc_script1 <<include::>>
+            card "config.yml[]" as inc_config1 <<include::>>
+            card "footer" as footer1
+            note right of head1 : Setup (save imagesdir/localdir)\nIFDEF flag-book: localdir=./folder1/\nIFNDEF flag-book: localdir=./
+            note right of footer1 : Restore imagesdir/localdir
+        }
+        head1 --> content1
+        content1 --> inc_code1
+        inc_code1 --> inc_script1
+        inc_script1 --> inc_config1
+        inc_config1 --> footer1
+        inc_code1 --> code1
+        inc_script1 --> script1
+        inc_config1 --> config1
+    }
+    
+    folder folder2 {        
+        folder images {
+            file "diagram1.png" as img1
+            file "diagram2.png" as img2
+            file "diagram3.png" as img3
+        }        
+        file "section2.adoc" as chap2 {
+            card "head" as head2
+            card "content" as content2
+            card "images/diagram1.png[]" as inc_img1 <<include::>>
+            card "images/diagram2.png[]" as inc_img2 <<include::>>
+            card "images/diagram3.png[]" as inc_img3 <<include::>>
+            card "footer" as footer2
+            note right of head2 : Setup (save imagesdir/localdir)\nIFDEF flag-book: imagesdir=./folder2/\nIFNDEF flag-book: imagesdir=./
+            note right of footer2 : Restore imagesdir/localdir
+        }
+        head2 --> content2
+        content2 --> inc_img1
+        inc_img1 --> inc_img2
+        inc_img2 --> inc_img3
+        inc_img3 --> footer2
+        inc_img1 --> img1
+        inc_img2 --> img2
+        inc_img3 --> img3
+    }
+    
+    folder includes {
+        file "glossary.adoc" as glossary
+        file "book-format-header.adoc" as header
+        file "copyright-notice.adoc" as copyright
+        note right of glossary : No blank lines. One item per line.\nNo other content. Allows alphabetical sort.\nHeader info in main doc.
+    }
+}
+mainhead -> header : include::
+
+inc1 --> chap1 : include::
+inc2 --> chap2 : include::
+incGlos -> glossary : include::
+incCopy -> copyright : include::
+
+legend
+Only the main doc publishes. Each sub doc stands alone near code. Teams edit their sections as needed. Sections stay complete or in progress. Include when ready. Docs remain in repo, readable on GitHub. Book-flag expands to section flags for complex sections with independent folders or includes. This is not the base.
+endlegend
+
+@enduml</content>
+<parameter name="filePath">/home/deck/Documents/Github/donnels/wainlux-pi/images/documentation-structure.plantuml

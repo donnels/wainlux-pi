@@ -1,0 +1,131 @@
+= Project Status
+ifdef::flag-book[]
+:imagesdir-saved: {imagesdir}
+:localdir-saved: {localdir}
+:imagesdir: ./images
+:localdir: ./documentation
+endif::flag-book[]
+ifndef::flag-book[]
+:toc: right
+:toclevels: 5
+:sectnums:
+:sectnumlevels: 5
+ifdef::github-env[]
+:icons: font
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::github-env[]
+:imagesdir: ../images
+:localdir: .
+endif::flag-book[]
+
+== How we got here
+
+.This is the shortest honest story.
+. We started with the C++ protocol code (`backup/K3_LASER_ENGRAVER_PROTOCOL/`).
+. We made it build on Linux (CMake: do not compile `win.cpp` on Linux).
+. We fixed the ACK reader in C++ (`wait_for_ack()` was lying).
+. The C++ “K3” handshake still stalled on this unit.
+. We switched to the vendor macOS Java app in `backup/` and ran it through ghidra through an LLM.
+. That revealed a different opcode set that *does* ACK and move this unit.
+. We implemented that sequence in Python and got repeatable movement and `0x09` ACKs.
+. We fumbled in the dark and had to reset the unit multiple times and listen to it push on boundaries etc.
+. We got more stable as we ran into every problem possible in no particular order.
+
+== Complete
+
+* [x] Pi Zero W setup and Docker installation
+* [x] USB serial driver (CP2102) working
+* [x] Flask web app structure
+* [x] Docker container builds on ARMv6
+* [x] Web UI (connect, disconnect, test, engrave)
+* [x] Protocol capture with vendor Windows/macOS software
+* [x] K6 protocol identification (differs from K3)
+* [x] Basic serial communication (115200 baud)
+* [x] ACK byte (0x09) confirmed
+* [x] Home command works
+* [x] Design and print 3D holder/case for Pi Zero with UPS and camera
+* [x] Initial basic testing on actual K6 hardware
+* [x] K3 protocol reverse-engineering referenced
+* [x] Documentation structure established (AsciiDoc)
+* [x] PlantUML diagrams for architecture and protocol
+* [x] Initial test scripts (MVP vector and raster)
+    ** Now removed to avoid confusiuon
+* [x] Fix USB device ID in Dockerfile (CP2102: 10c4:ea60)
+* [x] UPS Lite integration option (power status + safe shutdown (was python2))
+* [x] Camera tasks: rpicam-still capture 
+* [x] Java protocol extraction before deletion
+* [x] Ghidra/MCP debug tooling (decompile + extract protocol details)
+* [x] Job data packet format validation
+* [x] Reliable burning/marking (now strong marks with correct header endianness + depth=10)
+* [x] Opcode mapping (K3 vs K6 differences) - all opcodes documented
+* [x] Identified failing opcode in handshake sequence (0x1c not in K6 protocol, K3-only)
+* [x] Licensing implementation (MIT for code, CC-BY/CC0 for docs, clean-room statement, contributor policy)
+* [x] Remove vendor java from repo (was already gitignored, now deleted)
+* [x] Image size limits documentation (80mm @ 0.075mm/px = 1067x1067px max from Java)
+* [x] Error handling improvements
+* [x] initial vector testing on actual K6 hardware
+* [x] initial image testing on actual K6 hardware
+* [x] Hardware testing (raster burns with depth=10, power=1000 defaults)
+* [x] Vector-only mode validation on K6
+* [x] Calibrate burn completion timeout: Fixed serial timeout corruption, increased idle timeout to 90s, changed max timeout to 5× estimate with proper exit reason tracking
+* [x] Library refactoring: Extracted protocol into scripts/k6 package
+* [x] Transport abstraction: SerialTransport + MockTransport for testing
+* [x] Exception-based error handling (K6Error, K6TimeoutError, K6DeviceError)
+* [x] Unit test suite: 34 tests covering protocol, driver, CSV logging
+* [x] CSV logging integration with legacy format compatibility
+* [x] Flask API updated to use new transport-based driver
+* [x] Fixed Flask app k6 library integration (removed placeholder, uses docker/k6/)
+* [x] Added draw_bounds_transport method (no subprocess dependency)
+* [x] Docker container uses pure library implementation (no legacy script)
+
+== In Progress
+
+* [ ] Camera integration option (burn preview + documentation photos)
+* [ ] Hardware validation with new library on Pi Zero W
+
+== Pending
+* [ ] Adjust payload format for raster streaming (if needed after hardware testing)
+* [ ] Image boundary/cropping (observed behavior: crop to work area)
+* [ ] Production testing on actual K6 hardware
+* [ ] Status API expansion
+* [ ] Multi-job queue (if needed)
+* [ ] GitHub Actions for documentation build
+* [ ] PDF theme customization
+* [ ] Front cover image
+
+== Known Issues
+
+* Image positioning/centering can drive out of bounds (Java centering formula documented: center_x = x + width/2 + 67)
+* Vector circles >20mm may go out of bounds (40mm diameter observed to go haywire)
+* No persistent storage (stateless design by choice)
+* Image size limit: 1067x1067px max (80mm work area @ 0.075mm/px resolution)
+* Y-axis calibration: boundary test shows 80x76mm instead of expected 80x80mm (4mm shortfall)
+** need to retry
+
+== Architecture Decisions
+
+* [x] Docker: Isolation and device passthrough
+* [x] Flask: Lightweight (40MB less than FastAPI)
+* [x] No database: 512MB RAM limit, stateless by design
+* [x] Privileged container: Required for /dev/ttyUSB0
+* [x] Pillow only: No OpenCV (150MB overhead)
+* [x] AsciiDoc: Multi-format output, GitHub rendering
+* [x] MCP/Ghidra: Reverse-engineering tools without looking at code with mine own eyes
+
+== Next Steps
+
+* [ ] Y-axis calibration investigation (80x76mm vs 80x80mm)
+* [ ] Implement boundary checking/cropping (prevent out-of-bounds)
+* [ ] Test vector circles >20mm diameter (40mm went out of bounds)
+* [ ] Test repeat count parameter (byte 36 in header)
+* [ ] Validate all newly documented opcodes (0x06/07, 0x16, 0x20, 0x25, 0x28)
+* [ ] Optional: Firmware update feature (IAP protocol fully documented)
+
+ifdef::flag-book[]
+:imagesdir: {imagesdir-saved}
+:localdir: {localdir-saved}
+endif::flag-book[]

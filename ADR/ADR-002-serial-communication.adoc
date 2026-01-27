@@ -1,0 +1,62 @@
+= ADR-002: Serial vs USB Communication
+
+== Status
+
+Accepted
+
+== Context
+
+K6 uses CP2102 USB-to-serial bridge chip.
+
+.Options considered
+* pyserial (serial port abstraction)
+* pyusb (direct USB access)
+* libusb1 (C bindings)
+* Custom USB driver
+
+== Decision
+
+Use pyserial with /dev/ttyUSB0.
+
+== Rationale
+
+CP2102 presents as serial port. Linux kernel driver built-in.
+
+*pyserial:*
+* Standard serial API
+* Abstraction over platform differences
+* No USB protocol knowledge required
+* Device appears as file
+* Works with existing protocol code
+
+*pyusb considered:*
+* Direct USB control
+* More complex
+* Requires USB descriptor knowledge
+* No advantage for serial device
+
+*libusb1:*
+* C library, Python bindings clunky
+* Lower level than needed
+* More code, more bugs
+
+*Custom driver:*
+* Massive overkill
+* Kernel module complexity
+* CP2102 driver already exists
+
+Binary protocol runs cleanly over serial read/write operations.
+
+== Consequences
+
+*Positive:*
+* Simple serial read/write operations
+* No USB complexity or libusb dependencies
+* Standard Linux device permissions
+* Portable code (works on any Linux)
+
+*Negative:*
+* No access to low-level USB features (not needed)
+* Depends on kernel driver (already present)
+
+*Trade-off accepted:* Simplicity and portability win. No need for USB-level control.

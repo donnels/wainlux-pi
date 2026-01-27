@@ -1,0 +1,28 @@
+= Images
+
+PlantUML diagrams.
+
+== Files
+
+* *architecture.puml* - System components
+* *use-cases.puml* - Use cases
+* *sequence-engrave.puml* - Engraving sequence
+* *protocol-flow.puml* - Protocol flow
+
+== Generate
+
+[source,bash]
+----
+plantuml *.plantuml
+----
+
+== Usage
+
+[source,asciidoc]
+----
+.caption
+image::images/architecture.png[Architecture]
+----
+
+.bytefield example
+image::./k6-raster-packet.svg[]

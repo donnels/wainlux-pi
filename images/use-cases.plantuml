@@ -1,0 +1,32 @@
+@startuml
+skinparam backgroundColor #fff/aaf
+skinparam usecasebackgroundColor #fff/aaf
+skinparam Shadowing 1
+left to right direction
+
+actor User
+
+rectangle "Wainlux K6 Interface" {
+  usecase "Connect to K6" as UC1
+  usecase "Disconnect from K6" as UC2
+  usecase "Home laser head" as UC3
+  usecase "Draw test bounds" as UC4
+  usecase "Upload image" as UC5
+  usecase "Engrave image" as UC6
+  usecase "Check status" as UC7
+}
+
+User --> UC1
+User --> UC2
+User --> UC3
+User --> UC4
+User --> UC5
+User --> UC6
+User --> UC7
+
+UC6 ..> UC1 : <<requires>>
+UC6 ..> UC5 : <<requires>>
+UC3 ..> UC1 : <<requires>>
+UC4 ..> UC1 : <<requires>>
+
+@enduml

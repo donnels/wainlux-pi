@@ -1,0 +1,8 @@
+;; K6 Error Response (0x08)
+;; Single-byte error indication
+
+(defattrs :bg-error {:fill "#ffd0d0"})
+
+(draw-column-headers)
+
+(draw-box "0x08 (Error)" [{:span 8} :bg-error])

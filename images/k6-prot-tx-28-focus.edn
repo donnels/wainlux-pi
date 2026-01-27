@@ -1,0 +1,26 @@
+;; K6 Set Focus/Angle Command (0x28)
+;; Configure focus and angle parameters
+;; 11 bytes total
+
+(defattrs :bg-cmd {:fill "#e8f4f8"})
+
+(draw-column-headers)
+
+;; Header
+(draw-box "0x28" [:box-first {:span 8} :bg-cmd])
+(draw-box "0x00" [:box-related {:span 8} :bg-cmd])
+(draw-box "0x0B" [:box-related {:span 8} :bg-cmd])
+(draw-box "Focus" [:box-last {:span 8} :bg-cmd])
+
+;; Parameters
+(next-row)
+(draw-box "Mode" [:box-first {:span 8} :bg-cmd])
+(draw-box "0x00" [:box-related {:span 8} :bg-cmd])
+(draw-box "0x00" [:box-related {:span 8} :bg-cmd])
+(draw-box "0x00" [:box-last {:span 8} :bg-cmd])
+
+;; Reserved bytes
+(next-row)
+(draw-box "0x00" [:box-first {:span 8} :bg-cmd])
+(draw-box "0x00" [:box-related {:span 8} :bg-cmd])
+(draw-box "0x00" [:box-last {:span 16} :bg-cmd])

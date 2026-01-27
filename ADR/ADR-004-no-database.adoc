@@ -1,0 +1,46 @@
+= ADR-004: No Database
+
+== Status
+
+Accepted
+
+== Context
+
+Web app needs state management. Could use database.
+
+== Decision
+
+Stateless design. No database.
+
+== Rationale
+
+*RAM:* 512MB total. Database uses 50-100MB.
+
+*Purpose:* Real-time laser control, not job management.
+
+*Complexity:* Database adds failure modes.
+
+*State:* Restart clears state. This is acceptable for single-user local control.
+
+Jobs run immediately. No queue. No persistence needed.
+
+== Consequences
+
+*Positive:*
+* Lower memory usage
+* Simpler deployment
+* Fewer dependencies
+* Faster restarts
+
+*Negative:*
+* No job history
+* No job queue
+* Must re-upload after restart
+
+== Mitigation
+
+CSV logs provide burn history.
+
+User workflow is immediate: upload → burn → done.
+
+For job queues, add database later if needed.

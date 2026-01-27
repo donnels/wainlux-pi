@@ -1,0 +1,125 @@
+= Getting Started
+ifdef::flag-book[]
+:imagesdir-saved: {imagesdir}
+:localdir-saved: {localdir}
+:imagesdir: ./images
+:localdir: ./documentation
+endif::flag-book[]
+ifndef::flag-book[]
+:toc: right
+:toclevels: 5
+:sectnums:
+:sectnumlevels: 5
+ifdef::github-env[]
+:icons: font
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::github-env[]
+:imagesdir: ../images
+:localdir: .
+endif::flag-book[]
+
+Quick guide to using this repository.
+
+== For Users
+
+=== Deploy to Pi
+
+[source,bash]
+----
+cd docker-wainlux
+docker compose build
+docker compose up -d
+----
+
+Access: `http://<pi-ip>:8080`
+
+== For Developers
+
+=== Read Code
+
+* link:docker-wainlux/docker/app/k6.py[K6 Driver] - Protocol
+* link:docker-wainlux/docker/app/main.py[Flask App] - API
+* link:docker-wainlux/docker/templates/index.html[Web UI] - Interface
+
+See link:docker-wainlux/docker/README.adoc[App README].
+
+=== Generate Diagrams
+
+[source,bash]
+----
+cd images
+plantuml *.puml
+cd ..
+----
+
+Output: `images/*.png`
+
+== For Documentation Writers
+
+=== Add Diagram
+
+Create `.plantuml` file in `images/`:
+
+[source,plantuml]
+----
+@startuml
+
+actor User
+User --> System
+@enduml
+----
+
+Generate:
+[source,bash]
+----
+plantuml images/new-diagram.plantuml
+----
+
+Reference in AsciiDoc:
+[source,asciidoc]
+----
+\image::images/new-diagram.png[Description]
+----
+
+== For Contributors
+
+=== Clone Repository
+
+[source,bash]
+----
+git clone <repo-url> wainlux-pi
+cd wainlux-pi
+----
+
+=== Follow Style
+
+* DRY - Don't Repeat Yourself
+* KISS - Keep It Simple, Stupid
+* Hemingway - Short, direct sentences
+* No fluff - Essential info only
+
+== Quick Commands
+
+[source,bash]
+----
+# Generate diagrams
+plantuml images/*.plantuml
+
+# Build container
+cd docker-wainlux && docker compose build
+
+# Run container
+docker compose up -d
+
+# View logs
+docker compose logs -f
+----
+
+ifdef::flag-book[]
+:imagesdir: {imagesdir-saved}
+:localdir: {localdir-saved}
+endif::flag-book[]

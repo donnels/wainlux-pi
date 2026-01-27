@@ -1,0 +1,11 @@
+;; K6 Crosshair ON (0x06)
+;; Enable positioning laser for alignment
+
+(defattrs :bg-cmd {:fill "#e8f4f8"})
+
+(draw-column-headers)
+
+(draw-box "0x06 (Opcode)" [:box-first {:span 8} :bg-cmd])
+(draw-box "0x00" [:box-related {:span 8} :bg-cmd])
+(draw-box "0x04 (Len)" [:box-related {:span 8} :bg-cmd])
+(draw-box "0x00" [:box-last {:span 8} :bg-cmd])

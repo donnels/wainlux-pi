@@ -1,0 +1,72 @@
+= Jog Testing Observations
+:toc:
+
+== Coordinate System Behavior
+
+=== Normal Operation (Soft Limits ON)
+* X-axis: 0-1600px (0-80mm @ 0.05mm/px)
+* Y-axis: 0-1600px (0-80mm @ 0.05mm/px)
+
+=== Soft Limits OFF (Experimental)
+
+WARNING: When soft limits are disabled, negative coordinates produce inverted movement and physical bounds contact.
+
+==== Negative X Movement
+* setting: 10mm hops
+* Command: Move to negative X coordinates
+* Actual behavior: Laser head moves to *positive X* extreme
+* Result: Physical contact with right-side bounds
+* Audible feedback: continuous
+
+==== Negative Y Movement
+* setting: 10mm hops
+* Command: Move to negative Y coordinates (toward top)
+* Actual behavior: Laser head moves *down* 
+* Result: Physical contact with bottom bounds
+* Audible feedback: continuous
+
+==== Positive Bounds Testing
+* setting: 10mm hops
+* X-axis: Audible feedback for 2 jogs beyond 1600px, then silent
+* Y-axis: Audible feedback at steps 8-10 beyond 1600px
+* **Observation**: Y-axis appears more physically limited than X-axis
+
+== Connection State
+
+=== CONNECT Command (0x0A)
+* *Not required* for jog/bounds commands to work
+* Device accepts movement commands even when "disconnected"
+* Purpose: Helps establish sane device state
+* Not strictly enforced by firmware
+
+=== Testing Notes
+* Can turn laser off/on and continue jogging
+* CONNECT helpful but not mandatory
+* Connection tracking is client-side only
+
+== Protocol Interpretation
+
+=== BOUNDS (0x20)
+* Function: Enable preview/framing mode
+* Effect: Shows burn area outline without firing laser
+* Used for: Positioning and alignment
+
+=== FRAMING (0x21)
+* Function: Disable preview/framing mode
+* Effect: Stops BOUNDS preview, returns to idle
+* Used for: Clearing preview state before burns
+* Already in burn sequence to disable bounds checking
+
+=== CROSSHAIR (0x06/0x07)
+* Status: No observed effect
+* Purpose: Testing only, not production
+* Clearing: Not necessary - if set, it's intentional for testing
+* Note: Left alone per YAGNI principle
+
+== Recommendations
+
+. Use soft limits unless specifically testing edge cases
+. Negative coordinates produce unexpected inverted movement
+. Y-axis has less physical travel than X-axis
+. CONNECT at session start for clean state, but not required for every operation
+. FRAMING (0x21) before burns is sufficient state clearing

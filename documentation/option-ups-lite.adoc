@@ -1,0 +1,211 @@
+= UPS Lite v1.1 Setup
+ifdef::flag-book[]
+:imagesdir-saved: {imagesdir}
+:localdir-saved: {localdir}
+:imagesdir: ./images
+:localdir: ./documentation
+endif::flag-book[]
+ifndef::flag-book[]
+:toc: right
+:toclevels: 5
+:sectnums:
+:sectnumlevels: 5
+ifdef::github-env[]
+:icons: font
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::github-env[]
+:imagesdir: ../images
+:localdir: .
+endif::flag-book[]
+//SWD
+
+UPS Lite v1.1 battery management for Pi Zero W.
+
+Reference: https://github.com/linshuqin329/UPS-Lite
+
+== Hardware
+
+* Device: UPS Lite v1.1 with MAX17040 fuel gauge
+* Connection: I2C bus 1, address 0x36, pogo pins under Pi
+* Battery: 1000mAh LiPo pouch
+* Runtime: ~2-3 hours typical
+
+=== Pogo Pin Connections
+
+UPS Lite connects to first 10 pins (pins 1-10) of Pi Zero GPIO header via 2x5 pogo pin block:
+
+[source]
+----
+Power Connector Side ← → Camera Side
+
+ 1  3V3     |  2  5V (output to Pi)
+ 3  GPIO2   |  4  5V (output to Pi)
+ 5  GPIO3   |  6  GND
+ 7  GPIO4   |  8  GPIO14 (UART TX)
+ 9  GND     | 10  GPIO15 (UART RX)
+----
+
+.Active connections:
+* Pin 2, 4: 5V output to Pi (regulated from battery or USB passthrough)
+* Pin 3: GPIO2 (I2C SDA) - MAX17040 communication
+* Pin 5: GPIO3 (I2C SCL) - MAX17040 communication
+* Pin 6, 9: GND (ground return)
+* Pin 7: GPIO4 - power detection (unreliable on v1.1, stuck at LOW)
+
+.Available but unused:
+* Pin 1: 3V3 - Pi's 3.3V rail (not powered by UPS)
+* Pin 8, 10: GPIO14/15 (UART TX/RX) - can be used for serial console
+
+== Verify UPS
+
+[source,bash]
+----
+/usr/sbin/i2cdetect -y 1
+# Should show device at 0x36
+----
+
+== Install Shutdown Watchdog
+
+Python 3 version of vendor daemon (original was Python 2):
+
+[source,bash]
+----
+sudo tee /usr/local/bin/UPS_Lite.py << 'EOF'
+#!/usr/bin/env python3
+import smbus2
+import time
+import RPi.GPIO as GPIO
+
+
+def readVoltage(bus):
+    address = 0x36
+    vcell_msb = bus.read_byte_data(address, 0x02)
+    vcell_lsb = bus.read_byte_data(address, 0x03)
+    vcell = (vcell_msb << 8) | vcell_lsb
+    voltage = vcell * 78.125 / 1000000
+    return voltage
+
+
+def readCapacity(bus):
+    address = 0x36
+    soc_msb = bus.read_byte_data(address, 0x04)
+    soc_lsb = bus.read_byte_data(address, 0x05)
+    soc = (soc_msb << 8) | soc_lsb
+    capacity = soc / 256
+    return capacity
+
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setwarnings(False)
+GPIO.setup(4, GPIO.IN)
+
+bus = smbus2.SMBus(1)
+
+while True:
+    voltage = readVoltage(bus)
+    capacity = readCapacity(bus)
+    gpio4 = GPIO.input(4)
+    
+    # Infer power from voltage (GPIO4 unreliable on some v1.1 units)
+    # USB power: >4.1V, Battery: <4.1V
+    if voltage > 4.1:
+        power = "USB"
+    else:
+        power = "BATT"
+    
+    # Write status file with GPIO debug info
+    with open("/tmp/ups_status", "w") as f:
+        f.write(f"{voltage:.2f}V {capacity:.1f}% [{power}] GPIO4={gpio4}\n")
+    
+    if capacity < 5:
+        bus.close()
+        GPIO.cleanup()
+        import os
+        os.system("sudo shutdown -h now")
+    
+    time.sleep(2)
+EOF
+
+sudo chmod +x /usr/local/bin/UPS_Lite.py
+
+sudo tee /etc/systemd/system/ups-lite.service << 'EOF'
+[Unit]
+Description=UPS Lite Battery Monitor
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/bin/UPS_Lite.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl enable ups-lite
+sudo systemctl start ups-lite
+----
+
+Monitors GPIO4 (power detect) and SOC. Shuts down at 5% charge.
+
+== Check Status
+
+Daemon status:
+[source,bash]
+----
+sudo systemctl status ups-lite
+----
+
+Battery level and power status (for display integration):
+[source,python]
+----
+#!/usr/bin/env python3
+# Read UPS status from daemon file
+try:
+    with open('/tmp/ups_status', 'r') as f:
+        print(f.read().strip())
+except FileNotFoundError:
+    print("UPS daemon not running")
+----
+
+Installed at `/home/user/bat_status.py` for OLED or status display hooks.
+
+Daemon writes status to `/tmp/ups_status` every 2 seconds with format: `voltage% [power_source] GPIO4=value`
+
+Power detection method:
+* `[USB]`: Voltage >4.1V (micro USB plugged in - charging or charged)
+* `[BATT]`: Voltage <4.1V (on battery - discharging)
+
+Note: GPIO4 is unreliable on my v1.1 hardware (stuck at LOW), so voltage-based detection is used instead. V1.2/V1.3 may have working GPIO4 power detection. MAX17040 is a fuel gauge only * no charging status register. To detect "charging" vs "charged" when USB connected, track SOC changes over time.
+
+== Serial Console (Optional)
+
+UPS Lite pogo pins 8 (GPIO14/TX) and 10 (GPIO15/RX) provide UART access for serial console debugging.
+
+Check if enabled:
+[source,bash]
+----
+grep enable_uart /boot/firmware/config.txt
+# Should show: enable_uart=1
+
+grep console=serial0 /boot/firmware/cmdline.txt
+# Should show: console=serial0,115200
+----
+
+If not enabled, add to `/boot/firmware/config.txt`:
+[source]
+----
+enable_uart=1
+----
+
+Serial console is active by default on this Pi (115200 baud, 8N1). Connect USB-to-serial adapter to pins 8 (TX) and 10 (RX) on Pi header for headless access *OR* the micro usb of the UPS-lite board. Plugging it in to a computer should charge and allow console access if the USB cable has data lines (Which I have checked in the past on other ones but not here and now).
+
+ifdef::flag-book[]
+:imagesdir: {imagesdir-saved}
+:localdir: {localdir-saved}
+endif::flag-book[]

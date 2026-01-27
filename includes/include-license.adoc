@@ -1,0 +1,30 @@
+= Copyright and License
+
+== Code License
+
+All source code in this repository is licensed under the **MIT License**.
+
+See link:../LICENSE[LICENSE] for full text.
+
+== Protocol Documentation License
+
+All protocol documentation (files in `/documentation`) is dual-licensed:
+
+* **Creative Commons Attribution 4.0 International (CC BY 4.0)**, or
+* **Creative Commons Zero v1.0 Universal (CC0 1.0)** - Public Domain Dedication
+
+See link:../LICENSE-DOCS[LICENSE-DOCS] for full text.
+
+== Clean Room Statement
+
+This project was developed through clean-room reverse-engineering methods.
+No vendor source code, proprietary binaries, or confidential materials were
+used or redistributed.
+
+See link:../CLEAN_ROOM.md[CLEAN_ROOM.md] for full methodology and exclusions.
+
+== Copyright Notice
+
+Copyright (c) 2026 Sean Donnellan
+
+

@@ -1,0 +1,17 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: "v0.14.14"
+    hooks:
+      - id: ruff
+        args: ["--fix", "--select", "E,F,W,C90"]
+        # Exclude legacy k6_burn_image.py - working script, keep untouched
+        # Exclude debug_serial_monitor.py - complex interactive script
+        exclude: ^scripts/(k6_burn_image|debug_serial_monitor)\.py$
+  - repo: https://github.com/psf/black
+    rev: 26.1.0
+    hooks:
+      - id: black
+        args: ["--fast"]
+        # Exclude legacy k6_burn_image.py - working script, keep untouched
+        # Exclude debug_serial_monitor.py - complex interactive script
+        exclude: ^scripts/(k6_burn_image|debug_serial_monitor)\.py$

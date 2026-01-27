@@ -1,0 +1,259 @@
+= Wainlux K6 on Linux (Headless) - Debugging notes
+ifdef::flag-book[]
+:imagesdir-saved: {imagesdir}
+:localdir-saved: {localdir}
+:imagesdir: ./images
+:localdir: ./documentation
+endif::flag-book[]
+ifndef::flag-book[]
+:toc: right
+:toclevels: 5
+:sectnums:
+:sectnumlevels: 5
+ifdef::github-env[]
+:icons: font
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::github-env[]
+:imagesdir: ../images
+:localdir: .
+endif::flag-book[]
+
+== Pi Run Results (2025-01-12)
+
+Ran on `pi-hostname` with `/home/user/test_square24.bmp` (24-bit BMP) and `/dev/ttyUSB0`.
+
+.Observed sequence (default / non-discrete):
+* `TX cmd 0x0a` -> `RX 0x09` (ACK OK immediately)
+* `TX cmd 0x17` -> ACK after ~20 tries (slow)
+* `TX cmd 0x1c` -> **no ACK**, times out and stalls
+* After timeout, `TX cmd 0x06` (reset) -> also **no ACK**
+
+.Observed sequence (`--discrete`):
+* `TX cmd 0x0a` -> ACK OK
+* `TX cmd 0x17` -> ACK after ~20 tries
+* `TX cmd 0x1b` -> **no ACK**, times out and stalls
+
+.Takeaway:
+* The discrete mode commands `0x1b` (enable) and `0x1c` (disable) do **not** ACK on this device.
+* The reset command `0x06` also fails to ACK in this flow.
+* `0x17` responds but is **slow** (requires retries).
+
+.Hypothesis:
+* This unit’s command set is close to K3/K6 but differs in discrete-mode and reset opcodes or sequencing.
+
+== MVP Test Result (First Pass)
+
+.Observed on `pi-hostname` with the protocol MVP script:
+* Device homed to top-left, paused, then moved to center.
+* No laser firing, no further motion.
+* Second run had no observable effect until device reset.
+
+.Interpretation:
+* The `35/36` job header/init likely triggered a positioning routine, but the `34` data packet did not start raster output (or was rejected).
+* We need richer RX capture to see if the device returns a non-ACK error byte (e.g., `0xFF`) or a multi-byte status.
+
+== MVP Test Result (RX Capture)
+
+.Run with full RX capture during ACK windows (after device reset):
+* `CONNECT 1` -> RX: `ff ff ff fe` (no `0x09`)
+* `CONNECT 2` -> RX: timeout
+* `HOME` -> RX: repeated `ff ff ff fe` blocks
+* `INIT 36 #1` -> timeout
+* `INIT 36 #2` -> RX: `ff ff ff fe`
+* `DATA 34` -> RX: `ff ff ff fe`
+
+.Notes:
+* The device is returning `0xFF 0xFF 0xFF 0xFE` instead of `0x09`.
+* That pattern is likely a NAK/status frame; not a valid ACK for this flow.
+
+== MVP Test Result (Version + 50% Power)
+
+.Run after device reset with `0xFF` version command and higher power params:
+* `VERSION` -> RX: `0x04 0x01 0x06` (3-byte response; version read works)
+* `CONNECT` x2 -> ACK `0x09`
+* `HOME` -> ACK `0x09`
+* `INIT 36` x2 -> RX: `0xff 0xff 0x00 0x00`
+* `JOB HEADER 35` sent with `param6/param11 = 500` (~50%)
+* `DATA 34` -> timeout (no ACK)
+
+.Interpretation:
+* Device is alive and speaks the protocol (version read works).
+* `INIT 36` returns a 4-byte status (`ff ff 00 00`) instead of ACK.
+* `DATA 34` still not accepted; likely missing required header fields or the payload format/length does not match expectations.
+
+.User observation:
+* Behavior matched earlier run: home → pause → small non-laser movement → short line movement with no visible burn on 1cm cork at ~50% settings.
+
+== MVP Test Result (Options 3/2/1)
+
+.Ran sequence with:
+* opcode `33` before header,
+* real-ish offsets (`+67`) in header fields,
+* `34` data sent in a 1900-byte chunk.
+
+.Results:
+* `VERSION` -> `0x04 0x01 0x06`
+* `CONNECT` x2 -> ACK
+* `HOME` -> ACK
+* `FRAMING 33` -> ACK
+* `INIT 36` -> `ff ff 00 00` (both times)
+* `DATA 34 (1900B)` -> timeout (no ACK)
+
+No visible burn observed.
+
+== MVP Test Result (Options 1+2)
+
+Ran two sequences with revised header params and 1900-byte chunks:
+
+.Raster test (2-line payload):
+* `INIT 36` returned `ff ff 00 00` then `ff ff 00 32 ff`
+* `DATA 34` **ACKed** (`0x09`)
+
+.Vector test (3-point payload):
+* `INIT 36` returned repeated `ff ff 00 32 ff` patterns
+* `DATA 34` **ACKed** (`0x09`)
+
+.Notes:
+* This is the first time opcode `34` ACKed consistently.
+* Motion occurred but still no visible burn at ~50% on 1cm cork.
+
+== MVP Test Result (Full Black, Full Power)
+
+.Run with a 32x4 full-black raster at full power (param6/param11 = 1000):
+* `INIT 36` -> `ff ff ff ff` (both times)
+* `DATA 34` -> ACK (`0x09`)
+
+No visible burn observed.
+
+.User observation:
+* Laser flickered twice.
+* Raster movement was smaller than previous runs.
+
+== MVP Test Result (Larger Raster + Repeats)
+
+Run with a 64x16 full-black raster at full power, 3 repeated chunks:
+
+* `INIT 36` -> `ff ff 00 42 ff ff 00 42` then `ff ff ff ff`
+* `DATA 34` chunk #1 -> ACK
+* `DATA 34` chunk #2 -> ACK
+* `DATA 34` chunk #3 -> ACK
+
+== MVP Test Result (64x32 + Repeats + Pauses)
+
+Run with 64x32 full-black raster, full power, 8 repeats, 0.5s pause:
+
+* `INIT 36` -> `ff ff 00 4b ff ff 00 4b` then `ff ff 00 06`
+* `DATA 34` #1 -> timeout
+* `DATA 34` #2 -> timeout
+* `DATA 34` #3-#8 -> `ff ff ff fe` (NAK/status)
+
+[NOTE]
+====
+I stopped recording stuff at this point as I got frustrated.... 
+Funny thing: More problems popped up but the ghidra helped get answers on the payload stuff and the vector/raster stuff.
+Lot's of further testing ensued none the less.
+====
+
+== Timing testing
+After the few first working tests taking a long time but getting some squares and circles it's time to test the timing.
+
+The script now saves a CSV with timing parameters to generate statistics and timing diagrams.
+
+=== Statistics Graphs
+
+The `generate_statistics_graphs.py` script generates PNG graphs from CSV data:
+
+.Burning a circle (20mm diameter)
+image::example-k6_stats_status-1.png[]
+
+When burning the laser sends completion heartbeats. I have the feeling one can see the vector circle reflected in them.
+
+.What the script spends it's time doing
+image::example-k6_stats_timeline-1.png[]
+
+.interleaving the data send and data prep work
+image::example-k6_stats_timeline-2.png[]
+
+The timing and the waiting for acks and hard coded timeouts etc. are adding a bit to the wait time but it seems to be acceptable now. The laser is taking the most time and so improving the timing is now not so large a win as it was at the start when conservative timing multiplied the time to image by at least 10 of what it is now.
+
+.Burning a small tiger
+image::example-stat-26-01-21-23-26_status-3.png[]
+
+.I was expecting it to take longer
+image::example-stat-26-01-21-23-26_timeline-3.png[]
+
+[NOTE]
+====
+Percentage completed is wonky. It was observed to start at 37% complete on a vector. It was also observed to end at 37% for a raster (but it looks like the laser did keep going after the script reported complete). We found the reason for the end at 37% and it's pure coincidence that one ends there and the other starts there.... see below. still need to look at why it starts at 37% complete on the vector and if that varies by vector size.
+====
+
+=== Burn Completion Detection Issues (2026-01-22)
+
+Script quit at 37%. Laser kept burning.
+
+.Problems:
+* `send_cmd()` left `ser.timeout=0.01s` after reading ACK
+** `wait_for_completion()` timed out every 10ms
+** Idle check failed after 30 seconds
+* Estimated 336s. Burned 889s.
+** Hit max timeout at 37%
+* Idle timeout: 30s. Device pauses 7-15s between status. Sometimes longer.
+
+.Fixed:
+* Reset `ser.timeout=1.0` before monitoring
+* Idle timeout: 90s (was 30s)
+* Max timeout: 5× estimate (was 1×)
+* Track exit reason
+* Log everything to CSV
+
+.Exit Order:
+1. See 100% → `COMPLETE_100%`
+2. 90s silence → `IDLE_TIMEOUT`
+3. Hit 5× estimate → `MAX_TIMEOUT`
+
+.Device Sends:
+* `FF FF 00 XX` every 1.5s while burning
+* Counts up by 1%
+* May repeat final % or go silent
+
+.Tools Added:
+* `serial_monitor.py` - watch serial live
+* CSV - retry counts, states, exit reasons
+* Error log - errors with tracebacks
+* `--verbose` - full hex dumps
+
+=== PlantUML Timing Diagrams
+
+The CSV now includes `state` and `response_type` fields for generating detailed timing diagrams:
+
+[source,bash]
+----
+./generate_timing_diagram.py stat-26-01-21-23-26.csv -o timing.puml
+plantuml timing.puml  # generates timing.png
+----
+
+Timing diagrams show:
+
+* **Phase**: SETUP, BUILD, DATA, BURN
+* **Serial TX/RX**: Binary high/low for transmission activity
+* **Device Response**: ACK, HEARTBEAT, STATUS, TIMEOUT states
+* **Burn Progress**: Percentage completion from device
+
+This allows analysis of protocol timing, serial communication patterns, and device state transitions. The diagrams are of course a mile wide so to be viewed when needed and then scrolled. They are not suitable for documentation other than as cropped versions.
+
+[WARNING]
+====
+The timing diagram script is a work in progress.
+
+.Known issues
+* some overlap
+==== 
+
+ifdef::flag-book[]
+:imagesdir: {imagesdir-saved}
+:localdir: {localdir-saved}
+endif::flag-book[]

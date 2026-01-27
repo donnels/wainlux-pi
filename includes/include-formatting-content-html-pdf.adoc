@@ -1,0 +1,13 @@
+
+ifdef::backend-html5[]
+// HTML-specific content - set TOC to right sidebar
+:toc: right
+image::../includes/laser-warning.svg[align=center,pdfwidth=20%]
+*Other formats:* icon:file-pdf-o[] {pdf-docs-url}[PDF] | icon:github[] {repo-url}[GitHub Repository]
+endif::backend-html5[]
+
+ifdef::backend-pdf[]
+// PDF-specific content - title logo is in include-formatting-book-header.adoc
+toc::[]
+*Other formats:* icon:html5[] {html-docs-url}[HTML] | icon:github[] {repo-url}[GitHub Repository]
+endif::backend-pdf[]

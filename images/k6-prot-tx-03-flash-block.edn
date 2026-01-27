@@ -1,0 +1,11 @@
+;; K6 Flash Firmware Block (0x03)
+
+(defattrs :bg-header {:fill "#e8f4f8"})
+(defattrs :bg-data {:fill "#fff4e8"})
+
+(draw-column-headers)
+
+(draw-box "0x03" [{:span 8} :bg-header])
+(draw-box "0x04 Hi" [{:span 8} :bg-header])
+(draw-box "0x04 Lo" [{:span 8} :bg-header])
+(draw-box "1024 data + chk" [{:span 8} :bg-data])

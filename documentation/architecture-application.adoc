@@ -1,0 +1,214 @@
+= Application Implementation (PENDING)
+ifdef::flag-book[]
+:imagesdir-saved: {imagesdir}
+:localdir-saved: {localdir}
+:imagesdir: ./images
+:localdir: ./documentation
+endif::flag-book[]
+ifndef::flag-book[]
+:toc: right
+:toclevels: 5
+:sectnums:
+:sectnumlevels: 5
+ifdef::github-env[]
+:icons: font
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::github-env[]
+:imagesdir: ../images
+:localdir: .
+endif::flag-book[]
+
+== Introduction
+
+Pi Zero W controls Wainlux K6 laser via USB serial.
+
+Docker container. Web interface. Binary raster protocol.
+
+=== Features
+
+* Web UI on port 8080
+* Test patterns
+* Image upload and engraving
+* Direct serial protocol
+* Docker containerized
+
+== Quick start
+
+See <<doing-installation.adoc#,Installation and Setup>> for detailed installation instructions.
+
+=== Prerequisites
+
+. Pi Zero W with OS
+. Docker installed
+. 1GB swap enabled
+. K6 connected via USB
+. WiFi network
+
+=== Build and run
+
+[source,bash]
+----
+cd docker-wainlux
+docker compose build
+docker compose up -d
+----
+
+=== Access
+
+Open browser: `http://<pi-ip>:8080`
+
+=== First steps
+
+. Click CONNECT
+. Click DRAW BOUNDS (test pattern)
+. Upload image
+. Click BURN
+
+== Architecture
+
+=== System overview
+
+image::architecture.png[Architecture]
+
+=== Components
+
+==== Pi Zero W
+* Docker host
+* Serial USB device
+* WiFi client
+
+==== Container
+* Flask web app
+* K6 protocol driver
+* pyserial communication
+
+==== Browser
+* User interface
+* Image upload
+* Status display
+
+=== Data flow
+
+image::protocol-flow.png[Protocol Flow]
+
+.Serial protocol:
+. Open /dev/ttyUSB0 at 115200 baud
+. Send binary command
+. Wait for ACK byte (9)
+. Repeat or close
+
+== Use cases
+
+image::use-cases.png[Use Cases]
+
+=== UC1: Connect to K6
+
+*Actor:* User
+
+*Precondition:* K6 plugged into Pi via USB
+
+.*Flow:*
+. User opens web interface
+. User clicks CONNECT button
+. System opens /dev/ttyUSB0
+. System confirms connection
+. Status shows CONNECTED
+
+*Postcondition:* K6 ready for commands
+
+=== UC2: Disconnect from K6
+
+*Actor:* User
+
+*Precondition:* K6 connected
+
+.*Flow:*
+. User clicks DISCONNECT button
+. System closes serial port
+. Status shows DISCONNECTED
+
+*Postcondition:* K6 released
+
+=== UC3: Home laser head
+
+*Actor:* User
+
+*Precondition:* K6 connected
+
+.*Flow:*
+. User clicks HOME button
+. System sends home command
+. K6 moves to origin
+. System waits for ACK
+
+*Postcondition:* Laser at home position
+
+=== UC4: Draw test bounds
+
+*Actor:* User
+
+*Precondition:* K6 connected
+
+.*Flow:*
+. User clicks DRAW BOUNDS button
+. System generates boundary image
+. System engraves perimeter
+. Laser traces rectangle
+
+*Postcondition:* Test pattern visible
+
+=== UC5: Upload image
+
+*Actor:* User
+
+*Precondition:* None
+
+.*Flow:*
+. User clicks file input
+. User selects image file
+. Browser validates format
+. File ready for engraving
+
+*Postcondition:* Image loaded in browser
+
+=== UC6: Engrave image
+
+*Actor:* User
+
+*Precondition:* K6 connected, image uploaded
+
+.*Flow:*
+. User clicks BURN button
+. System processes image
+. System converts to 1-bit
+. System packs pixels
+. System sends chunked data
+. K6 engraves image
+
+image::image-processing.png[Image Processing Pipeline]
+
+image::sequence-engrave.png[Engrave Sequence]
+
+*Postcondition:* Image engraved on material
+
+=== UC7: Check status
+
+*Actor:* User
+
+*Precondition:* None
+
+.*Flow:*
+. User opens interface
+. System displays connection state
+. System shows max dimensions
+
+*Postcondition:* User informed
+
+ifdef::flag-book[]
+:imagesdir: {imagesdir-saved}
+:localdir: {localdir-saved}
+endif::flag-book[]

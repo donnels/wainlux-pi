@@ -1,0 +1,42 @@
+= Docker Wainlux K6 (build and run)
+
+Container for K6 laser control.
+
+== Build
+
+[source,bash]
+----
+docker compose build
+----
+
+Takes 15-20 minutes on Pi Zero W.
+
+== Run
+
+[source,bash]
+----
+docker compose up -d
+----
+
+Browse: `http://<pi-ip>:8080`
+
+== Configuration
+
+* *Device*: `/dev/ttyUSB0`
+* *Port*: `8080`
+* *Privileged*: Required for serial
+* *Volume*: `./data`
+
+== Commands
+
+[source,bash]
+----
+# View logs
+docker compose logs -f
+
+# Stop
+docker compose down
+
+# Rebuild
+docker compose build --no-cache
+----

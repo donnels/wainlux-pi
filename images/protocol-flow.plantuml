@@ -1,0 +1,42 @@
+@startuml
+skinparam backgroundColor #fff/aaf
+skinparam activitybackgroundColor #fff/aaf
+skinparam Shadowing 1
+
+start
+
+:Open /dev/ttyUSB0 115200;
+
+:0xFF VERSION;
+note right: Returns 3 bytes
+
+:0x0A CONNECT;
+:Wait ACK 0x09;
+:0x0A CONNECT (2nd);
+:Wait ACK 0x09;
+
+:0x17 HOME;
+:Wait ACK 0x09;
+
+:0x21 FRAMING;
+:Wait ACK 0x09;
+note right: Optional boundary test
+
+:0x24 INIT (11B);
+:Read status FF FF 00 XX;
+
+:0x24 INIT (11B);
+:Read status FF FF 00 XX;
+
+:0x23 JOB HEADER (38B);
+note right: No ACK wait
+
+while (Data chunks?) is (yes)
+  :0x22 DATA (≤1900B + checksum);
+  :Wait ACK 0x09;
+endwhile (no)
+
+:Close serial;
+stop
+
+@enduml

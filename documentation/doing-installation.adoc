@@ -1,0 +1,349 @@
+= Installation and Setup
+ifdef::flag-book[]
+:imagesdir-saved: {imagesdir}
+:localdir-saved: {localdir}
+:imagesdir: ./images
+:localdir: ./documentation
+endif::flag-book[]
+ifndef::flag-book[]
+:toc: right
+:toclevels: 5
+:sectnums:
+:sectnumlevels: 5
+ifdef::github-env[]
+:icons: font
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::github-env[]
+:imagesdir: ../images
+:localdir: .
+endif::flag-book[]
+//SWD
+
+Step-by-step installation and setup for Wainlux K6 on Pi Zero W.
+
+== Pi Zero W setup
+
+Initial Pi preparation for Wainlux K6.
+
+=== Verified hardware
+
+* Pi Zero W (ARMv6)
+* Raspbian GNU/Linux 13 (trixie)
+* 427 MiB RAM / 426 MiB swap
+* Wainlux K6 (labeled K6)
+* K6 via CP2102 USB-UART bridge (idVendor=10c4, idProduct=ea60)
+* Device: /dev/ttyUSB0 (cp210x driver)
+* Wifi
+
+=== OS install
+
+.Download Raspberry Pi OS Lite
+* 32-bit slim version
+** No desktop needed
+* https://www.raspberrypi.com/software/
+
+.Flash with Imager (version >2)
+* Enable SSH
+* Configure WiFi
+* Set hostname: `pi-hostname`
+* User: `user` (or other)
+** Password: set your own
+
+=== First boot
+
+.SSH access:
+[source,bash]
+----
+## for paswwordless access
+#ssh-copy-id user@pi-ip
+#ssh-add
+
+ssh user@pi-ip
+----
+
+.Update system:
+[source,bash]
+----
+sudo apt-get update && sudo apt-get upgrade -y
+----
+
+.Install git:
+[source,bash]
+----
+sudo apt-get install -y git
+----
+
+=== K6 USB verification
+
+.Check USB device:
+[source,bash]
+----
+lsusb | grep 10c4
+----
+
+Should show:
+[source,console]
+----
+Bus 001 Device 004: ID 10c4:ea60 Silicon Labs CP210x UART Bridge
+----
+
+.Check serial device:
+[source,bash]
+----
+ls -la /dev/ttyUSB0
+----
+
+Should show:
+[source,console]
+----
+crw-rw---- 1 root dialout 188, 0 Jan 11 16:16 /dev/ttyUSB0
+----
+
+.Verify kernel driver:
+[source,bash]
+----
+dmesg | grep -i cp210x
+----
+
+Should show:
+[source,console]
+----
+cp210x 1-1:1.0: cp210x converter detected
+usb 1-1: cp210x converter now attached to ttyUSB0
+----
+
+== Build instructions
+
+Step-by-step build on Pi Zero W.
+
+=== Prerequisites
+
+. Pi Zero W with OS
+. Docker installed
+. 1GB swap enabled
+. K6 connected via USB
+. Network access
+
+=== Build
+
+[source,bash]
+----
+cd ~/wainlux-pi/docker-wainlux
+docker compose build
+----
+
+.Expected output:
+[source]
+----
+[+] Building 1089.3s (12/12) FINISHED
+ => [internal] load build definition
+ => => transferring dockerfile
+ => [internal] load .dockerignore
+ => exporting to image
+----
+
+Time: 15-20 minutes.
+
+=== Verify
+
+[source,bash]
+----
+docker images
+----
+
+Should show:
+[source]
+----
+REPOSITORY              TAG       SIZE
+docker-wainlux-wainlux  latest    ~280MB
+----
+
+=== Run
+
+[source,bash]
+----
+docker compose up -d
+----
+
+.Check status:
+[source,bash]
+----
+docker compose ps
+----
+
+Should show:
+[source]
+----
+NAME          STATUS    PORTS
+wainlux-k6    Up        0.0.0.0:8080->8080/tcp
+----
+
+=== Test
+
+.Find Pi IP:
+[source,bash]
+----
+hostname -I
+----
+
+.Browse:
+----
+http://<pi-ip>:8080
+----
+
+.Test sequence:
+. Click CONNECT
+. Wait for CONNECTED status
+. Click DRAW BOUNDS
+. K6 should trace perimeter
+. Click HOME
+
+=== Logs
+
+[source,bash]
+----
+docker compose logs -f
+----
+
+Look for:
+[source]
+----
+INFO:app.k3:K3 connected
+INFO:werkzeug:127.0.0.1 - - "GET / HTTP/1.1" 200
+----
+
+== Troubleshooting
+
+=== Build fails: memory
+
+[source,bash]
+----
+free -h
+# Check swap
+
+sudo dphys-swapfile swapoff
+sudo nano /etc/dphys-swapfile
+# CONF_SWAPSIZE=1024
+sudo dphys-swapfile setup
+sudo dphys-swapfile swapon
+----
+
+=== K6 not found
+
+[source,bash]
+----
+lsusb | grep 10c4
+----
+
+Should show:
+[source]
+----
+Bus 001 Device 004: ID 10c4:ea60 Silicon Labs CP210x UART Bridge
+----
+
+.Check serial:
+[source,bash]
+----
+ls -la /dev/ttyUSB*
+# Should show: /dev/ttyUSB0
+----
+
+.If missing:
+* Check USB cable
+* Try different port
+* Reboot Pi
+
+=== Container won't start
+
+[source,bash]
+----
+docker compose logs
+----
+
+.Common issues:
+* Port 8080 in use: Change in compose.yaml
+* USB permission: Check privileged mode
+* Missing image: Rebuild
+
+=== Port in use
+
+.Change port in docker-wainlux/compose.yaml:
+[source,yaml]
+----
+ports:
+  - "8081:8080"
+----
+
+== Auto-start
+
+.Create service:
+[source,bash]
+----
+sudo nano /etc/systemd/system/wainlux.service
+----
+
+[source,ini]
+----
+[Unit]
+Description=Wainlux K6 Interface
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/home/pi/wainlux-pi/docker-wainlux
+ExecStart=/usr/bin/docker compose up -d
+ExecStop=/usr/bin/docker compose down
+User=pi
+
+[Install]
+WantedBy=multi-user.target
+----
+
+.Enable service:
+[source,bash]
+----
+sudo systemctl enable wainlux
+sudo systemctl start wainlux
+----
+
+== Maintenance
+
+=== Update
+
+.Pull changes:
+[source,bash]
+----
+cd ~/wainlux-pi
+git pull
+----
+
+.Rebuild:
+[source,bash]
+----
+cd docker-wainlux
+docker compose down
+docker compose build --no-cache
+docker compose up -d
+----
+
+=== Uninstall
+
+[source,bash]
+----
+cd ~/wainlux-pi/docker-wainlux
+docker compose down
+docker rmi docker-wainlux-wainlux
+cd ~
+rm -rf wainlux-pi
+----
+
+ifdef::flag-book[]
+:imagesdir: {imagesdir-saved}
+:localdir: {localdir-saved}
+endif::flag-book[]

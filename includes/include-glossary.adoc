@@ -1,0 +1,13 @@
+ACK:: Acknowledgement byte (0x09) returned by K6 after successful command.
+ARMv6:: CPU architecture of Pi Zero W. 32-bit. Limited to older Alpine/Debian.
+CP2102:: USB-to-serial chip in K6. Creates /dev/ttyUSB0. Vendor 10c4:ea60.
+Depth:: Laser on-time per pixel. Range 1-255. Higher burns deeper.
+Docker:: Container platform. Isolates K6 app. Privileged mode for /dev access.
+Flask:: Python web framework. Lightweight. 40MB less RAM than FastAPI.
+K3:: Earlier Wainlux model. Protocol reverse-engineered. K6 differs.
+K6:: Wainlux K6 laser engraver. 80x80mm work area. USB serial. NOT GRBL.
+Opcode:: Command byte in protocol. 0x0A=connect, 0x17=home, 0x09=engrave (K3).
+Pi Zero W:: Raspberry Pi Zero W. ARMv6, 512MB RAM, WiFi. Headless host.
+PySerial:: Python serial library. Talks to /dev/ttyUSB0 at 115200 baud.
+Raster:: Image as rows of pixels. 8 pixels per byte packed.
+TOGAF:: The Open Group Architecture Framework. DevOps guides recommend docs near code.

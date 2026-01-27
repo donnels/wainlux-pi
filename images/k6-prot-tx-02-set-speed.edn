@@ -1,0 +1,15 @@
+;; K6 Set Speed (0x02)
+;; 5-byte command to set speed parameter during firmware update
+
+(defattrs :bg-cmd {:fill "#e8f4f8"})
+
+(draw-column-headers)
+
+(draw-box "0x02 (Opcode)" [:box-first {:span 8} :bg-cmd])
+(draw-box "0x00" [:box-related {:span 8} :bg-cmd])
+(draw-box "0x05 (Len)" [:box-related {:span 8} :bg-cmd])
+(draw-box "0x00" [:box-related {:span 8} :bg-cmd])
+
+(next-row)
+(draw-box "0x73 (115)" [{:span 8} :bg-cmd])
+(draw-gap 24)

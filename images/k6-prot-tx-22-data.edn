@@ -1,0 +1,30 @@
+;; K6 Raster Data Packet (0x22)
+;; 9-byte header + variable pixel data
+
+;; Color coding
+(defattrs :bg-header {:fill "#e8f4f8"})
+(defattrs :bg-data {:fill "#fff4e8"})
+
+(draw-column-headers)
+
+;; Header row 1
+(draw-box "0x22" [:box-first {:span 8} :bg-header])
+(draw-box "Size MSB" [:box-related {:span 8} :bg-header])
+(draw-box "Size LSB" [:box-related {:span 8} :bg-header])
+(draw-box "1-255" [:box-last {:span 8} :bg-header])
+
+;; Header row 2
+(next-row)
+(draw-box "Power MSB" [:box-first {:span 8} :bg-header])
+(draw-box "Power LSB" [:box-related {:span 8} :bg-header])
+(draw-box "Line MSB" [:box-related {:span 8} :bg-header])
+(draw-box "Line LSB" [:box-last {:span 8} :bg-header])
+
+;; Header row 3 and pixel data
+(next-row)
+(draw-box "Count" [{:span 8} :bg-header])
+(draw-gap "Packed Pixel Data" [{:span 24} :bg-data])
+
+;; Variable length continuation
+(next-row)
+(draw-gap "..." [{:span 32} :bg-data])

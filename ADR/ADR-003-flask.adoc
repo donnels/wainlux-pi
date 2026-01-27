@@ -1,0 +1,38 @@
+= ADR-003: Flask vs FastAPI
+
+== Status
+
+Accepted
+
+== Context
+
+Need web framework for Pi Zero W (512MB RAM).
+
+.Options
+* Flask
+* FastAPI
+* Django
+
+== Decision
+
+Use Flask.
+
+== Rationale
+
+*Memory:* Flask uses 40MB less RAM than FastAPI.
+
+*Async:* Don't need async. Serial communication is synchronous. Single laser. One job at a time.
+
+*Simplicity:* Flask proven on Pi Zero. Minimal dependencies.
+
+*Speed:* FastAPI async overhead wasted on serial I/O.
+
+Django too heavy for this use case.
+
+== Consequences
+
+Lower memory footprint on constrained hardware.
+
+Simpler code without async complexity.
+
+Single-threaded model matches serial hardware constraints.

@@ -1,0 +1,110 @@
+= ADR-006: Clean Room Reverse Engineering
+
+== Status
+
+Accepted
+
+== Context
+
+K6 protocol undocumented. Initial assumption: existing K3 open source code would work.
+
+*Assumption failed:* K3 protocol differs from K6. K3 handshake stalled. K3 opcodes wrong.
+
+Need interoperability without vendor documentation.
+
+.Options considered
+* Use existing K3 OSS implementation as-is (tried, failed)
+* Adapt K3 code with modifications (insufficient)
+* Use vendor SDK (can't find one)
+* Clean room reverse engineering
+* Black box only (no verification)
+* Contact vendor for documentation (no response expected)
+
+== Decision
+
+Clean room reverse engineering with verification via decompilation.
+
+== Rationale
+
+=== Method
+
+. USB packet capture
+. Serial monitoring (115200 baud)
+. Black box testing
+. Public K3 protocol references
+. Decompilation for *verification only*
+
+=== Critical Distinction
+
+Decompiled code used for verification. Not implementation.
+
+*Process:*
+
+. Observe protocol via USB captures
+. Implement from observed packets
+. Verify with Ghidra decompilation
+. Test on hardware
+
+*Not used from vendor code:*
+
+* Algorithms
+* Variable names
+* Code structure
+* Direct translations
+
+=== AI-Mediated Analysis
+
+Ghidra accessed via MCP with Claude as intermediary.
+
+LLM answered protocol questions without user reading source line-by-line.
+
+Creates separation between implementation and vendor internals.
+
+=== Legal Basis
+
+Decompilation for interoperability is fair use under US precedent:
+
+* _Sega Enterprises Ltd. v. Accolade, Inc._, 977 F.2d 1510 (9th Cir. 1992)
+** Held: Intermediate copying for purpose of understanding functional requirements for interoperability is fair use
+** Public sources: https://en.wikipedia.org/wiki/Sega_Enterprises_Ltd._v._Accolade,_Inc.[Wikipedia]
+
+* _Sony Computer Entertainment, Inc. v. Connectix Corp._, 203 F.3d 596 (9th Cir. 2000)
+** Held: Reverse engineering of software for interoperability purposes is fair use
+** Public sources: https://en.wikipedia.org/wiki/Sony_Computer_Entertainment,_Inc._v._Connectix_Corp.[Wikipedia]
+
+Both cases establish that reverse engineering for interoperability purposes constitutes fair use.
+
+No vendor code included in repository.
+
+All distributed code is original implementation.
+
+== Consequences
+
+=== Positive
+
+* Legal distribution under MIT/CC
+* No copyright infringement
+* No trade secret issues
+* Community can safely build on this work
+* Protocol validated by actual device behavior
+
+=== Negative
+
+* More work than using vendor SDK
+* Some protocol details require testing to confirm
+* Documentation responsibility on us
+
+=== Verification
+
+Protocol correctness validated by:
+
+* Device ACK/NAK responses
+* Actual laser movement and marking
+* USB traffic comparison
+* Hardware testing
+
+== Implementation
+
+See link:../CLEAN_ROOM.md[] for full methodology and contributor guidelines.
+
+All code in `/docker-wainlux` and `/scripts` is original work based on observed protocol behavior.

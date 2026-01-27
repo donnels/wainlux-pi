@@ -1,0 +1,76 @@
+= Scripts
+ifdef::flag-book[]
+:imagesdir-saved: {imagesdir}
+:localdir-saved: {localdir}
+:imagesdir: ./images
+:localdir: ./scripts
+endif::flag-book[]
+ifndef::flag-book[]
+:toc: right
+:toclevels: 5
+:sectnums:
+:sectnumlevels: 5
+ifdef::github-env[]
+:icons: font
+endif::github-env[]
+:imagesdir: ../images
+:localdir: .
+endif::flag-book[]
+//SWD
+
+Test and utility scripts for K6 protocol.
+
+== Usage
+
+`k6_burn_image.py`:: Burn image to K6. Complete protocol sequence. Generates CSV stats automatically.
+`generate_statistics_graphs.py`:: Generate PNG graphs from CSV stats (throughput, timeline, progress).
+`generate_timing_diagram.py`:: Generate PlantUML timing diagrams from CSV stats.
+`generate_qr_wifi.py`:: Generate WiFi QR codes and alignment boxes for credit card sized bamboo blanks.
+`generate_test_grid.py`:: Generate test patterns and alignment grids.
+
+== Run
+
+[source,bash]
+----
+# Burn image (generates stat-YY-MM-DD-HH-MM.csv and stat-YY-MM-DD-HH-MM.json automatically)
+./k6_burn_image.py image.png --power 1000 --depth 10
+
+# Replay previous burn with saved config
+./k6_burn_image.py --config stat-26-01-22-11-35.json
+
+# Vector circle burn
+./k6_burn_image.py --vector-circle-mm 20 --power 1000 --depth 10
+
+# Generate statistics graphs
+./generate_statistics_graphs.py stat-26-01-21-23-26.csv
+
+# Generate PlantUML timing diagram
+./generate_timing_diagram.py stat-26-01-21-23-26.csv -o timing.puml
+plantuml timing.puml  # generates timing.png
+----
+
+== Content Generation
+
+=== Test Patterns
+
+[source,bash]
+----
+# A4 alignment grid for testing burns on
+./generate_test_grid.py test_grid.svg
+----
+
+== Requirements
+
+Python 3, pyserial, Pillow, matplotlib, qrcode.
+
+For PlantUML timing diagrams: plantuml package or web renderer.
+
+[source,bash]
+----
+pip install -r requirements.txt
+----
+
+ifdef::flag-book[]
+:imagesdir: {imagesdir-saved}
+:localdir: {localdir-saved}
+endif::flag-book[]

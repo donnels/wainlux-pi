@@ -1,0 +1,493 @@
+= K3 Reference (NOT K6)
+ifdef::flag-book[]
+:imagesdir-saved: {imagesdir}
+:localdir-saved: {localdir}
+:imagesdir: ./images
+:localdir: ./documentation
+endif::flag-book[]
+ifndef::flag-book[]
+:toc: right
+:toclevels: 5
+:sectnums:
+:sectnumlevels: 5
+ifdef::github-env[]
+:icons: font
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::github-env[]
+:imagesdir: ../images
+:localdir: .
+endif::flag-book[]
+
+[CAUTION]
+====
+Everything in this section is for the K3 only and was fruitless for the K6.
+====
+
+[NOTE]
+====
+This protocol was reverse-engineered for the K3. 
+The K6 at hand does not behave identically. 
+Initial assumption was that K6 uses K3 protocol. 
+This is false. 
+The K6 is NOT a simple cosmetic change to the K3.
+Original python testers and all K3 code have been removed.
+This section is left as reference only.
+====
+
+Reference: https://github.com/mogenson/K3_LASER_ENGRAVER_PROTOCOL
+
+== Command table
+
+.K3 (NOT K6) Serial Protocol
+[%header,stripes=even]
+,===
+Command,Opcode,Length,Byte0,Byte1,Byte2,Byte3,Byte4,Byte5,Byte6,Byte7,Notes,Status
+Connect Sequence,10,4,10,0,4,0,,,,,"Initialize connection",Implemented
+Home Upper Left,23,4,23,0,4,0,,,,,"Move to home position (0,0)",Implemented
+Go To Position,7,7,7,0,7,x>>8,x,y>>8,y,,"Absolute position X_MAX=1600 Y_MAX=1520",Implemented
+Fan On,4,4,4,0,4,0,,,,,"Enable cooling fan",Implemented
+Fan Off,5,4,5,0,4,0,,,,,"Disable cooling fan",Implemented
+Start Engrave Position,20,7,20,0,7,x>>8,x,y>>8,y,,"Start engraving and move to position X_MAX=1600 Y_MAX=1520",Implemented
+Move To Center,26,4,26,0,4,0,,,,,"Move to center position",Implemented
+Stop,22,4,22,0,4,0,,,,,"Stop operation",Implemented
+Unknown 14,14,4,14,0,4,0,,,,,"Unknown function",Not Implemented
+Left/Make (zuo),17,5,17,0,5,s>>8,s,,,,"Move left by s steps",Implemented
+Down/Under (xia),16,5,16,0,5,s>>8,s,,,,"Move down by s steps",Implemented
+Up/Light On (shang),15,5,15,0,5,s>>8,s,,,,"Move up by s steps",Implemented
+Move Y Relative,12,5,12,0,5,s>>8,s,,,,"Relative Y movement",Implemented
+Move X Relative,11,5,11,0,5,s>>8,s,,,,"Relative X movement",Implemented
+Blink Laser,7,5,7,0,5,s>>8,s,,,,"Fire laser for s milliseconds (e.g. 20ms)",Implemented
+Hui Ling (Return),8,4,8,0,4,0,,,,,"Return command",Implemented
+Reset,6,4,6,0,4,0,,,,,"Reset controller",Implemented
+Continue,25,1,25,,,,,,,,"Resume operation",Implemented
+Suspend,24,1,24,,,,,,,,"Pause operation",Implemented
+Enable Unknown,4,1,4,,,,,,,,"Unknown enable",Not Implemented
+Disable Unknown,5,1,5,,,,,,,,"Unknown disable",Not Implemented
+End,21,4,21,0,4,0,,,,,"End operation",Implemented
+Turn Off Light,3,4,3,0,4,0,,,,,"Disable laser/light",Implemented
+Turn On Light,2,4,2,0,4,0,,,,,"Enable laser/light",Implemented
+Disable Discrete Mode,28,4,28,0,4,0,,,,,"Continuous mode - laser stays on between pixels",Implemented
+Enable Discrete Mode,27,4,27,0,4,0,,,,,"Discrete mode - laser turns off between pixels",Implemented
+,===
+
+== Serial configuration
+
+* Device: /dev/ttyUSB0
+* Baud: 115200
+* Data: 8 bits
+* Parity: None
+* Stop: 1 bit
+* Timeout: 2 seconds
+
+== Command format
+
+Binary protocol. All commands return ACK byte (9).
+
+=== Home command
+
+[source]
+----
+[1, 0, 0, 0, 0, 0, 0, 0, 0]
+----
+
+Moves laser head to origin (0,0).
+
+=== Move command
+
+[source]
+----
+[2, x_hi, x_lo, y_hi, y_lo, 0, 0, 0, 0]
+----
+
+* `x_hi, x_lo`: X position (16-bit big-endian)
+* `y_hi, y_lo`: Y position (16-bit big-endian)
+
+=== Image line command
+
+[source]
+----
+[9, size_hi, size_lo, depth_hi, depth_lo,
+    pwr_hi, pwr_lo, line_hi, line_lo, ...pixels]
+----
+
+* `size`: Total buffer length
+* `depth`: Laser on time (1-255)
+* `pwr`: Power (1000 fixed)
+* `line`: Current Y line (0 to height-1)
+* `pixels`: Packed pixel data
+
+== Pixel packing
+
+8 pixels per byte:
+
+[source]
+----
+byte == 0
+for bit in 0..7:
+  if pixel[x+bit] === black:
+    byte +== 32
+buffer[idx] == byte
+----
+
+Black pixel == laser on == add 32.
+
+== ACK protocol
+
+After each command:
+
+. Send command buffer
+. Read 1 byte
+. Verify byte === 9
+. Proceed or abort
+
+Timeout after 2 seconds == failure.
+
+== Limits
+
+* Max image width: 1600px
+* Max image height: 1520px
+* Depth range: 1-255
+* Power: 1000mW (fixed)
+
+== K3 protocol reference
+
+RBEGamer's reverse-engineered protocol (for K3):
+[source,bash]
+----
+cd ~
+git clone https://github.com/RBEGamer/K3_LASER_ENGRAVER_PROTOCOL.git
+----
+
+.Key docs in `documentation/`
+* `commands.xlsx` - Full command reference
+* `known_commands.PNG` - Visual reference
+* `buffer_dump/` - Example captures
+* `test_images/` - Test bitmaps
+
+== Bare metal test (C++ CLI)
+
+.Install build tools:
+[source,bash]
+----
+sudo apt-get install -y cmake build-essential
+----
+
+.Fix CMakeLists.txt for Linux:
+[source,bash]
+----
+cd ~/K3_LASER_ENGRAVER_PROTOCOL/src/k3_laser_api
+cat > CMakeLists.txt << 'EOF'
+cmake_minimum_required(VERSION 3.11)
+project(k3_laser_api)
+set(CMAKE_CXX_STANDARD 14)
+if(WIN32)
+    add_executable(k3_laser_api main.cpp ./serial/serialib.cpp ./bitmap/bitmap_image.hpp win.hpp win.cpp)
+else()
+    add_executable(k3_laser_api main.cpp ./serial/serialib.cpp ./bitmap/bitmap_image.hpp)
+endif()
+EOF
+----
+
+.Build:
+[source,bash]
+----
+cd ~/K3_LASER_ENGRAVER_PROTOCOL/src/k3_laser_api
+mkdir -p build && cd build
+cmake ..
+make
+----
+
+Binary: `~/K3_LASER_ENGRAVER_PROTOCOL/src/k3_laser_api/build/k3_laser_api`
+
+.Quick bounds test (325x193):
+[source,bash]
+----
+cd ~/K3_LASER_ENGRAVER_PROTOCOL/src/k3_laser_api/build
+./k3_laser_api --port /dev/ttyUSB0 \
+  --if ~/K3_LASER_ENGRAVER_PROTOCOL/documentation/test_images/vio_calibration_86x51@96ppi.bmp \
+  --depth 30 --bwt 128
+----
+
+.Full test image (512x512):
+[source,bash]
+----
+./k3_laser_api --port /dev/ttyUSB0 \
+  --if ~/K3_LASER_ENGRAVER_PROTOCOL/documentation/test_images/test_image_1.bmp \
+  --depth 50 --bwt 128
+----
+
+.Key options
+* `--port` - Serial device (default /dev/ttyUSB0)
+* `--if` - Input BMP (max 1600x1520)
+* `--depth` - Laser on time per pixel (1-199)
+* `--bwt` - Black/white threshold (1-255)
+* `--fan` - Enable fan
+* `--discrete` - Don't turn off laser between pixels
+* `--offsetx/y` - Position offset
+* `--passes` - Repeat count
+
+Protocol verified against this implementation (for K3).
+
+== Python debug test
+
+No Python implementations found on the internet at first glance. 
+Created manual step-by-step tester.
+
+.Copy to Pi:
+[source,bash]
+----
+scp test_k3_manual.py user@pi-ip:~/
+----
+
+.Run interactive test:
+[source,bash]
+----
+ssh user@pi-ip
+python3 ~/test_k3_manual.py
+----
+
+.Tests individual commands
+* Home (opcode 1)
+* Relative move (opcode 2)
+* Single line engrave (opcode 9)
+
+Shows hex TX/RX for each command. Step through manually or run all.
+
+== K3 Debug Notes
+
+=== Build Instructions (Linux)
+
+The project is CMake-based and contains Windows-only code that must be excluded.
+
+==== 1. Remove Windows-only source from Linux build
+
+Edit `src/k3_laser_api/CMakeLists.txt`.
+
+Ensure `win.cpp` is only compiled on Windows:
+
+[source,cmake]
+----
+set(SOURCES
+    main.cpp
+    serial/serialib.cpp
+)
+
+if(WIN32)
+  list(APPEND SOURCES win.cpp)
+endif()
+
+add_executable(k3_laser_api ${SOURCES})
+----
+
+==== 2. Build (Debug recommended)
+
+[source,bash]
+----
+cd src/k3_laser_api
+rm -rf build
+mkdir build
+cd build
+cmake -DCMAKE_BUILD_TYPE=Debug ..
+make -j1
+----
+
+=== Serial Confirmation
+
+Expected kernel output:
+
+[source]
+----
+cp210x converter now attached to ttyUSB0
+----
+
+Check permissions:
+
+[source,bash]
+----
+ls -l /dev/ttyUSB0
+groups   # must include dialout
+----
+
+=== Generating Test Bitmaps
+
+[source,bash]
+----
+convert -size 128x128 xc:white \
+  -fill black -draw "rectangle 16,16 112,112" \
+  -depth 8 -type TrueColor BMP3:test_128_24.bmp
+----
+
+.Verify:
+[source,bash]
+----
+file test_128_24.bmp
+identify test_128_24.bmp
+----
+
+=== Required Runtime Fixes
+
+==== 1. Temp directory
+
+The program writes intermediate images to `./tmp`.
+
+[source,bash]
+----
+cd build
+mkdir -p tmp
+----
+
+(Alternative: `ln -s /tmp tmp`)
+
+=== Root Cause #1: Broken ACK Handling (FIXED)
+
+Original `wait_for_ack()` was fundamentally broken:
+
+* Printed `ACK_OK` even when no ACK received
+* Read 128 bytes without checking return value
+* Looked only at `rec_buffer[0]`
+* Could loop forever while lying to the user
+
+==== Correct ACK Behaviour Observed
+
+The K6 sends ACK byte:
+
+* `0x09`
+
+Confirmed via GDB and serial tracing.
+
+=== REQUIRED CODE CHANGE: wait_for_ack()
+
+Replace the existing implementation in `main.cpp` with:
+
+[source,cpp]
+----
+int wait_for_ack(serialib &_ser) {
+    int trys = 0;
+    unsigned char b = 0;
+
+    while (trys < WAIT_FOR_ACK_RETRIES) {
+        trys++;
+        int ret = _ser.readBytes(&b, 1, 200);
+
+        if (ret == 1) {
+            std::cout << "RX 0x"
+                      << std::hex << (int)b << std::dec << std::endl;
+
+            if (b == 0x09) {
+                std::cout << "ACK_OK after "
+                          << trys << " trys" << std::endl;
+                return 1;
+            }
+        } else {
+            std::cout << "RX timeout" << std::endl;
+        }
+
+        thread_sleep(WAIT_FOR_ACK_TIME);
+    }
+
+    std::cout << "ACK_FAIL" << std::endl;
+    return 0;
+}
+----
+
+Rebuild after change.
+
+=== REQUIRED CODE CHANGE: Instrument send_4byte_cmd()
+
+Add logging and RX flush to identify failing opcodes.
+
+[source,cpp]
+----
+int send_4byte_cmd(serialib &_ser, unsigned char cmd) {
+    std::cout << "TX cmd 0x"
+              << std::hex << (int)cmd << std::dec << std::endl;
+
+    // Flush stale RX data
+    unsigned char dump;
+    while (_ser.readBytes(&dump, 1, 5) == 1) {}
+
+    unsigned char data[4] = { cmd, 0x00, 0x04, 0x00 };
+    _ser.writeBytes(data, 4);
+
+    int ok = wait_for_ack(_ser);
+    if (!ok)
+        std::cout << "ACK_FAIL for cmd 0x"
+                  << std::hex << (int)cmd << std::dec << std::endl;
+
+    return ok;
+}
+----
+
+=== Current Observed Behaviour (After Fixes)
+
+* `RX 0x09` seen for early commands
+* Subsequent command(s) never ACK
+* Program stuck in `wait_for_ack()`
+* `strace` shows only **three 4-byte writes**
+* **No raster/job payload ever sent**
+
+Conclusion:
+
+* Tool never reaches raster-send phase
+* Failure is in control-flow / handshake stage
+* NOT yet a raster protocol mismatch
+
+=== Debug Evidence
+
+==== GDB Backtrace at Stall
+
+[source]
+----
+main
+└─ start_engraving
+   └─ send_4byte_cmd
+      └─ wait_for_ack
+         └─ serialib::readBytes
+            └─ usleep
+----
+
+==== strace Summary
+
+[source]
+----
+write(3, "\n\0\4\0", 4)
+write(3, "\27\0\4\0", 4)
+write(3, "\34\0\4\0", 4)
+----
+
+No further writes observed.
+
+=== Next Steps (TODO)
+
+==== 1. Identify failing opcode
+* Use `TX cmd 0x..` logging
+* Observe which command never receives ACK
+
+==== 2. After identifying failing command, test
+
+* Remove command entirely
+* Add delay after command (`thread_sleep(500-1000ms)`)
+* Replace opcode with observed K6 equivalent (if we can capture it)
+
+==== 3. Only if raster streaming starts but engraving still fails
+
+* Capture known-good protocol (Windows or MAC app via USB sniff)
+* Compare job-start and raster framing
+* Adjust payload format
+
+=== Key Takeaways
+
+* BMP format errors and temp dir issues masked real problem early
+* ACK handling was completely broken and misleading
+* K6 **does respond with 0x09 ACK**
+* Current blocker is **handshake/state machine**, not image or raster
+* Raster protocol mismatch is a *secondary* hypothesis, not primary
+
+ifdef::flag-book[]
+:imagesdir: {imagesdir-saved}
+:localdir: {localdir-saved}
+endif::flag-book[]

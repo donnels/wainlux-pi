@@ -1,0 +1,51 @@
+@startuml
+skinparam backgroundColor #fff/aaf
+skinparam activitybackgroundColor #fff/aaf
+skinparam Shadowing 1
+
+title K6 Image Processing Pipeline
+
+start
+
+:User uploads image\n(JPEG/PNG/BMP);
+
+:Pillow loads image;
+
+if (Size > 1066x1066?) then (yes)
+  :Resize (thumbnail)\npreserve aspect;
+  note right: Max: 80mm @ 0.075mm/px
+else (no)
+  :Keep original size;
+endif
+
+:Convert to grayscale;
+
+:Threshold at 128\n(configurable);
+
+:Convert to 1-bit\n(black/white);
+
+:Pack 8 pixels per byte\nMasks: [-128,64,32,16,8,4,2,1];
+note right: Red channel < 10 → bit set
+
+:Calculate dimensions\nwidth, height in pixels;
+
+:Calculate center\ncx = x + width/2 + 67\ncy = y + height/2;
+
+:Build 38-byte header\n(0x23);
+note right
+  Packet count
+  Sizes, offsets
+  Power (default 1000)
+  Depth (default 10)
+  Center coordinates
+end note
+
+:Split into chunks\n≤1900 bytes each;
+
+:Add checksum to each chunk;
+
+:Ready for transmission;
+
+stop
+
+@enduml

@@ -1,0 +1,160 @@
+= UI Design Decisions
+:toc:
+
+Design choices for K6 web interface. Why things work the way they do.
+
+== Color Themes
+
+*Problem:* Laser safety glasses block specific wavelengths. Blue laser glasses block green/cyan. Users can't see standard green terminal UI.
+
+*Solution:* 5 selectable color themes stored in localStorage.
+
+- GREEN: Default, no glasses
+- RED: For blue laser glasses (450nm blocked)
+- YELLOW: For blue laser glasses (450nm blocked)
+- CYAN: Avoid with blue laser glasses
+- WHITE: High contrast, works with most glasses
+
+*Rationale:* White-on-black or black-on-white safest. Works with any glasses. High contrast reduces eye strain during long sessions.
+
+== Preview vs Burn Bounds
+
+Two separate operations. Different purposes.
+
+=== Preview Bounds (0x20 command)
+
+*What:* Laser traces rectangle outline. No burning.
+
+*When:* Check positioning before committing material.
+
+*Speed:* Instant (single 11-byte command).
+
+*Use case:* "Will this fit my material?"
+
+=== Burn Bounds (full engrave)
+
+*What:* Burns permanent frame into material.
+
+*When:* Create positioning guide for repeated burns.
+
+*Speed:* Seconds (actual engrave operation).
+
+*Use case:* "Mark this area so I can position objects inside it."
+
+*Rationale:* Preview gauges size/position without wasting material. Burn creates reusable reference marks.
+
+=== Preview Toggle
+
+*Problem:* Preview bounds (0x20) starts continuous tracing. Needed way to stop it.
+
+*Discovery:* 0x20 starts preview loop. 0x21 FRAMING stops it. Not documented in protocol notes.
+
+*Solution:* Single toggle button with state indication.
+
+*States:*
+- Inactive: "PREVIEW BOUNDS" (normal theme colors)
+- Active: "STOP PREVIEW" (white bg, bold black text)
+
+*Protocol:*
+1. Click → Send 0x20 BOUNDS (start continuous trace)
+2. Click → Send 0x21 FRAMING + HOME (stop trace, return origin)
+
+*Color choice:* White-on-black or black-on-white visible through any laser glasses. Colours can become nearly invisible with laser goggles. Active state must be unmistakable.
+
+*Rationale:* Toggle = single button for start/stop. State visible at glance. Follows same safety-first color principle as all UI elements: white/black always works.
+
+== Progress Tracking
+
+=== Three Separate Bars
+
+Not one combined bar. Three distinct phases with different speeds:
+
+1. *SETUP (connect/framing/header)*
+   - Fixed ~4-5 commands
+   - Takes 5-10 seconds
+   - Progress: deterministic
+
+2. *UPLOAD (data chunks)*
+   - Variable (1-1600 chunks for full frame)
+   - Takes 30-60 seconds for 1600×1600
+   - Progress: linear, predictable
+
+3. *BURN (device executing)*
+   - Fixed duration per job
+   - Takes minutes
+   - Progress: device reports status
+
+*Rationale:* Each phase has different time characteristics. Single bar misleads. Three bars show: setup complete, upload at 90%, burn near to starting.
+
+=== Real-time Log
+
+Scrolling log box shows every operation:
+
+- Connection events
+- Protocol commands
+- Chunk progress
+- Device status
+- Errors
+
+Auto-scrolls to bottom. Timestamped.
+
+*Rationale:* Progress bars show "how much." Logs show "what's happening." User sees: upload stalled → checks logs → "Retry on chunk 847" → knows device is still working, not frozen.
+
+== Emergency Stop
+
+*Design:* NEVER ask for confirmation.
+
+Button always enabled. Click → immediate action:
+
+1. Set Python cancellation flag
+2. Send 0x16 STOP to device
+3. Send 0x0A CONNECT to reset state
+4. Close SSE stream
+5. Update UI
+
+*Rationale:* Emergency means emergency. Confirmation dialog wastes 2-5 seconds. In emergency (smoke, fire, material shifting), every second counts. User clicks STOP → expects immediate response.
+
+Confirmation belongs on destructive operations (start burn). Not on safety features that stop destruction.
+
+== Burn Confirmation
+
+*Design:* Burn button shows confirmation for burn operations.
+
+*Rationale:* Prevents accidental burns. Material costs money. User has time to:
+
+- Check positioning
+- Verify settings
+- Confirm material is secured
+
+Not a safety feature. A "are you sure?" check.
+
+*Difference from STOP:* Burn is deliberate action. STOP is reaction to problem.
+
+== Image Processing Time
+
+90 seconds → 5-10 seconds with NumPy.
+
+*Problem:* Pi Zero W ARM6, single core ~1GHz. Python `getpixel()` called 2.56M times for 1600×1600. Each call has interpreter overhead.
+
+*Solution:* Bulk NumPy operations. Single C call converts entire image array. Vectorized threshold and bit packing.
+
+*UI feedback:* "Processing image with NumPy (~5-10 sec for 1600×1600)"
+
+Sets expectation. User knows: not frozen, just processing.
+
+*Rationale:* Long gaps without feedback → user assumes crash → hits STOP → wastes partial work. Clear message → user waits → successful burn.
+
+== Lessons Applied
+
+1. *Show, don't tell*: Progress bars + logs, not just "working..."
+2. *Expect the worst*: NumPy might take 20 seconds on slow SD card, message says "5-10 sec" so 15 sec feels normal
+3. *Safety first*: STOP always works, no questions asked
+4. *Different tools, different jobs*: Preview vs burn bounds serve different needs
+5. *Visibility*: Can't fix what you can't see (logs critical for debugging)
+
+== Future Considerations
+
+- Add download logs button (troubleshooting is currently cut and paste)
+- Pause/resume for long burns (is this even possible??) (currently: stop cancels all)
+- Preview image before burn (show what will be engraved)
+- Persistent settings (power/depth saved per material type)

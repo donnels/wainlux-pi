@@ -1,0 +1,11 @@
+;; K6 Status Frame (Progress)
+;; 4-byte frame sent during burn operation
+
+(defattrs :bg-status {:fill "#fff0d0"})
+
+(draw-column-headers)
+
+(draw-box "0xFF (Marker)" [:box-first {:span 8} :bg-status])
+(draw-box "0xFF (Marker)" [:box-related {:span 8} :bg-status])
+(draw-box "0x00 (Status)" [:box-related {:span 8} :bg-status])
+(draw-box "0xXX (0-100%)" [:box-last {:span 8} :bg-status])

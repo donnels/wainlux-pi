@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>K6 Calibration</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: monospace;
+            background: #000;
+            color: #fff;
+            padding: 20px;
+        }
+        .container { max-width: 800px; margin: 0 auto; }
+        h1 { margin-bottom: 20px; border-bottom: 1px solid #fff; padding-bottom: 10px; }
+        h2 { margin-top: 20px; margin-bottom: 10px; font-size: 1.2em; }
+        .nav {
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px solid #fff;
+        }
+        .nav a {
+            color: #fff;
+            text-decoration: none;
+            margin-right: 15px;
+        }
+        .nav a:hover { text-decoration: underline; }
+        .status {
+            margin: 20px 0;
+            padding: 10px;
+            border: 1px solid #fff;
+        }
+        .status.disconnected { border: 3px solid #fff; font-weight: bold; }
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #fff;
+        }
+        .form-row {
+            margin: 15px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .form-row label {
+            min-width: 150px;
+        }
+        select, input[type="number"] {
+            background: #000;
+            color: #fff;
+            border: 1px solid #fff;
+            padding: 5px;
+            font-family: monospace;
+        }
+        button {
+            background: #000;
+            color: #fff;
+            border: 1px solid #fff;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            font-family: monospace;
+        }
+        button:hover { background: #fff; color: #000; }
+        button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        .info {
+            margin: 10px 0;
+            padding: 10px;
+            border-left: 3px solid #fff;
+            font-size: 0.9em;
+        }
+        #message {
+            margin: 10px 0;
+            padding: 10px;
+            display: none;
+        }
+        #message.show { display: block; }
+        #message.error { border: 3px solid #fff; font-weight: bold; }
+        #message.success { border: 1px solid #fff; }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            border: 1px solid #fff;
+            display: none;
+        }
+        .result.show { display: block; }
+        #logBox {
+            font-family: monospace;
+            font-size: 0.9em;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #fff;
+            padding: 10px;
+            margin-top: 15px;
+            background: #000;
+        }
+    </style>
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>K6 CALIBRATION</h1>
+        
+        <div class="nav">
+            <a href="/">← MAIN</a>
+            <a href="/calibration">CALIBRATION</a>
+        </div>
+        
+        <div id="status" class="status {% if not connected %}disconnected{% endif %}">
+            {% if connected %}CONNECTED{% else %}DISCONNECTED{% endif %}
+        </div>
+        
+        <div class="section">
+            <h2>JOG CONTROLS</h2>
+            <div class="info" style="margin-bottom: 15px;">
+                Move laser head by small increments for positioning.<br>
+                Step size: 1mm = 20px @ 0.05mm/px resolution
+            </div>
+            
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
+                <label>STEP SIZE (mm):</label>
+                <input type="number" id="jogStep" value="1" min="0.05" max="10" step="0.05" style="width: 80px;">
+                <button id="btnHome" {% if not connected %}disabled{% endif %}>HOME (0,0)</button>
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                    <input type="checkbox" id="disableLimits" style="cursor: pointer;">
+                    <span style="font-weight: bold;">⚠ DISABLE SOFT LIMITS (experimental - may hit physical limits)</span>
+                </label>
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                    <input type="checkbox" id="crosshairToggle" style="cursor: pointer;" {% if not connected %}disabled{% endif %}>
+                    <span>CROSSHAIR/POSITIONING LASER (test 0x06/0x07 commands)</span>
+                </label>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(3, 60px); gap: 5px; justify-content: center; margin-bottom: 10px;">
+                <div></div>
+                <button id="jogUp" {% if not connected %}disabled{% endif %} style="padding: 10px;">↑</button>
+                <div></div>
+                <button id="jogLeft" {% if not connected %}disabled{% endif %} style="padding: 10px;">←</button>
+                <button id="btnHomeCenter" {% if not connected %}disabled{% endif %} style="padding: 5px; font-size: 0.8em;">HOME</button>
+                <button id="jogRight" {% if not connected %}disabled{% endif %} style="padding: 10px;">→</button>
+                <div></div>
+                <button id="jogDown" {% if not connected %}disabled{% endif %} style="padding: 10px;">↓</button>
+                <div></div>
+            </div>
+            
+            <div style="border-top: 1px solid #fff; margin: 15px 0; padding-top: 15px;">
+                <h3 style="margin-bottom: 10px;">MARK POSITION</h3>
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                    <label>MARK POWER:</label>
+                    <input type="number" id="markPower" value="500" min="0" max="1000" step="10" style="width: 80px;">
+                    <label>DEPTH:</label>
+                    <input type="number" id="markDepth" value="10" min="1" max="255" step="1" style="width: 60px;">
+                    <button id="btnMark" {% if not connected %}disabled{% endif %} style="font-weight: bold;">🔥 MARK HERE</button>
+                </div>
+                <div class="info" style="font-size: 0.9em;">
+                    Burns a single pixel dot at current position.<br>
+                    Use low depth (10) for testing, higher for visible marks.
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>DIMENSIONAL ACCURACY TEST</h2>
+            
+            <div class="info" style="border: 3px solid #fff; padding: 10px; margin-bottom: 15px; font-weight: bold;">
+                ⚠ IMPORTANT: K6 firmware uses FIXED 0.05 mm/px resolution.<br>
+                Other resolutions will produce incorrect dimensions.<br>
+                Use 0.05 for accurate physical sizing (1600px = 80mm).<br>
+                Test with calipers to verify.
+            </div>
+            
+            <div class="info">
+                Test resolution accuracy by burning calibration patterns.<br>
+                Measure burned patterns with calipers to verify dimensional accuracy.<br>
+                Start with high resolution (0.05) and work through each.
+            </div>
+            
+            <div class="form-row">
+                <label>RESOLUTION (mm/px):</label>
+                <select id="resolution">
+                    <option value="0.05" selected>0.05 - HARDWARE FIXED (1600px = 80mm) ✓</option>
+                    <option value="0.06">0.06 - ADJUSTED (1333px = 80mm)</option>
+                    <option value="0.075">0.075 - NORMAL (1067px = 80mm)</option>
+                    <option value="0.08">0.08 - COARSE (1000px = 80mm)</option>
+                </select>
+            </div>
+            
+            <div class="form-row">
+                <label>PATTERN:</label>
+                <select id="pattern">
+                    <option value="center" selected>CENTER BOX (10mm for measurement)</option>
+                    <option value="corners">CORNER BOXES (test bounds)</option>
+                    <option value="frame">FULL FRAME (80mm border)</option>
+                    <option value="grid">GRAPH PAPER (10mm grid)</option>
+                </select>
+            </div>
+            
+            <div class="form-row">
+                <label>BOX SIZE (mm):</label>
+                <input type="number" id="sizeInput" value="10" min="5" max="50" step="1">
+                <span>(for center/corner patterns)</span>
+            </div>
+            
+            <div class="form-row">
+                <label>POWER (0-1000):</label>
+                <input type="number" id="powerInput" value="500" min="0" max="1000" step="10">
+            </div>
+            
+            <div class="form-row">
+                <label>DEPTH (1-255):</label>
+                <input type="number" id="depthInput" value="10" min="1" max="255" step="1">
+                <span>(hardboard: 10 works well)</span>
+            </div>
+            
+            <button id="btnPreview" {% if not connected %}disabled{% endif %}>PREVIEW BOUNDS</button>
+            <button id="btnBurnBounds" {% if not connected %}disabled{% endif %}>BURN BOUNDS (engrave frame)</button>
+            <button id="btnBurn" {% if not connected %}disabled{% endif %}>BURN TEST PATTERN</button>
+            <button id="btnStop" style="font-weight: bold;">EMERGENCY STOP</button>
+            
+            <div id="result" class="result">
+                <div id="resultInfo"></div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>TEST PROCEDURE</h2>
+            <div class="info">
+                1. Start with HIGH resolution (0.05 mm/px)<br>
+                2. Burn CENTER BOX pattern (10mm)<br>
+                3. Measure with calipers - should be exactly 10mm<br>
+                4. If incorrect, adjust resolution or document offset<br>
+                5. Burn CORNER BOXES to test max bounds<br>
+                6. Verify all 4 corners are reachable<br>
+                7. Burn FULL FRAME to verify 80mm work area<br>
+                8. Repeat for each resolution (0.05, 0.06, 0.075, 0.08)<br>
+                9. Document results for each resolution
+            </div>
+        </div>
+        
+        <div class="section" id="previewSection" style="display: none;">
+            <h2>PREVIEW</h2>
+            <canvas id="previewCanvas" style="border: 1px solid var(--ui-color); max-width: 100%; background: #fff;"></canvas>
+            <div id="previewInfo" style="margin-top: 10px;"></div>
+        </div>
+        
+        <div class="section" id="progressSection" style="display: none;">
+            <h2>PROGRESS</h2>
+            
+            <!-- Setup Progress -->
+            <div style="margin-bottom: 15px;">
+                <div style="margin-bottom: 5px;">SETUP (connect/framing/header):</div>
+                <div style="width: 100%; height: 25px; border: 1px solid var(--ui-color); position: relative;">
+                    <div id="setupFill" style="height: 100%; background: var(--ui-color); width: 0%;"></div>
+                    <div id="setupText" style="position: absolute; top: 3px; left: 50%; transform: translateX(-50%); color: #000; font-weight: bold;">0%</div>
+                </div>
+            </div>
+            
+            <!-- Upload Progress -->
+            <div style="margin-bottom: 15px;">
+                <div style="margin-bottom: 5px;">UPLOAD (data chunks):</div>
+                <div style="width: 100%; height: 25px; border: 1px solid var(--ui-color); position: relative;">
+                    <div id="uploadFill" style="height: 100%; background: var(--ui-color); width: 0%;"></div>
+                    <div id="uploadText" style="position: absolute; top: 3px; left: 50%; transform: translateX(-50%); color: #000; font-weight: bold;">0%</div>
+                </div>
+            </div>
+            
+            <!-- Burn Progress -->
+            <div style="margin-bottom: 15px;">
+                <div style="margin-bottom: 5px;">BURNING (laser active):</div>
+                <div style="width: 100%; height: 25px; border: 1px solid var(--ui-color); position: relative;">
+                    <div id="burnFill" style="height: 100%; background: var(--ui-color); width: 0%;"></div>
+                    <div id="burnText" style="position: absolute; top: 3px; left: 50%; transform: translateX(-50%); color: #000; font-weight: bold;">0%</div>
+                </div>
+            </div>
+            
+            <div id="logBox" style="margin-top: 20px; height: 200px; overflow-y: auto; border: 1px solid var(--ui-color); padding: 10px; font-size: 0.9em;">
+            </div>
+        </div>
+        
+        <div id="message"></div>
+    </div>
+    
+    <script>
+        const btnBurn = document.getElementById('btnBurn');
+        const btnPreview = document.getElementById('btnPreview');
+        const btnBurnBounds = document.getElementById('btnBurnBounds');
+        const btnStop = document.getElementById('btnStop');
+        const resolutionSelect = document.getElementById('resolution');
+        const patternSelect = document.getElementById('pattern');
+        const sizeInput = document.getElementById('sizeInput');
+        const powerInput = document.getElementById('powerInput');
+        const depthInput = document.getElementById('depthInput');
+        const message = document.getElementById('message');
+        const result = document.getElementById('result');
+        const resultInfo = document.getElementById('resultInfo');
+        const status = document.getElementById('status');
+        
+        let currentEventSource = null;
+        let previewActive = false;
+        
+        // Check connection status on page load
+        fetch('/api/status')
+            .then(res => res.json())
+            .then(data => {
+                if (data.connected && data.version) {
+                    status.textContent = `CONNECTED TO K6 ${data.version}`;
+                    status.className = 'status';
+                } else if (data.connected) {
+                    status.textContent = 'CONNECTED';
+                    status.className = 'status';
+                } else {
+                    status.textContent = 'DISCONNECTED';
+                    status.className = 'status disconnected';
+                }
+            })
+            .catch(() => {
+                status.textContent = 'DISCONNECTED';
+                status.className = 'status disconnected';
+            });
+        
+        function showMessage(text, isError = false) {
+            message.textContent = text;
+            message.className = isError ? 'show error' : 'show success';
+            setTimeout(() => message.className = '', 5000);
+        }
+        
+        function showResult(data) {
+            resultInfo.innerHTML = `
+                BURN COMPLETE<br>
+                Pattern: ${data.pattern}<br>
+                Resolution: ${data.resolution} mm/px<br>
+                Size: ${data.size_mm}mm (${data.width_px}x${data.height_px}px)<br>
+                Power: ${data.power}, Depth: ${data.depth}<br>
+                Time: ${data.total_time.toFixed(1)}s<br>
+                Chunks: ${data.chunks}<br>
+                Log: ${data.csv_log}
+            `;
+            result.className = 'result show';
+        }
+        
+        async function apiCall(endpoint, method = 'POST', body = null) {
+            try {
+                const opts = {
+                    method,
+                    headers: { 'Content-Type': 'application/json' }
+                };
+                if (body) opts.body = JSON.stringify(body);
+                
+                const res = await fetch(endpoint, opts);
+                const data = await res.json();
+                
+                if (!res.ok || !data.success) {
+                    throw new Error(data.error || 'Request failed');
+                }
+                
+                return data;
+            } catch (err) {
+                showMessage(err.message, true);
+                throw err;
+            }
+        }
+        
+        btnStop.addEventListener('click', async () => {
+            // EMERGENCY STOP - no confirmation, immediate action
+            const wasDisabled = btnStop.disabled;
+            btnStop.disabled = true;
+            
+            try {
+                // Send STOP command
+                await apiCall('/api/test/stop', 'POST');
+                addLog('✓ STOP command sent');
+                showMessage('STOP command sent', false);
+            } catch (err) {
+                addLog('✗ Stop failed: ' + err.message);
+                showMessage('Stop failed: ' + err.message, true);
+            } finally {
+                // Close SSE stream if active
+                if (currentEventSource) {
+                    currentEventSource.close();
+                    currentEventSource = null;
+                }
+                btnBurn.disabled = false;
+                btnStop.disabled = wasDisabled;
+            }
+        });
+        
+        btnPreview.addEventListener('click', async () => {
+            btnPreview.disabled = true;
+            try {
+                if (!previewActive) {
+                    // Start preview
+                    const resolution = parseFloat(resolutionSelect.value);
+                    const pattern = patternSelect.value;
+                    const size_mm = parseFloat(sizeInput.value);
+                    
+                    // Calculate dimensions based on pattern
+                    let width_px, height_px;
+                    const mm_to_px = (mm) => Math.round(mm / resolution);
+                    
+                    if (pattern === 'center') {
+                        width_px = height_px = mm_to_px(size_mm);
+                    } else if (pattern === 'corners' || pattern === 'frame' || pattern === 'grid') {
+                        width_px = height_px = mm_to_px(80.0);
+                    } else {
+                        width_px = height_px = mm_to_px(10.0);
+                    }
+                    
+                    showMessage('Starting preview bounds (0x20)...');
+                    await apiCall('/api/calibration/preview', 'POST', {
+                        width: width_px,
+                        height: height_px
+                    });
+                    previewActive = true;
+                    btnPreview.textContent = 'STOP PREVIEW';
+                    btnPreview.style.backgroundColor = '#fff';
+                    btnPreview.style.color = '#000';
+                    btnPreview.style.fontWeight = 'bold';
+                    showMessage('Preview active - laser tracing rectangle');
+                } else {
+                    // Stop preview
+                    showMessage('Stopping preview (0x21)...');
+                    await apiCall('/api/test/home', 'POST');
+                    previewActive = false;
+                    btnPreview.textContent = 'PREVIEW BOUNDS';
+                    btnPreview.style.backgroundColor = '';
+                    btnPreview.style.color = '';
+                    btnPreview.style.fontWeight = '';
+                    showMessage('Preview stopped');
+                }
+            } catch (err) {
+                showMessage('Preview failed: ' + err.message, true);
+                previewActive = false;
+                btnPreview.textContent = 'PREVIEW BOUNDS';
+                btnPreview.style.backgroundColor = '';
+                btnPreview.style.color = '';
+                btnPreview.style.fontWeight = '';
+            } finally {
+                btnPreview.disabled = false;
+            }
+        });
+        
+        btnBurnBounds.addEventListener('click', async () => {
+            btnBurnBounds.disabled = true;
+            try {
+                const resolution = parseFloat(resolutionSelect.value);
+                const pattern = patternSelect.value;
+                const size_mm = parseFloat(sizeInput.value);
+                const power = parseInt(powerInput.value);
+                const depth = parseInt(depthInput.value);
+                
+                // Calculate dimensions based on pattern
+                let width_px, height_px;
+                const mm_to_px = (mm) => Math.round(mm / resolution);
+                
+                if (pattern === 'center') {
+                    width_px = height_px = mm_to_px(size_mm);
+                } else if (pattern === 'corners' || pattern === 'frame' || pattern === 'grid') {
+                    width_px = height_px = mm_to_px(80.0);
+                } else {
+                    width_px = height_px = mm_to_px(10.0);
+                }
+                
+                showMessage('Burning bounds frame (creates positioning guide)...');
+                const result = await apiCall('/api/calibration/burn-bounds', 'POST', {
+                    width: width_px,
+                    height: height_px,
+                    power: power,
+                    depth: depth
+                });
+                showMessage(`Bounds frame burned: ${result.width}×${result.height}px in ${result.total_time.toFixed(1)}s`);
+            } catch (err) {
+                showMessage('Burn bounds failed: ' + err.message, true);
+            } finally {
+                btnBurnBounds.disabled = false;
+            }
+        });
+        
+        btnBurn.addEventListener('click', async () => {
+            const params = {
+                resolution: parseFloat(resolutionSelect.value),
+                pattern: patternSelect.value,
+                size_mm: parseFloat(sizeInput.value),
+                power: parseInt(powerInput.value),
+                depth: parseInt(depthInput.value)
+            };
+            
+            btnBurn.disabled = true;
+            btnStop.disabled = false;
+            result.className = 'result';
+            
+            // Show progress section
+            const progressSection = document.getElementById('progressSection');
+            const setupFill = document.getElementById('setupFill');
+            const setupText = document.getElementById('setupText');
+            const uploadFill = document.getElementById('uploadFill');
+            const uploadText = document.getElementById('uploadText');
+            const burnFill = document.getElementById('burnFill');
+            const burnText = document.getElementById('burnText');
+            const logBox = document.getElementById('logBox');
+            
+            progressSection.style.display = 'block';
+            setupFill.style.width = '0%';
+            setupText.textContent = '0%';
+            uploadFill.style.width = '0%';
+            uploadText.textContent = '0%';
+            burnFill.style.width = '0%';
+            burnText.textContent = '0%';
+            logBox.innerHTML = '';
+            
+            function addLog(msg) {
+                const line = document.createElement('div');
+                line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+                logBox.appendChild(line);
+                logBox.scrollTop = logBox.scrollHeight;
+            }
+            
+            addLog('Connecting to progress stream...');
+            
+            // Connect to SSE for real-time progress
+            currentEventSource = new EventSource('/api/progress/stream');
+            
+            currentEventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                
+                // Update appropriate progress bar based on phase
+                if (data.progress !== undefined) {
+                    const pct = data.progress + '%';
+                    
+                    if (data.phase === 'setup' || data.phase === 'connect' || data.phase === 'prepare') {
+                        setupFill.style.width = pct;
+                        setupText.textContent = pct;
+                    } else if (data.phase === 'upload') {
+                        uploadFill.style.width = pct;
+                        uploadText.textContent = pct;
+                    } else if (data.phase === 'burning' || data.phase === 'wait' || data.phase === 'finalize') {
+                        burnFill.style.width = pct;
+                        burnText.textContent = pct;
+                    }
+                }
+                
+                // Add to log
+                addLog(`[${data.phase}] ${data.message}`);
+                
+                // Close stream on completion or error
+                if (data.phase === 'complete' || data.phase === 'error') {
+                    currentEventSource.close();
+                    currentEventSource = null;
+                }
+            };
+            
+            currentEventSource.onerror = function() {
+                addLog('Stream connection lost');
+                currentEventSource.close();
+                currentEventSource = null;
+            };
+            
+            addLog('Starting burn...');
+            addLog(`Pattern: ${params.pattern}, Resolution: ${params.resolution} mm/px`);
+            addLog(`Power: ${params.power}, Depth: ${params.depth}`);
+            showMessage('Burning pattern...');
+            
+            try {
+                const data = await apiCall('/api/calibration/burn', 'POST', params);
+                
+                showMessage('Pattern burned successfully');
+                showResult(data);
+            } catch (err) {
+                addLog('✗ Error: ' + err.message);
+                showMessage(err.message, true);
+            } finally {
+                if (currentEventSource) {
+                    currentEventSource.close();
+                    currentEventSource = null;
+                }
+                btnBurn.disabled = false;
+            }
+        });
+        
+        // Update size input visibility based on pattern
+        pattern.addEventListener('change', () => {
+            const showSize = pattern.value !== 'frame';
+            sizeInput.disabled = !showSize;
+        });
+        
+        // Jog controls - track position client-side (K6 doesn't report position)
+        const jogStep = document.getElementById('jogStep');
+        const jogUp = document.getElementById('jogUp');
+        const jogDown = document.getElementById('jogDown');
+        const jogLeft = document.getElementById('jogLeft');
+        const jogRight = document.getElementById('jogRight');
+        const btnHome = document.getElementById('btnHome');
+        const disableLimits = document.getElementById('disableLimits');
+        
+        // Current position tracking (pixels)
+        // Start at center (800, 800) = 40mm from edges @ 0.05mm/px
+        let currentX = 800;
+        let currentY = 800;
+        
+        async function jog(direction) {
+            try {
+                const step_mm = parseFloat(jogStep.value);
+                const step_px = Math.round(step_mm * 20);  // 0.05mm/px = 20px/mm
+                const disable_limits = disableLimits.checked;
+                
+                // Calculate new position
+                let newX = currentX;
+                let newY = currentY;
+                
+                if (direction === 'left') newX -= step_px;
+                else if (direction === 'right') newX += step_px;
+                else if (direction === 'up') newY -= step_px;
+                else if (direction === 'down') newY += step_px;
+                
+                // Client-side clamp only if limits enabled
+                if (!disable_limits) {
+                    newX = Math.max(0, Math.min(1600, newX));
+                    newY = Math.max(0, Math.min(1600, newY));
+                } else {
+                    // Still apply reasonable max to prevent overflow
+                    newX = Math.max(-200, Math.min(2000, newX));
+                    newY = Math.max(-200, Math.min(2000, newY));
+                }
+                
+                // Send absolute position to API
+                const result = await apiCall('/api/jog', 'POST', { x: newX, y: newY, disable_limits });
+                
+                // Update tracked position
+                currentX = result.position.x;
+                currentY = result.position.y;
+                
+                const mm_x = (currentX * 0.05).toFixed(2);
+                const mm_y = (currentY * 0.05).toFixed(2);
+                const limitsMsg = result.limits_disabled ? ' [LIMITS OFF]' : '';
+                showMessage(`Moved ${direction} → Position: (${currentX}px, ${currentY}px) = (${mm_x}mm, ${mm_y}mm)${limitsMsg}`);
+            } catch (err) {
+                showMessage('Jog failed: ' + err.message, true);
+            }
+        }
+        
+        jogUp.addEventListener('click', () => jog('up'));
+        jogDown.addEventListener('click', () => jog('down'));
+        jogLeft.addEventListener('click', () => jog('left'));
+        jogRight.addEventListener('click', () => jog('right'));
+        
+        // Home buttons (both top and center)
+        const btnHomeCenter = document.getElementById('btnHomeCenter');
+        
+        async function goHome() {
+            try {
+                await apiCall('/api/test/home', 'POST');
+                // Reset tracked position to origin
+                currentX = 0;
+                currentY = 0;
+                showMessage('Homed to origin (0,0)');
+            } catch (err) {
+                showMessage('Home failed: ' + err.message, true);
+            }
+        }
+        
+        btnHome.addEventListener('click', goHome);
+        btnHomeCenter.addEventListener('click', goHome);
+        
+        // Mark position control
+        const btnMark = document.getElementById('btnMark');
+        const markPower = document.getElementById('markPower');
+        const markDepth = document.getElementById('markDepth');
+        
+        btnMark.addEventListener('click', async () => {
+            if (!confirm(`BURN single pixel mark at (${currentX}, ${currentY})?\n\nThis will activate the laser!`)) {
+                return;
+            }
+            
+            btnMark.disabled = true;
+            try {
+                const power = parseInt(markPower.value);
+                const depth = parseInt(markDepth.value);
+                
+                const result = await apiCall('/api/mark', 'POST', {
+                    x: currentX,
+                    y: currentY,
+                    power,
+                    depth
+                });
+                
+                const mm_x = (currentX * 0.05).toFixed(2);
+                const mm_y = (currentY * 0.05).toFixed(2);
+                showMessage(`✓ Marked at (${currentX}px, ${currentY}px) = (${mm_x}mm, ${mm_y}mm)`);
+            } catch (err) {
+                showMessage('Mark failed: ' + err.message, true);
+            } finally {
+                btnMark.disabled = false;
+            }
+        });
+        
+        // Crosshair toggle
+        const crosshairToggle = document.getElementById('crosshairToggle');
+        
+        crosshairToggle.addEventListener('change', async () => {
+            const enable = crosshairToggle.checked;
+            crosshairToggle.disabled = true;
+            
+            try {
+                const result = await apiCall('/api/crosshair', 'POST', { enable });
+                showMessage(result.message + ' (observe K6 for changes)');
+            } catch (err) {
+                showMessage('Crosshair toggle failed: ' + err.message, true);
+                // Revert checkbox on error
+                crosshairToggle.checked = !enable;
+            } finally {
+                crosshairToggle.disabled = false;
+            }
+        });
+    </script>
+    
+    <script>
+</body>
+</html>

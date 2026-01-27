@@ -1,0 +1,51 @@
+= Wainlux K6 USB Interface
+ifdef::flag-book[]
+:imagesdir-saved: {imagesdir}
+:localdir-saved: {localdir}
+:imagesdir: ./images
+:localdir: ./documentation
+endif::flag-book[]
+ifndef::flag-book[]
+:toc: right
+:toclevels: 5
+:sectnums:
+:sectnumlevels: 5
+ifdef::github-env[]
+:icons: font
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::github-env[]
+:imagesdir: ../images
+:localdir: .
+endif::flag-book[]
+
+Documentation for the Wainlux K6 laser engraver control system on Pi Zero W. Includes implementation details, quick start guide, status tracking, K3 protocol reference (archived - not applicable to K6), and debug notes.
+
+include::status.adoc[leveloffset=+1]
+
+include::GETTING_STARTED.adoc[leveloffset=+1]
+
+include::doing-installation.adoc[leveloffset=+1]
+
+include::architecture-application.adoc[leveloffset=+1]
+
+include::reference-k6_protocol.adoc[leveloffset=+1]
+
+include::option-ups-lite.adoc[leveloffset=+1]
+
+include::option-camera.adoc[leveloffset=+1]
+
+include::option-ghidra-mcp-setup.adoc[leveloffset=+1]
+
+include::reference-k3_commands.adoc[leveloffset=+1]
+
+include::doing-debugging.adoc[leveloffset=+1]
+
+ifdef::flag-book[]
+:imagesdir: {imagesdir-saved}
+:localdir: {localdir-saved}
+endif::flag-book[]
+

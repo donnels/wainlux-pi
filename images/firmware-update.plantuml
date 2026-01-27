@@ -1,0 +1,50 @@
+@startuml
+skinparam backgroundColor #fff/aaf
+skinparam activitybackgroundColor #fff/aaf
+skinparam Shadowing 1
+
+title K6 Firmware Update (IAP Bootloader)
+
+start
+
+:Open /dev/ttyUSB0 115200;
+note right: Same port as runtime
+
+:Enter IAP mode;
+note right: Power-cycle or button?\n(method unclear)
+
+:0x0A CONNECT;
+:Wait ACK 0x09 (400ms);
+
+:0xFE RESET MCU + checksum;
+:Wait ACK 0x09 (1s);
+note right: Device in bootloader
+
+:0x02 SET SPEED 115;
+note right: Purpose unclear\nNo response
+
+:Wait 5 seconds;
+
+:Load ROM.bin;
+:Calculate blocks\n(file_size + 1023) / 1024;
+
+while (More blocks?) is (yes)
+  :Build 1024B block\n(pad with 0xFF);
+  :0x03 WRITE BLOCK\n+ 1024 bytes\n+ checksum;
+  :Wait ACK 0x09;
+  :Update progress;
+endwhile (no)
+
+:Device auto-reboots;
+:Close serial;
+
+stop
+
+legend
+  ROM.bin: 28072 bytes = 28 blocks
+  Block size: 1024 bytes
+  Packet: 3 header + 1024 data + 1 checksum
+  Checksum: two's complement
+end legend
+
+@enduml

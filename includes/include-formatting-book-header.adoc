@@ -1,0 +1,34 @@
+// this file contains the formatting for:
+// the main documentation book when built as a whole
+// included at the start of the main .adoc file 
+// directly after local formatting with NO blank lines in this include
+// No blanks between "= title" and this include
+// set the book flag so that chapter know they are part of something larger
+:flag-book: true
+// Set data-uri to embed images in output
+:data-uri:
+:allow-uri-read:
+// toc placement - disable auto TOC, use manual placement with toc::[] macro
+:toc: macro
+:toclevels: 4
+:sectnums:
+:sectnumlevels: 5
+// Set source highlighter and style
+:source-highlighter: rouge
+:rouge-style: github
+// set HTML formatting options
+:icons: font
+// set PDF formatting options
+:pdf-page-size: A4
+:pdf-theme: custom
+:pdf-fontsdir: fonts/
+//:pdf-style: theme.yml
+// set PDF title page with laser warning logo
+// Laser warning symbol (DIN 4844-2) by Torsten Henning, public domain via Wikimedia Commons
+:title-logo-image: image:includes/laser-warning.svg[align=center,pdfwidth=50%]
+ifdef::backend-html5[]
+:toc: right
+//:stylesheet: custom.css
+//favicon (inline base64)
+:favicon: data:image/x-icon;base64,AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wCqVQBVqlUAf6pVAH+qVQB/qlUAf6pVAH+qVQB/qlUAf6pVAH+qVQB/qlUAf6pVAH+qVQBVqlUAVapVAH+qVQD/qlUA/6pVAP+qVQD/qlUA/6pVAP+qVQD/qlUA/6pVAP+qVQD/qlUA/6pVAH+qVQB/qlUA/6pVAP+qVQD/qlUA/6pVAP+qVQD/qlUA/6pVAP+qVQD/qlUA/6pVAP+qVQD/qlUA/6pVAH+qVQB/qlUA/6pVAP+qVQD/qlUA/6pVAP+qVQD/qlUA/6pVAP+qVQD/qlUA/6pVAP+qVQD/qlUAf6pVAH+qVQD/qlUA/6pVAP+qVQD/qlUA/6pVAP+qVQD/qlUA/6pVAP+qVQD/qlUA/6pVAP+qVQB/qlUAf6pVAP+qVQD/qlUA/6pVAP+qVQD/qlUA/6pVAP+qVQD/qlUA/6pVAP+qVQD/qlUA/6pVAH+qVQB/qlUA/6pVAP+qVQD/qlUA/6pVAP+qVQD/qlUA/6pVAP+qVQD/qlUA/6pVAP+qVQD/qlUAf6pVAH+qVQD/qlUA/6pVAP+qVQD/qlUA/6pVAP+qVQD/qlUA/6pVAP+qVQD/qlUA/6pVAP+qVQB/qlUAVapVAH+qVQB/qlUAf6pVAH+qVQB/qlUAf6pVAH+qVQB/qlUAf6pVAH+qVQB/qlUAf6pVAFX///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AP///wD///8A////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+endif::backend-html5[]
