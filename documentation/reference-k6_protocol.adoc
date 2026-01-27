@@ -104,21 +104,21 @@ The stepper motor step size is hardware-defined. Sending different pixel counts 
 
 === ACK Protocol
 
-.K6 ACK Response (0x09)
+.K6 ACK Response (0x09) (`k6-prot-rx-09-ack.edn`)
 image::../images/k6-prot-rx-09-ack.svg[K6 ACK Response,align="center"]
 
-[source,clojure]
-----
-include::../images/k6-prot-rx-09-ack.edn[]
-----
+//[source,clojure]
+//----
+//include::../images/k6-prot-rx-09-ack.edn[]
+//----
 
-.K6 Error Response (0x08)
+.K6 Error Response (0x08) (`k6-prot-rx-08-error.edn`)
 image::../images/k6-prot-rx-08-error.svg[K6 Error Response,align="center"]
 
-[source,clojure]
-----
-include::../images/k6-prot-rx-08-error.edn[]
-----
+//[source,clojure]
+//----
+//include::../images/k6-prot-rx-08-error.edn[]
+//----
 
 * ACK byte: `0x09` (success)
 * Error byte: `0x08` (failure)
@@ -228,13 +228,13 @@ Interpretation: device likely in a bad state. Power-cycle is recommended before 
 
 ==== Heartbeat Frame (Processing)
 
-.K6 Heartbeat Frame
+.K6 Heartbeat Frame (`k6-prot-rx-heartbeat.edn`)
 image::../images/k6-prot-rx-heartbeat.svg[K6 Heartbeat Frame,align="center"]
 
-[source,clojure]
-----
-include::../images/k6-prot-rx-heartbeat.edn[]
-----
+//[source,clojure]
+//----
+//include::../images/k6-prot-rx-heartbeat.edn[]
+//----
 
 `FF FF FF FE` - sent every ~4 seconds while device processes a job header or large command.
 
@@ -244,13 +244,13 @@ include::../images/k6-prot-rx-heartbeat.edn[]
 
 ==== Status Frame (Progress)
 
-.K6 Status Frame
+.K6 Status Frame (`k6-prot-rx-status.edn`)
 image::../images/k6-prot-rx-status.svg[K6 Status Frame,align="center"]
 
-[source,clojure]
-----
-include::../images/k6-prot-rx-status.edn[]
-----
+//[source,clojure]
+//----
+//include::../images/k6-prot-rx-status.edn[]
+//----
 
 `FF FF 00 XX` where `XX` is a progress percentage (0-100).
 
@@ -261,13 +261,13 @@ include::../images/k6-prot-rx-status.edn[]
 
 ==== Connect (0x0A)
 
-.K6 Connect Command (0x0A)
+.K6 Connect Command (0x0A) (`k6-prot-tx-0a-connect.edn`)
 image::../images/k6-prot-tx-0a-connect.svg[K6 Connect Command,align="center"]
 
-[source,clojure]
-----
-include::../images/k6-prot-tx-0a-connect.edn[]
-----
+//[source,clojure]
+//----
+//include::../images/k6-prot-tx-0a-connect.edn[]
+//----
 
 Sent twice with 500 ms delay between sends.
 
@@ -288,30 +288,30 @@ The JOB_HEADER triggers continuous heartbeats that stream in background. First C
 .K6 Version Query (0xFF)
 image::../images/k6-prot-tx-ff-version.svg[K6 Version Query,align="center"]
 
-[source,clojure]
-----
-include::../images/k6-prot-tx-ff-version.edn[]
-----
+//[source,clojure]
+//----
+//include::../images/k6-prot-tx-ff-version.edn[]
+//----
 
 Expects a 3-byte reply (example: `04 01 06`).
 
-.K6 Version Response
+.K6 Version Response (`k6-prot-rx-version.edn`)
 image::../images/k6-prot-rx-version.svg[K6 Version Response,align="center"]
 
-[source,clojure]
-----
-include::../images/k6-prot-rx-version.edn[]
-----
+//[source,clojure]
+//----
+//include::../images/k6-prot-rx-version.edn[]
+//----
 
 ==== Job Header (0x23)
 
-.K6 Job Header (0x23)
+.K6 Job Header (0x23) (`k6-prot-tx-23-job-header.edn`)
 image::../images/k6-prot-tx-23-job-header.svg[K6 Job Header,align="center"]
 
-[source,clojure]
-----
-include::../images/k6-prot-tx-23-job-header.edn[]
-----
+//[source,clojure]
+//----
+//include::../images/k6-prot-tx-23-job-header.edn[]
+//----
 
 Total length: 38 bytes.
 
@@ -341,13 +341,13 @@ See <<Job Header Parameters>> for complete byte-level mapping.
 
 ==== Job Data (0x22)
 
-.K6 Job Data (0x22)
+.K6 Job Data (0x22) (`k6-prot-tx-22-data.edn`)
 image::../images/k6-prot-tx-22-data.svg[K6 Job Data,align="center"]
 
-[source,clojure]
-----
-include::../images/k6-prot-tx-22-data.edn[]
-----
+//[source,clojure]
+//----
+//include::../images/k6-prot-tx-22-data.edn[]
+//----
 
 Chunk size: 1900 bytes of payload.
 
@@ -368,13 +368,13 @@ Live test note:
 
 ==== Init/Status (0x24)
 
-.K6 Init/Status Command (0x24)
+.K6 Init/Status Command (0x24) (`k6-prot-tx-24-init.edn`)
 image::../images/k6-prot-tx-24-init.svg[K6 Init Command,align="center"]
 
-[source,clojure]
-----
-include::../images/k6-prot-tx-24-init.edn[]
-----
+//[source,clojure]
+//----
+//include::../images/k6-prot-tx-24-init.edn[]
+//----
 
 11-byte packet, sent twice after job data:
 
@@ -389,21 +389,21 @@ This triggers or accompanies the `ff ff 00 xx` status frames.
 
 Toggle positioning laser/LED for alignment:
 
-.K6 Crosshair ON (0x06)
+.K6 Crosshair ON (0x06) (`k6-prot-tx-06-crosshair-on.edn`)
 image::../images/k6-prot-tx-06-crosshair-on.svg[K6 Crosshair ON,align="center"]
 
-[source,clojure]
-----
-include::../images/k6-prot-tx-06-crosshair-on.edn[]
-----
+//[source,clojure]
+//----
+//include::../images/k6-prot-tx-06-crosshair-on.edn[]
+//----
 
-.K6 Crosshair OFF (0x07)
+.K6 Crosshair OFF (0x07) (`k6-prot-tx-07-crosshair-off.edn`)
 image::../images/k6-prot-tx-07-crosshair-off.svg[K6 Crosshair OFF,align="center"]
 
-[source,clojure]
-----
-include::../images/k6-prot-tx-07-crosshair-off.edn[]
-----
+//[source,clojure]
+//----
+//include::../images/k6-prot-tx-07-crosshair-off.edn[]
+//----
 
 * *Purpose:* Enable/disable positioning laser for alignment before burning
 * *Length:* 4 bytes each
@@ -417,13 +417,13 @@ include::../images/k6-prot-tx-07-crosshair-off.edn[]
 
 Stop current operation immediately:
 
-.K6 Stop/Cancel Command (0x16)
+.K6 Stop/Cancel Command (0x16) (`k6-prot-tx-16-stop.edn`)
 image::../images/k6-prot-tx-16-stop.svg[K6 Stop Command,align="center"]
 
-[source,clojure]
-----
-include::../images/k6-prot-tx-16-stop.edn[]
-----
+//[source,clojure]
+//----
+//include::../images/k6-prot-tx-16-stop.edn[]
+//----
 
 * *Purpose:* Cancel active engraving/motion
 * *Length:* 4 bytes
@@ -437,13 +437,13 @@ include::../images/k6-prot-tx-16-stop.edn[]
 
 Return to home position:
 
-.K6 Home Command (0x17)
+.K6 Home Command (0x17) (`k6-prot-tx-17-home.edn`)
 image::../images/k6-prot-tx-17-home.svg[K6 Home Command,align="center"]
 
-[source,clojure]
-----
-include::../images/k6-prot-tx-17-home.edn[]
-----
+//[source,clojure]
+//----
+//include::../images/k6-prot-tx-17-home.edn[]
+//----
 
 * *Purpose:* Move to origin/home position
 * *Length:* 4 bytes
@@ -454,13 +454,13 @@ include::../images/k6-prot-tx-17-home.edn[]
 
 Draw boundary frame:
 
-.K6 Framing Command (0x21)
+.K6 Framing Command (0x21) (`k6-prot-tx-21-framing.edn`)
 image::../images/k6-prot-tx-21-framing.svg[K6 Framing Command,align="center"]
 
-[source,clojure]
-----
-include::../images/k6-prot-tx-21-framing.edn[]
-----
+//[source,clojure]
+//----
+//include::../images/k6-prot-tx-21-framing.edn[]
+//----
 
 * *Purpose:* Stop preview mode / draw boundary box for work area preview
 * *Length:* 4 bytes
@@ -474,13 +474,13 @@ include::../images/k6-prot-tx-21-framing.edn[]
 
 ==== Set Bounding Box (0x20)
 
-.K6 Set Bounding Box (0x20)
+.K6 Set Bounding Box (0x20) (`k6-prot-tx-20-bounds.edn`)
 image::../images/k6-prot-tx-20-bounds.svg[K6 Set Bounding Box,align="center"]
 
-[source,clojure]
-----
-include::../images/k6-prot-tx-20-bounds.edn[]
-----
+//[source,clojure]
+//----
+//include::../images/k6-prot-tx-20-bounds.edn[]
+//----
 
 Configure bounding box for framing area:
 
@@ -498,13 +498,13 @@ Configure bounding box for framing area:
 
 ==== Set Speed/Power (0x25)
 
-.K6 Set Speed/Power (0x25)
+.K6 Set Speed/Power (0x25) (`k6-prot-tx-25-speed-power.edn`)
 image::../images/k6-prot-tx-25-speed-power.svg[K6 Set Speed/Power,align="center"]
 
-[source,clojure]
-----
-include::../images/k6-prot-tx-25-speed-power.edn[]
-----
+//[source,clojure]
+//----
+//include::../images/k6-prot-tx-25-speed-power.edn[]
+//----
 
 Configure speed and power settings:
 
@@ -520,13 +520,13 @@ Configure speed and power settings:
 
 ==== Set Focus/Angle (0x28)
 
-.K6 Set Focus/Angle (0x28)
+.K6 Set Focus/Angle (0x28) (`k6-prot-tx-28-focus.edn`)
 image::../images/k6-prot-tx-28-focus.svg[K6 Set Focus/Angle,align="center"]
 
-[source,clojure]
-----
-include::../images/k6-prot-tx-28-focus.edn[]
-----
+//[source,clojure]
+//----
+//include::../images/k6-prot-tx-28-focus.edn[]
+//----
 
 Configure focus/angle parameters:
 
@@ -739,13 +739,13 @@ image::firmware-update.png[Firmware Update Sequence]
 
 ==== 2. Reset MCU (Enter IAP Mode)
 
-.K6 Reset MCU (0xFE)
+.K6 Reset MCU (0xFE) (`k6-prot-tx-fe-reset-mcu.edn`)
 image::../images/k6-prot-tx-fe-reset-mcu.svg[K6 Reset MCU,align="center"]
 
-[source,clojure]
-----
-include::../images/k6-prot-tx-fe-reset-mcu.edn[]
-----
+//[source,clojure]
+//----
+//include::../images/k6-prot-tx-fe-reset-mcu.edn[]
+//----
 
 .Response:
 ----
@@ -762,13 +762,13 @@ include::../images/k6-prot-tx-fe-reset-mcu.edn[]
 
 ==== 3. Set Speed (Optional)
 
-.K6 Set Speed (0x02)
+.K6 Set Speed (0x02) (`k6-prot-tx-02-set-speed.edn`)
 image::../images/k6-prot-tx-02-set-speed.svg[K6 Set Speed,align="center"]
 
-[source,clojure]
-----
-include::../images/k6-prot-tx-02-set-speed.edn[]
-----
+//[source,clojure]
+//----
+//include::../images/k6-prot-tx-02-set-speed.edn[]
+//----
 
 .Response:
 * None observed
@@ -780,13 +780,13 @@ include::../images/k6-prot-tx-02-set-speed.edn[]
 
 ==== 4. Flash Firmware Blocks
 
-.K6 Flash Firmware Block (0x03)
+.K6 Flash Firmware Block (0x03) (`k6-prot-tx-03-flash-block.edn`)
 image::../images/k6-prot-tx-03-flash-block.svg[K6 Flash Block,align="center"]
 
-[source,clojure]
-----
-include::../images/k6-prot-tx-03-flash-block.edn[]
-----
+//[source,clojure]
+//----
+//include::../images/k6-prot-tx-03-flash-block.edn[]
+//----
 
 .Packet structure:
 ----
