@@ -5,4 +5,4 @@
 
 (draw-column-headers)
 
-(draw-box "0x08 (Error)" [{:span 8} :bg-error])
+(draw-box "0x08 (Error/Failure)" [{:span 8} :bg-error])

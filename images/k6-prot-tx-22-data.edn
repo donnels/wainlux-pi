@@ -8,22 +8,22 @@
 (draw-column-headers)
 
 ;; Header row 1
-(draw-box "0x22" [:box-first {:span 8} :bg-header])
-(draw-box "Size MSB" [:box-related {:span 8} :bg-header])
+(draw-box "0x22 (Raster Data)" [:box-first {:span 8} :bg-header])
+(draw-box "Size MSB (16-bit BE)" [:box-related {:span 8} :bg-header])
 (draw-box "Size LSB" [:box-related {:span 8} :bg-header])
-(draw-box "1-255" [:box-last {:span 8} :bg-header])
+(draw-box "Depth (1-255)" [:box-last {:span 8} :bg-header])
 
 ;; Header row 2
 (next-row)
-(draw-box "Power MSB" [:box-first {:span 8} :bg-header])
+(draw-box "Power MSB (16-bit BE, 0-1000)" [:box-first {:span 8} :bg-header])
 (draw-box "Power LSB" [:box-related {:span 8} :bg-header])
-(draw-box "Line MSB" [:box-related {:span 8} :bg-header])
+(draw-box "Line MSB (16-bit BE)" [:box-related {:span 8} :bg-header])
 (draw-box "Line LSB" [:box-last {:span 8} :bg-header])
 
 ;; Header row 3 and pixel data
 (next-row)
-(draw-box "Count" [{:span 8} :bg-header])
-(draw-gap "Packed Pixel Data" [{:span 24} :bg-data])
+(draw-box "Pixel Count" [{:span 8} :bg-header])
+(draw-gap "Packed Pixel Data (1-bit packed)" [{:span 24} :bg-data])
 
 ;; Variable length continuation
 (next-row)

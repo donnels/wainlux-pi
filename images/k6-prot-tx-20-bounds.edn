@@ -7,20 +7,20 @@
 (draw-column-headers)
 
 ;; Header
-(draw-box "0x20" [:box-first {:span 8} :bg-cmd])
-(draw-box "0x00" [:box-related {:span 8} :bg-cmd])
-(draw-box "0x0B" [:box-related {:span 8} :bg-cmd])
-(draw-box "Width MSB" [:box-last {:span 8} :bg-cmd])
+(draw-box "0x20 (Set Bounds/Start Preview)" [:box-first {:span 8} :bg-cmd])
+(draw-box "0x00 (Reserved)" [:box-related {:span 8} :bg-cmd])
+(draw-box "0x0B (Length = 11)" [:box-related {:span 8} :bg-cmd])
+(draw-box "Width MSB (16-bit BE)" [:box-last {:span 8} :bg-cmd])
 
 ;; Dimensions
 (next-row)
 (draw-box "Width LSB" [:box-first {:span 8} :bg-cmd])
-(draw-box "Height MSB" [:box-related {:span 8} :bg-cmd])
+(draw-box "Height MSB (16-bit BE)" [:box-related {:span 8} :bg-cmd])
 (draw-box "Height LSB" [:box-related {:span 8} :bg-cmd])
-(draw-box "Center X MSB" [:box-last {:span 8} :bg-cmd])
+(draw-box "Center X MSB (16-bit BE)" [:box-last {:span 8} :bg-cmd])
 
 ;; Center position
 (next-row)
 (draw-box "Center X LSB" [:box-first {:span 8} :bg-cmd])
-(draw-box "Center Y MSB" [:box-related {:span 8} :bg-cmd])
+(draw-box "Center Y MSB (16-bit BE)" [:box-related {:span 8} :bg-cmd])
 (draw-box "Center Y LSB" [:box-last {:span 8} :bg-cmd])

@@ -5,7 +5,7 @@
 
 (draw-column-headers)
 
-(draw-box "0x03" [{:span 8} :bg-header])
-(draw-box "0x04 Hi" [{:span 8} :bg-header])
-(draw-box "0x04 Lo" [{:span 8} :bg-header])
-(draw-box "1024 data + chk" [{:span 8} :bg-data])
+(draw-box "0x03 (Flash Block)" [{:span 8} :bg-header])
+(draw-box "0x04 (Length MSB)" [{:span 8} :bg-header])
+(draw-box "0x04 (Length LSB = 1024)" [{:span 8} :bg-header])
+(draw-box "1024 bytes data + checksum" [{:span 8} :bg-data])

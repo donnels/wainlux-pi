@@ -7,21 +7,21 @@
 (draw-column-headers)
 
 ;; Header
-(draw-box "0x25" [:box-first {:span 8} :bg-cmd])
-(draw-box "0x00" [:box-related {:span 8} :bg-cmd])
-(draw-box "0x0B" [:box-related {:span 8} :bg-cmd])
-(draw-box "Speed MSB" [:box-last {:span 8} :bg-cmd])
+(draw-box "0x25 (Set Speed/Power)" [:box-first {:span 8} :bg-cmd])
+(draw-box "0x00 (Reserved)" [:box-related {:span 8} :bg-cmd])
+(draw-box "0x0B (Length = 11)" [:box-related {:span 8} :bg-cmd])
+(draw-box "Speed MSB (16-bit BE)" [:box-last {:span 8} :bg-cmd])
 
 ;; Speed and Power
 (next-row)
 (draw-box "Speed LSB" [:box-first {:span 8} :bg-cmd])
-(draw-box "Power MSB" [:box-related {:span 8} :bg-cmd])
+(draw-box "Power MSB (16-bit BE, 0-1000)" [:box-related {:span 8} :bg-cmd])
 (draw-box "Power LSB" [:box-related {:span 8} :bg-cmd])
-(draw-box "0x00" [:box-last {:span 8} :bg-cmd])
+(draw-box "0x00 (Reserved)" [:box-last {:span 8} :bg-cmd])
 
 ;; Reserved bytes
 (next-row)
-(draw-box "0x00" [:box-first {:span 8} :bg-cmd])
-(draw-box "0x00" [:box-related {:span 8} :bg-cmd])
-(draw-box "0x00" [:box-related {:span 8} :bg-cmd])
-(draw-box "0x00" [:box-last {:span 8} :bg-cmd])
+(draw-box "0x00 (Reserved)" [:box-first {:span 8} :bg-cmd])
+(draw-box "0x00 (Reserved)" [:box-related {:span 8} :bg-cmd])
+(draw-box "0x00 (Reserved)" [:box-related {:span 8} :bg-cmd])
+(draw-box "0x00 (Reserved)" [:box-last {:span 8} :bg-cmd])

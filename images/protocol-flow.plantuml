@@ -7,34 +7,51 @@ start
 
 :Open /dev/ttyUSB0 115200;
 
+:0x16 STOP (best-effort);
+note right: No response wait
+
 :0xFF VERSION;
 note right: Returns 3 bytes
 
-:0x0A CONNECT;
+:0x0A CONNECT #1;
 :Wait ACK 0x09;
-:0x0A CONNECT (2nd);
+
+:0x0A CONNECT #2;
 :Wait ACK 0x09;
 
 :0x17 HOME;
 :Wait ACK 0x09;
 
+partition "Burn Sequence" {
 :0x21 FRAMING;
 :Wait ACK 0x09;
-note right: Optional boundary test
-
-:0x24 INIT (11B);
-:Read status FF FF 00 XX;
-
-:0x24 INIT (11B);
-:Read status FF FF 00 XX;
+note right: Stop preview mode
 
 :0x23 JOB HEADER (38B);
-note right: No ACK wait
+note right: Sends heartbeats FF FF FF FE
+
+:0x0A CONNECT #1;
+:Wait ACK 0x09;
+
+:0x0A CONNECT #2;
+:Wait ACK 0x09;
 
 while (Data chunks?) is (yes)
   :0x22 DATA (≤1900B + checksum);
   :Wait ACK 0x09;
 endwhile (no)
+
+:0x24 INIT #1 (11B);
+:Read status FF FF 00 XX;
+
+:0x24 INIT #2 (11B);
+:Read status FF FF 00 XX;
+
+while (Burning?) is (yes)
+  :Read status FF FF 00 XX;
+  note right: Progress 0-100%
+endwhile (complete)
+}
 
 :Close serial;
 stop

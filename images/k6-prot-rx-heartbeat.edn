@@ -5,7 +5,7 @@
 
 (draw-column-headers)
 
-(draw-box "0xFF (Marker)" [:box-first {:span 8} :bg-heartbeat])
-(draw-box "0xFF (Marker)" [:box-related {:span 8} :bg-heartbeat])
-(draw-box "0xFF (Marker)" [:box-related {:span 8} :bg-heartbeat])
-(draw-box "0xFE (Busy)" [:box-last {:span 8} :bg-heartbeat])
+(draw-box "0xFF (Marker byte 1)" [:box-first {:span 8} :bg-heartbeat])
+(draw-box "0xFF (Marker byte 2)" [:box-related {:span 8} :bg-heartbeat])
+(draw-box "0xFF (Marker byte 3)" [:box-related {:span 8} :bg-heartbeat])
+(draw-box "0xFE (Busy indicator)" [:box-last {:span 8} :bg-heartbeat])

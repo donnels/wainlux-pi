@@ -5,7 +5,7 @@
 
 (draw-column-headers)
 
-(draw-box "0xFF (Opcode)" [:box-first {:span 8} :bg-cmd])
-(draw-box "0x00" [:box-related {:span 8} :bg-cmd])
-(draw-box "0x04 (Len)" [:box-related {:span 8} :bg-cmd])
-(draw-box "0x00" [:box-last {:span 8} :bg-cmd])
+(draw-box "0xFF (Version Query)" [:box-first {:span 8} :bg-cmd])
+(draw-box "0x00 (Reserved)" [:box-related {:span 8} :bg-cmd])
+(draw-box "0x04 (Length)" [:box-related {:span 8} :bg-cmd])
+(draw-box "0x00 (Reserved)" [:box-last {:span 8} :bg-cmd])

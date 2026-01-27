@@ -15,26 +15,51 @@ Flask -> Flask: Resize to 1066x1066 max
 Flask -> Flask: Grayscale → 1-bit
 Flask -> K6Driver: engrave_image(img, depth)
 
+K6Driver -> K6Device: 0x16 STOP (best-effort)
+note right: No response wait
+
 K6Driver -> K6Device: 0xFF VERSION
 K6Device --> K6Driver: 3 bytes
 
-K6Driver -> K6Device: 0x0A CONNECT (2x)
-K6Device --> K6Driver: ACK 0x09 (2x)
+K6Driver -> K6Device: 0x0A CONNECT #1
+K6Device --> K6Driver: ACK 0x09
+
+K6Driver -> K6Device: 0x0A CONNECT #2
+K6Device --> K6Driver: ACK 0x09
 
 K6Driver -> K6Device: 0x17 HOME
 K6Device --> K6Driver: ACK 0x09
 
-K6Driver -> K6Device: 0x24 INIT (2x)
-K6Device --> K6Driver: Status FF FF 00 XX
+K6Driver -> K6Driver: Resize & convert\nto 1-bit bitmap
+K6Driver -> K6Device: 0x21 FRAMING
+K6Device --> K6Driver: ACK 0x09
 
 K6Driver -> K6Driver: Build 38-byte header\n(size, power, depth, center+67)
 K6Driver -> K6Device: 0x23 JOB HEADER
-note right: No ACK wait
+K6Device --> K6Driver: Heartbeat FF FF FF FE
+note right: No ACK, sends heartbeats
+
+K6Driver -> K6Device: 0x0A CONNECT #1
+K6Device --> K6Driver: ACK 0x09
+
+K6Driver -> K6Device: 0x0A CONNECT #2
+K6Device --> K6Driver: ACK 0x09
 
 K6Driver -> K6Driver: Pack pixels 8/byte
 loop Chunks (≤1900 bytes)
   K6Driver -> K6Device: 0x22 DATA + checksum
   K6Device --> K6Driver: ACK 0x09
+end
+
+K6Driver -> K6Device: 0x24 INIT #1
+K6Device --> K6Driver: Status FF FF 00 XX
+
+K6Driver -> K6Device: 0x24 INIT #2
+K6Device --> K6Driver: Status FF FF 00 XX
+
+K6Driver -> K6Driver: Wait for completion
+loop Progress updates
+  K6Device --> K6Driver: Status FF FF 00 XX
 end
 
 K6Driver --> Flask: Success

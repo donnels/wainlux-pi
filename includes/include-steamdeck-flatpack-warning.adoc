@@ -1,4 +1,7 @@
-= Flatpak warning in VSCode
+= Using a Steamdeck for more than gaming
+
+== Flatpak warning in VSCode
+This warning is shown when using the Flatpak version of Visual Studio Code on the Steamdeck for the first time-
 //changed to adoc from txt
 
 * link:https://www.flathub.org[]
@@ -41,36 +44,108 @@ This Flatpak provides a standard development environment (gcc, python, etc).
 To see what's available:
 
 [,console]
-====
+----
 $ flatpak run --command=sh com.visualstudio.code
 $ ls /usr/bin (shared runtime)
 $ ls /app/bin (bundled with this flatpak)
-====
+----
 
 To get support for additional languages or tools within the Flatpak, you have to install SDK extensions, e.g.
 
 [,console]
-====
+----
 $ flatpak install flathub org.freedesktop.Sdk.Extension.dotnet
 $ flatpak install flathub org.freedesktop.Sdk.Extension.golang
 $ FLATPAK_ENABLE_SDK_EXT=dotnet,golang flatpak run com.visualstudio.code
-====
+----
 
 Similarly for shells and other tools:
 
 [,console]
-====
+----
 $ flatpak install com.visualstudio.code.tool.fish
 $ flatpak install com.visualstudio.code.tool.podman
-====
+----
 
 You can use
 
 [,console]
-====
+----
 $ flatpak search <TEXT>
-====
+----
 
 to find others.
 
-Also see link:https://code.visualstudio.com/docs/terminal/shell-integration[]
+== Terminal warnings
+
+When opening the integrated terminal for the first time, you may see warnings pointing here:
+
+* link:https://code.visualstudio.com/docs/terminal/shell-integration[]
+
+== PlantUML Integration
+
+The PlantUML extension (jebbs.plantuml) requires Java and Graphviz, which are not easily accessible to VS Code extensions inside the Flatpak sandbox. I ran a local PlantUML server in a Podman container.
+
+=== Setup
+
+Start a PlantUML server container that persists across reboots:
+
+[,console]
+----
+$ host-spawn podman run -d --name plantuml-server \
+  --restart=always \
+  -p 8888:8080 \
+  docker.io/plantuml/plantuml-server:jetty
+----
+
+Configure VS Code to use the local server. Settings location for Flatpak:
+
+[,console]
+----
+~/.var/app/com.visualstudio.code/config/Code/User/settings.json
+----
+
+Add these settings:
+
+[,json]
+----
+{
+  "plantuml.server": "http://localhost:8888",
+  "plantuml.render": "PlantUMLServer"
+}
+----
+
+Reload VS Code window (Ctrl+Shift+P → "Reload Window") and test with Alt+D on any .plantuml file.
+
+=== Management
+
+Check container status:
+[,console]
+----
+$ host-spawn podman ps -a | grep plantuml
+----
+
+Stop the server:
+[,console]
+----
+$ host-spawn podman stop plantuml-server
+----
+
+Start the server:
+[,console]
+----
+$ host-spawn podman start plantuml-server
+----
+
+Remove the server:
+[,console]
+----
+$ host-spawn podman rm -f plantuml-server
+----
+
+=== Why This Works
+
+* *Offline Capability:* Server runs locally, no external dependencies
+* *Sandbox Bypass:* VS Code extension communicates via HTTP, avoiding Flatpak file access restrictions
+* *Persistent:* Container survives reboots with `--restart=always`
+* *Minimal Overhead:* ~150MB container vs attempting to install Java/Graphviz in sandbox

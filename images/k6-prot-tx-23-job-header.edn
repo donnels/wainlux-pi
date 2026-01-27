@@ -10,70 +10,70 @@
 (draw-column-headers)
 
 ;; Row 1
-(draw-box "0x23" [:box-first {:span 8} :bg-header])
-(draw-box "0x00" [:box-related {:span 8} :bg-header])
-(draw-box "0x26" [:box-related {:span 8} :bg-header])
-(draw-box "Pkt Cnt MSB" [:box-last {:span 8} :bg-header])
+(draw-box "0x23 (Job Header)" [:box-first {:span 8} :bg-header])
+(draw-box "0x00 (Reserved)" [:box-related {:span 8} :bg-header])
+(draw-box "0x26 (Length = 38)" [:box-related {:span 8} :bg-header])
+(draw-box "Pkt Cnt MSB (16-bit BE)" [:box-last {:span 8} :bg-header])
 
 ;; Row 2
 (next-row)
 (draw-box "Pkt Cnt LSB" [:box-first {:span 8} :bg-header])
-(draw-box "0x01" [:box-related {:span 8} :bg-header])
-(draw-box "Raster W MSB" [:box-related {:span 8} :bg-raster])
+(draw-box "0x01 (Version/Mode)" [:box-related {:span 8} :bg-header])
+(draw-box "Raster W MSB (16-bit BE)" [:box-related {:span 8} :bg-raster])
 (draw-box "Raster W LSB" [:box-last {:span 8} :bg-raster])
 
 ;; Row 3
 (next-row)
-(draw-box "Raster H MSB" [:box-first {:span 8} :bg-raster])
+(draw-box "Raster H MSB (16-bit BE)" [:box-first {:span 8} :bg-raster])
 (draw-box "Raster H LSB" [:box-related {:span 8} :bg-raster])
-(draw-box "0x00" [:box-related {:span 8} :bg-header])
-(draw-box "0x21" [:box-last {:span 8} :bg-header])
+(draw-box "0x00 (Offset MSB)" [:box-related {:span 8} :bg-header])
+(draw-box "0x21 (Offset LSB = 33)" [:box-last {:span 8} :bg-header])
 
 ;; Row 4
 (next-row)
-(draw-box "Rast Pwr MSB" [:box-first {:span 8} :bg-raster])
+(draw-box "Rast Pwr MSB (16-bit BE, 0-1000)" [:box-first {:span 8} :bg-raster])
 (draw-box "Rast Pwr LSB" [:box-related {:span 8} :bg-raster])
-(draw-box "Rast Dep MSB" [:box-related {:span 8} :bg-raster])
+(draw-box "Rast Dep MSB (16-bit BE, 1-255)" [:box-related {:span 8} :bg-raster])
 (draw-box "Rast Dep LSB" [:box-last {:span 8} :bg-raster])
 
 ;; Row 5
 (next-row)
-(draw-box "Vect W MSB" [:box-first {:span 8} :bg-vector])
+(draw-box "Vect W MSB (16-bit BE)" [:box-first {:span 8} :bg-vector])
 (draw-box "Vect W LSB" [:box-related {:span 8} :bg-vector])
-(draw-box "Vect H MSB" [:box-related {:span 8} :bg-vector])
+(draw-box "Vect H MSB (16-bit BE)" [:box-related {:span 8} :bg-vector])
 (draw-box "Vect H LSB" [:box-last {:span 8} :bg-vector])
 
 ;; Row 6
 (next-row)
-(draw-box "Size byte 0" [:box-first {:span 8} :bg-raster])
-(draw-box "Size byte 1" [:box-related {:span 8} :bg-raster])
-(draw-box "Size byte 2" [:box-related {:span 8} :bg-raster])
-(draw-box "Size byte 3" [:box-last {:span 8} :bg-raster])
+(draw-box "Vect Offset byte 0 (32-bit BE)" [:box-first {:span 8} :bg-raster])
+(draw-box "Vect Offset byte 1" [:box-related {:span 8} :bg-raster])
+(draw-box "Vect Offset byte 2" [:box-related {:span 8} :bg-raster])
+(draw-box "Vect Offset byte 3" [:box-last {:span 8} :bg-raster])
 
 ;; Row 7
 (next-row)
-(draw-box "Vect Pwr MSB" [:box-first {:span 8} :bg-vector])
+(draw-box "Vect Pwr MSB (16-bit BE, 0-1000)" [:box-first {:span 8} :bg-vector])
 (draw-box "Vect Pwr LSB" [:box-related {:span 8} :bg-vector])
-(draw-box "Vect Dep MSB" [:box-related {:span 8} :bg-vector])
+(draw-box "Vect Dep MSB (16-bit BE, 1-255)" [:box-related {:span 8} :bg-vector])
 (draw-box "Vect Dep LSB" [:box-last {:span 8} :bg-vector])
 
 ;; Row 8
 (next-row)
-(draw-box "Pt Cnt byte 0" [:box-first {:span 8} :bg-vector])
+(draw-box "Pt Cnt byte 0 (32-bit BE)" [:box-first {:span 8} :bg-vector])
 (draw-box "Pt Cnt byte 1" [:box-related {:span 8} :bg-vector])
 (draw-box "Pt Cnt byte 2" [:box-related {:span 8} :bg-vector])
 (draw-box "Pt Cnt byte 3" [:box-last {:span 8} :bg-vector])
 
 ;; Row 9
 (next-row)
-(draw-box "Center X MSB" [:box-first {:span 8} :bg-pos])
+(draw-box "Center X MSB (16-bit BE)" [:box-first {:span 8} :bg-pos])
 (draw-box "Center X LSB" [:box-related {:span 8} :bg-pos])
-(draw-box "Center Y MSB" [:box-related {:span 8} :bg-pos])
+(draw-box "Center Y MSB (16-bit BE)" [:box-related {:span 8} :bg-pos])
 (draw-box "Center Y LSB" [:box-last {:span 8} :bg-pos])
 
 ;; Row 10
 (next-row)
-(draw-box "Quality" [:box-first {:span 8} :bg-header])
-(draw-box "0x00" [:box-related {:span 8} :bg-header])
-(draw-box "0x00" [:box-related {:span 8} :bg-header])
-(draw-box "0x00" [:box-last {:span 8} :bg-header])
+(draw-box "Repeat (1-10)" [:box-first {:span 8} :bg-header])
+(draw-box "0x00 (Reserved)" [:box-related {:span 8} :bg-header])
+(draw-box "0x00 (Reserved)" [:box-related {:span 8} :bg-header])
+(draw-box "0x00 (Reserved)" [:box-last {:span 8} :bg-header])

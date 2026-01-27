@@ -5,4 +5,4 @@
 
 (draw-column-headers)
 
-(draw-box "0x09 (ACK)" [{:span 8} :bg-ack])
+(draw-box "0x09 (ACK/Success)" [{:span 8} :bg-ack])

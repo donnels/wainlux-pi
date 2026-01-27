@@ -5,6 +5,6 @@
 
 (draw-column-headers)
 
-(draw-box "Major (04)" [:box-first {:span 8} :bg-version])
-(draw-box "Minor (01)" [:box-related {:span 8} :bg-version])
-(draw-box "Patch (06)" [:box-last {:span 8} :bg-version])
+(draw-box "Major (example: 04)" [:box-first {:span 8} :bg-version])
+(draw-box "Minor (example: 01)" [:box-related {:span 8} :bg-version])
+(draw-box "Patch (example: 06)" [:box-last {:span 8} :bg-version])
