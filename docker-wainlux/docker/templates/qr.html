@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WiFi QR Code Burn</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: monospace;
+            background: #000;
+            color: #fff;
+            padding: 20px;
+        }
+        .container { max-width: 900px; margin: 0 auto; }
+        h1 { margin-bottom: 20px; border-bottom: 1px solid #fff; padding-bottom: 10px; }
+        h2 { margin-top: 20px; margin-bottom: 10px; font-size: 1.2em; }
+        .nav {
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px solid #fff;
+        }
+        .nav a {
+            color: #fff;
+            text-decoration: none;
+            margin-right: 15px;
+        }
+        .nav a:hover { text-decoration: underline; }
+        .status {
+            margin: 20px 0;
+            padding: 10px;
+            border: 1px solid #fff;
+        }
+        .status.disconnected { border: 3px solid #fff; font-weight: bold; }
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #fff;
+        }
+        .form-row {
+            margin: 15px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .form-row label {
+            min-width: 150px;
+        }
+        select, input[type="text"], input[type="password"], input[type="number"] {
+            background: #000;
+            color: #fff;
+            border: 1px solid #fff;
+            padding: 5px;
+            font-family: monospace;
+            flex: 1;
+            max-width: 400px;
+        }
+        button {
+            background: #000;
+            color: #fff;
+            border: 1px solid #fff;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            font-family: monospace;
+        }
+        button:hover { background: #fff; color: #000; }
+        button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        .info {
+            margin: 10px 0;
+            padding: 10px;
+            border-left: 3px solid #fff;
+            font-size: 0.9em;
+        }
+        .warning {
+            border: 3px solid #fff;
+            font-weight: bold;
+        }
+        #message {
+            margin: 10px 0;
+            padding: 10px;
+            display: none;
+        }
+        #message.show { display: block; }
+        #message.error { border: 3px solid #fff; font-weight: bold; }
+        #message.success { border: 1px solid #fff; }
+        #previewSection {
+            margin-top: 20px;
+            padding: 20px;
+            border: 1px solid #fff;
+            text-align: center;
+        }
+        #previewImage {
+            max-width: 100%;
+            background: #fff;
+            border: 2px solid #fff;
+            margin: 20px 0;
+        }
+        #progressSection {
+            margin-top: 20px;
+            padding: 20px;
+            border: 1px solid #fff;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #000;
+            border: 3px solid #fff;
+            position: relative;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #fff;
+            transition: width 0.3s;
+        }
+        .progress-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-weight: bold;
+            font-size: 1.1em;
+            text-shadow: 0 0 3px #000;
+        }
+        #logBox {
+            font-family: monospace;
+            font-size: 0.9em;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #fff;
+            padding: 10px;
+            margin-top: 15px;
+            background: #000;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WIFI QR CODE BURN</h1>
+        
+        <div class="nav">
+            <a href="/">← MAIN</a>
+            <a href="/calibration">CALIBRATION</a>
+            <a href="/qr">QR BURN</a>
+        </div>
+        
+        <div id="status" class="status {% if not connected %}disconnected{% endif %}">
+            {% if connected %}CONNECTED{% else %}DISCONNECTED{% endif %}
+        </div>
+        
+        <div class="section">
+            <h2>WIFI CREDENTIALS</h2>
+            <div class="info" style="margin-bottom: 15px;">
+                Generate WiFi QR code for credit card sized bamboo blanks (85.6mm × 53.98mm).<br>
+                QR code includes SSID and password. Password is NOT displayed as text (security).
+            </div>
+            
+            <div class="form-row">
+                <label>SSID (Network Name):</label>
+                <input type="text" id="ssid" placeholder="MyWiFiNetwork" required>
+            </div>
+            
+            <div class="form-row">
+                <label>PASSWORD:</label>
+                <input type="password" id="password" placeholder="wifi password">
+            </div>
+            
+            <div class="form-row">
+                <label>SECURITY:</label>
+                <select id="security">
+                    <option value="WPA">WPA/WPA2</option>
+                    <option value="WEP">WEP</option>
+                    <option value="nopass">No Password</option>
+                </select>
+            </div>
+            
+            <div class="form-row">
+                <label>DESCRIPTION (optional):</label>
+                <input type="text" id="description" placeholder="Guest WiFi">
+            </div>
+            
+            <button id="btnGenerate">GENERATE QR PREVIEW</button>
+        </div>
+        
+        <div id="previewSection" style="display: none;">
+            <h2>QR CODE PREVIEW</h2>
+            <div class="info">
+                Scan with phone to verify QR is correct before burning.<br>
+                Size: 75 × 53.98mm (1500 × 1080px @ 0.05mm/px K6 native resolution)
+            </div>
+            <img id="previewImage" alt="QR Preview">
+            <div id="previewInfo" style="margin-top: 10px;"></div>
+        </div>
+        
+        <div class="section">
+            <h2>BURN CONTROLS</h2>
+            
+            <div class="info warning" style="margin-bottom: 15px;">
+                IMPORTANT: Burn alignment box FIRST, then burn QR code.<br>
+                Left-align credit card in alignment box before burning QR.
+            </div>
+            
+            <h3 style="margin-top: 20px; margin-bottom: 10px;">1. ALIGNMENT BOX (burn once)</h3>
+            <div class="info" style="margin-bottom: 15px;">
+                Creates physical positioning guide (75mm width fits K6 burn area).<br>
+                Credit card is 85.6mm wide - left-align in box, right edge extends ~11mm beyond.<br>
+                Use LOW power to create visible but light marks.
+            </div>
+            
+            <div class="form-row">
+                <label>ALIGNMENT POWER:</label>
+                <input type="number" id="alignPower" value="300" min="0" max="1000" step="10" style="width: 100px;">
+            </div>
+            
+            <div class="form-row">
+                <label>ALIGNMENT DEPTH:</label>
+                <input type="number" id="alignDepth" value="5" min="1" max="255" style="width: 100px;">
+            </div>
+            
+            <button id="btnAlignment" {% if not connected %}disabled{% endif %}>BURN ALIGNMENT BOX</button>
+            
+            <h3 style="margin-top: 30px; margin-bottom: 10px;">2. QR CODE (burn after alignment)</h3>
+            <div class="info" style="margin-bottom: 15px;">
+                Place card in alignment box before burning.<br>
+                Use NORMAL power for clear, scannable QR code.
+            </div>
+            
+            <div class="form-row">
+                <label>QR POWER:</label>
+                <input type="number" id="qrPower" value="500" min="0" max="1000" step="10" style="width: 100px;">
+            </div>
+            
+            <div class="form-row">
+                <label>QR DEPTH:</label>
+                <input type="number" id="qrDepth" value="10" min="1" max="255" style="width: 100px;">
+            </div>
+            
+            <button id="btnBurn" {% if not connected %}disabled{% endif %}>BURN QR CODE</button>
+            <button id="btnStop" style="font-weight: bold;">EMERGENCY STOP</button>
+        </div>
+        
+        <div id="progressSection" style="display: none;">
+            <h2>BURN PROGRESS</h2>
+            
+            <!-- Setup Progress -->
+            <div style="margin-bottom: 15px;">
+                <label>SETUP:</label>
+                <div class="progress-bar">
+                    <div id="setupFill" class="progress-fill" style="width: 0%;"></div>
+                    <div id="setupText" class="progress-text">0%</div>
+                </div>
+            </div>
+            
+            <!-- Upload Progress -->
+            <div style="margin-bottom: 15px;">
+                <label>UPLOAD:</label>
+                <div class="progress-bar">
+                    <div id="uploadFill" class="progress-fill" style="width: 0%;"></div>
+                    <div id="uploadText" class="progress-text">0%</div>
+                </div>
+            </div>
+            
+            <!-- Burn Progress -->
+            <div style="margin-bottom: 15px;">
+                <label>BURNING:</label>
+                <div class="progress-bar">
+                    <div id="burnFill" class="progress-fill" style="width: 0%;"></div>
+                    <div id="burnText" class="progress-text">0%</div>
+                </div>
+            </div>
+            
+            <div id="logBox"></div>
+        </div>
+        
+        <div id="message"></div>
+    </div>
+    
+    <script>
+        const ssid = document.getElementById('ssid');
+        const password = document.getElementById('password');
+        const security = document.getElementById('security');
+        const description = document.getElementById('description');
+        const btnGenerate = document.getElementById('btnGenerate');
+        const btnAlignment = document.getElementById('btnAlignment');
+        const btnBurn = document.getElementById('btnBurn');
+        const btnStop = document.getElementById('btnStop');
+        const message = document.getElementById('message');
+        const previewSection = document.getElementById('previewSection');
+        const previewImage = document.getElementById('previewImage');
+        const previewInfo = document.getElementById('previewInfo');
+        const progressSection = document.getElementById('progressSection');
+        const status = document.getElementById('status');
+        
+        let currentEventSource = null;
+        
+        // Check connection status
+        fetch('/api/status')
+            .then(res => res.json())
+            .then(data => {
+                if (data.connected) {
+                    status.textContent = data.version ? `CONNECTED TO K6 ${data.version}` : 'CONNECTED';
+                    status.className = 'status';
+                }
+            })
+            .catch(() => {
+                status.className = 'status disconnected';
+            });
+        
+        function showMessage(text, isError = false) {
+            message.textContent = text;
+            message.className = isError ? 'show error' : 'show success';
+            setTimeout(() => message.className = '', 5000);
+        }
+        
+        async function apiCall(endpoint, method = 'POST', body = null) {
+            try {
+                const opts = {
+                    method,
+                    headers: { 'Content-Type': 'application/json' }
+                };
+                if (body) opts.body = JSON.stringify(body);
+                
+                const res = await fetch(endpoint, opts);
+                const data = await res.json();
+                
+                if (!res.ok || !data.success) {
+                    throw new Error(data.error || 'Request failed');
+                }
+                
+                return data;
+            } catch (err) {
+                showMessage(err.message, true);
+                throw err;
+            }
+        }
+        
+        btnGenerate.addEventListener('click', async () => {
+            if (!ssid.value) {
+                showMessage('SSID required', true);
+                return;
+            }
+            
+            btnGenerate.disabled = true;
+            showMessage('Generating QR code...');
+            
+            try {
+                const result = await apiCall('/api/qr/generate', 'POST', {
+                    ssid: ssid.value,
+                    password: password.value,
+                    security: security.value,
+                    description: description.value
+                });
+                
+                previewImage.src = result.image;
+                previewInfo.textContent = `Size: ${result.size_mm} (${result.width}×${result.height}px)`;
+                previewSection.style.display = 'block';
+                showMessage('QR generated - scan with phone to verify');
+            } catch (err) {
+                showMessage('Generate failed: ' + err.message, true);
+            } finally {
+                btnGenerate.disabled = false;
+            }
+        });
+        
+        btnAlignment.addEventListener('click', async () => {
+            if (!confirm('Burn alignment box?\n\nThis creates positioning guides for card placement.')) {
+                return;
+            }
+            
+            btnAlignment.disabled = true;
+            showMessage('Burning alignment box...');
+            
+            try {
+                const result = await apiCall('/api/qr/alignment', 'POST', {
+                    power: parseInt(alignPower.value),
+                    depth: parseInt(alignDepth.value)
+                });
+                
+                showMessage(`Alignment box burned in ${result.total_time.toFixed(1)}s`);
+            } catch (err) {
+                showMessage('Alignment burn failed: ' + err.message, true);
+            } finally {
+                btnAlignment.disabled = false;
+            }
+        });
+        
+        btnBurn.addEventListener('click', async () => {
+            if (!ssid.value) {
+                showMessage('Generate QR preview first', true);
+                return;
+            }
+            
+            if (!confirm(`Burn WiFi QR for "${ssid.value}"?\n\nEnsure card is positioned in alignment box!`)) {
+                return;
+            }
+            
+            btnBurn.disabled = true;
+            btnStop.disabled = false;
+            
+            // Show progress
+            progressSection.style.display = 'block';
+            const setupFill = document.getElementById('setupFill');
+            const setupText = document.getElementById('setupText');
+            const uploadFill = document.getElementById('uploadFill');
+            const uploadText = document.getElementById('uploadText');
+            const burnFill = document.getElementById('burnFill');
+            const burnText = document.getElementById('burnText');
+            const logBox = document.getElementById('logBox');
+            
+            setupFill.style.width = '0%';
+            setupText.textContent = '0%';
+            uploadFill.style.width = '0%';
+            uploadText.textContent = '0%';
+            burnFill.style.width = '0%';
+            burnText.textContent = '0%';
+            logBox.innerHTML = '';
+            
+            function addLog(msg) {
+                const timestamp = new Date().toLocaleTimeString();
+                logBox.innerHTML += `[${timestamp}] ${msg}\n`;
+                logBox.scrollTop = logBox.scrollHeight;
+            }
+            
+            addLog('Connecting to progress stream...');
+            
+            // Connect to SSE
+            currentEventSource = new EventSource('/api/progress/stream');
+            
+            currentEventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                addLog(`${data.phase}: ${data.message}`);
+                
+                if (data.phase === 'setup') {
+                    setupFill.style.width = data.progress + '%';
+                    setupText.textContent = data.progress + '%';
+                    setupText.style.color = data.progress > 10 ? '#000' : '#fff';
+                } else if (data.phase === 'upload') {
+                    uploadFill.style.width = data.progress + '%';
+                    uploadText.textContent = data.progress + '%';
+                    uploadText.style.color = data.progress > 10 ? '#000' : '#fff';
+                } else if (data.phase === 'burning') {
+                    burnFill.style.width = data.progress + '%';
+                    burnText.textContent = data.progress + '%';
+                    burnText.style.color = data.progress > 10 ? '#000' : '#fff';
+                } else if (data.phase === 'complete') {
+                    setupFill.style.width = '100%';
+                    uploadFill.style.width = '100%';
+                    burnFill.style.width = '100%';
+                    setupText.textContent = '100%';
+                    uploadText.textContent = '100%';
+                    burnText.textContent = '100%';
+                    setupText.style.color = '#000';
+                    uploadText.style.color = '#000';
+                    burnText.style.color = '#000';
+                    currentEventSource.close();
+                } else if (data.phase === 'error' || data.phase === 'stopped') {
+                    currentEventSource.close();
+                }
+            };
+            
+            currentEventSource.onerror = function() {
+                addLog('Progress stream disconnected');
+                currentEventSource.close();
+            };
+            
+            addLog('Starting burn...');
+            showMessage('Burning QR code...');
+            
+            try {
+                const result = await apiCall('/api/qr/burn', 'POST', {
+                    ssid: ssid.value,
+                    password: password.value,
+                    security: security.value,
+                    description: description.value,
+                    power: parseInt(qrPower.value),
+                    depth: parseInt(qrDepth.value)
+                });
+                
+                showMessage(`QR burned in ${result.total_time.toFixed(1)}s`);
+                addLog(`Complete: ${result.message}`);
+            } catch (err) {
+                showMessage(err.message, true);
+                addLog(`Error: ${err.message}`);
+            } finally {
+                btnBurn.disabled = false;
+                btnStop.disabled = true;
+                if (currentEventSource) {
+                    currentEventSource.close();
+                }
+            }
+        });
+        
+        btnStop.addEventListener('click', async () => {
+            btnStop.disabled = true;
+            
+            try {
+                await apiCall('/api/test/stop');
+                showMessage('STOP command sent');
+            } catch (err) {
+                showMessage('Stop failed: ' + err.message, true);
+            } finally {
+                setTimeout(() => btnStop.disabled = false, 2000);
+            }
+        });
+    </script>
+</body>
+</html>

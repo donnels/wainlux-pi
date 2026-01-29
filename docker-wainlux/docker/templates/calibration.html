@@ -203,6 +203,7 @@
                     <option value="corners">CORNER BOXES (test bounds)</option>
                     <option value="frame">FULL FRAME (80mm border)</option>
                     <option value="grid">GRAPH PAPER (10mm grid)</option>
+                    <option value="bottom-test">BOTTOM-OUT TEST (horizontal line + 1cm marks)</option>
                 </select>
             </div>
             
@@ -230,6 +231,42 @@
             
             <div id="result" class="result">
                 <div id="resultInfo"></div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>PROTOCOL COMMAND TESTING</h2>
+            <div class="info" style="margin-bottom: 15px;">
+                Test opcodes 0x25 and 0x28 (no observable effect expected).<br>
+                Included for protocol completeness and testing purposes.
+            </div>
+            
+            <div style="border: 1px solid #fff; padding: 15px; margin-bottom: 15px;">
+                <h3 style="margin-bottom: 10px;">SET SPEED/POWER (0x25)</h3>
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                    <label>SPEED:</label>
+                    <input type="number" id="testSpeed" value="115" min="0" max="65535" step="1" style="width: 80px;">
+                    <label>POWER:</label>
+                    <input type="number" id="testPower" value="1000" min="0" max="1000" step="10" style="width: 80px;">
+                    <button id="btnTestSpeedPower" {% if not connected %}disabled{% endif %}>TEST 0x25</button>
+                </div>
+                <div class="info" style="font-size: 0.9em;">
+                    Purpose unclear. Defaults: speed=115, power=1000. Expects ACK.
+                </div>
+            </div>
+            
+            <div style="border: 1px solid #fff; padding: 15px;">
+                <h3 style="margin-bottom: 10px;">SET FOCUS/ANGLE (0x28)</h3>
+                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+                    <label>FOCUS (0-200):</label>
+                    <input type="number" id="testFocus" value="20" min="0" max="200" step="1" style="width: 80px;">
+                    <label>ANGLE/MODE:</label>
+                    <input type="number" id="testAngle" value="0" min="0" max="255" step="1" style="width: 80px;">
+                    <button id="btnTestFocusAngle" {% if not connected %}disabled{% endif %}>TEST 0x28</button>
+                </div>
+                <div class="info" style="font-size: 0.9em;">
+                    May control positioning laser intensity. Defaults: focus=20, angle=0. Expects ACK.
+                </div>
             </div>
         </div>
         
@@ -540,12 +577,15 @@
                     if (data.phase === 'setup' || data.phase === 'connect' || data.phase === 'prepare') {
                         setupFill.style.width = pct;
                         setupText.textContent = pct;
+                        setupText.style.color = data.progress > 10 ? '#000' : '#fff';
                     } else if (data.phase === 'upload') {
                         uploadFill.style.width = pct;
                         uploadText.textContent = pct;
+                        uploadText.style.color = data.progress > 10 ? '#000' : '#fff';
                     } else if (data.phase === 'burning' || data.phase === 'wait' || data.phase === 'finalize') {
                         burnFill.style.width = pct;
                         burnText.textContent = pct;
+                        burnText.style.color = data.progress > 10 ? '#000' : '#fff';
                     }
                 }
                 
@@ -589,7 +629,8 @@
         
         // Update size input visibility based on pattern
         pattern.addEventListener('change', () => {
-            const showSize = pattern.value !== 'frame';
+            // Size input not used for 'frame' or 'bottom-test' patterns
+            const showSize = pattern.value !== 'frame' && pattern.value !== 'bottom-test';
             sizeInput.disabled = !showSize;
         });
         
@@ -719,6 +760,52 @@
                 crosshairToggle.checked = !enable;
             } finally {
                 crosshairToggle.disabled = false;
+            }
+        });
+        
+        // Protocol command testing - 0x25 and 0x28
+        const btnTestSpeedPower = document.getElementById('btnTestSpeedPower');
+        const btnTestFocusAngle = document.getElementById('btnTestFocusAngle');
+        const testSpeed = document.getElementById('testSpeed');
+        const testPower = document.getElementById('testPower');
+        const testFocus = document.getElementById('testFocus');
+        const testAngle = document.getElementById('testAngle');
+        
+        btnTestSpeedPower.addEventListener('click', async () => {
+            btnTestSpeedPower.disabled = true;
+            try {
+                const speed = parseInt(testSpeed.value);
+                const power = parseInt(testPower.value);
+                
+                const result = await apiCall('/api/calibration/set-speed-power', 'POST', {
+                    speed,
+                    power
+                });
+                
+                showMessage(`✓ ${result.message} (speed=${result.speed}, power=${result.power})`);
+            } catch (err) {
+                showMessage('SET_SPEED_POWER (0x25) failed: ' + err.message, true);
+            } finally {
+                btnTestSpeedPower.disabled = false;
+            }
+        });
+        
+        btnTestFocusAngle.addEventListener('click', async () => {
+            btnTestFocusAngle.disabled = true;
+            try {
+                const focus = parseInt(testFocus.value);
+                const angle = parseInt(testAngle.value);
+                
+                const result = await apiCall('/api/calibration/set-focus-angle', 'POST', {
+                    focus,
+                    angle
+                });
+                
+                showMessage(`✓ ${result.message} (focus=${result.focus}, angle=${result.angle})`);
+            } catch (err) {
+                showMessage('SET_FOCUS_ANGLE (0x28) failed: ' + err.message, true);
+            } finally {
+                btnTestFocusAngle.disabled = false;
             }
         });
     </script>

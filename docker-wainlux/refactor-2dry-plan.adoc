@@ -1,0 +1,136 @@
+= DRY Refactor Plan
+
+.Todo list. 
+* Get to KISS. 
+* Get to DRY. 
+* Pass the pre-commit hook.
+
+== Current State
+
+* Code repeats. 
+* Progress bars in two files. 
+* Settings in two files. 
+* Logs in two files. 
+* Same CSS. 
+* Same JS. 
+
+Change one. Forget the other. Bug appears. This is bad.
+
+== The Work
+
+=== Step 1: Extract CSS
+* [ ] Create `static/css/shared.css`
+* [ ] Move common styles: body, buttons, sections, status, message
+* [ ] Create `static/css/components.css`
+* [ ] Move: progress bars, log box, form rows, info boxes
+* [ ] Link from all pages
+* [ ] Delete duplicates
+
+=== Step 2: Extract JS API
+* [ ] Create `static/js/api.js`
+* [ ] Move: `apiCall()`, connection status check
+* [ ] Export functions
+* [ ] Import in all pages
+* [ ] Delete duplicates
+
+=== Step 3: Build Progress Component
+* [ ] Create `static/js/progress.js`
+* [ ] Class `ProgressTracker`: init, update, reset
+* [ ] Handles three bars: setup, upload, burn
+* [ ] Text color logic: white when empty, black when filled
+* [ ] Use in calibration.html, qr.html
+* [ ] Delete duplicate code
+
+=== Step 4: Build Log Component
+* [ ] Create `static/js/log.js`
+* [ ] Class `LogManager`: add, clear, auto-scroll
+* [ ] Timestamp formatting
+* [ ] Use in calibration.html, qr.html
+* [ ] Delete duplicate code
+
+=== Step 5: Build Message Component
+* [ ] Create `static/js/message.js`
+* [ ] Function `showMessage(text, isError)`
+* [ ] Timeout logic
+* [ ] Use in all pages
+* [ ] Delete duplicates
+
+=== Step 6: Build Settings Component
+* [ ] Create template macro for power/depth inputs
+* [ ] Validation logic in JS
+* [ ] Use in calibration, qr pages
+* [ ] Delete duplicates
+
+=== Step 7: Build Jog Component
+* [ ] Create template macro for jog controls
+* [ ] JS class `JogController`: move, home, track position
+* [ ] Use in calibration, qr (maybe index for testing)
+* [ ] Delete duplicate code
+
+=== Step 8: Build Stop Component
+* [ ] Template macro for emergency stop button
+* [ ] JS handler: no confirmation, immediate
+* [ ] Use in all pages
+* [ ] Delete duplicates
+
+=== Step 9: Build Status Component
+* [ ] Template macro for status display
+* [ ] JS: poll status, update UI
+* [ ] Use in all pages
+* [ ] Delete duplicates
+
+=== Step 10: Build Nav Component
+* [ ] Template macro for navigation
+* [ ] Active page highlighting
+* [ ] Use in all pages
+* [ ] Delete duplicates
+
+=== Step 11: Create Base Template
+* [ ] Create `templates/base.html`
+* [ ] Head, body structure
+* [ ] Link all shared CSS, JS
+* [ ] Block for page content
+* [ ] All pages extend base
+* [ ] Delete duplicate HTML structure
+
+=== Step 12: Test Everything
+* [ ] Load each page
+* [ ] Verify UI works
+* [ ] Run burn test
+* [ ] Check progress bars visible
+* [ ] Check logs scroll
+* [ ] Check emergency stop works
+* [ ] Verify no regressions
+
+=== Step 13: Pre-commit
+* [ ] Run linter
+* [ ] Fix errors
+* [ ] Commit
+* [ ] Push
+
+== The Goal
+
+One place. One change. No duplicates. KISS. DRY. Done.
+
+== Benefits
+
+Fix progress bars once. Fixed everywhere.
+Add jog controls once. Available everywhere.
+Change API once. All pages updated.
+Test one component. Trust it everywhere.
+
+== Risk
+
+Big refactor. Many files change. Test carefully. Do it in steps. Commit often.
+
+== Timeline
+
+Step 1-2: 1 hour. Extract CSS and API.
+Step 3-5: 1 hour. Progress, log, message.
+Step 6-8: 1 hour. Settings, jog, stop.
+Step 9-11: 1 hour. Status, nav, base template.
+Step 12-13: 30 min. Test, lint, commit.
+
+Total: 4.5 hours for complete DRY refactor.
+
+Or: Do it in chunks. One step per day. Less risk.

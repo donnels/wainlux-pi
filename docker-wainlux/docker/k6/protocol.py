@@ -49,7 +49,7 @@ def build_data_packet(payload: bytes) -> bytes:
 
 
 def build_job_header_raster(
-    width: int, height: int, depth: int, power: int = 1000
+    width: int, height: int, depth: int, power: int = 1000, center_x: int = None, center_y: int = None
 ) -> bytes:
     """Build JOB_HEADER (0x23) for raster-only burn (no vector).
 
@@ -58,6 +58,8 @@ def build_job_header_raster(
         height: Raster height in pixels
         depth: Burn depth 1-255
         power: Laser power 0-1000 (default 1000)
+        center_x: Center X coordinate (default: width/2 + 67)
+        center_y: Center Y coordinate (default: 800 = centered in 1600px work area)
 
     Returns:
         38-byte JOB_HEADER packet
@@ -66,9 +68,11 @@ def build_job_header_raster(
     bytes_per_line = (width + 7) // 8
     total_size = bytes_per_line * height
 
-    # Center point calculation matching legacy script
-    center_x = (width // 2) + 67
-    center_y = height // 2
+    # Center point calculation - default to center of 1600x1520 work area (76mm actual)
+    if center_x is None:
+        center_x = (width // 2) + 67
+    if center_y is None:
+        center_y = 760  # Center of 1520px work area (76mm measured Y-axis)
 
     return build_job_header_custom(
         raster_w=width,

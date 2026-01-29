@@ -124,6 +124,12 @@ def calibration():
     return render_template("calibration.html", connected=k6_connected)
 
 
+@app.route("/qr")
+def qr_page():
+    """WiFi QR code generation and burn page"""
+    return render_template("qr.html", connected=k6_connected)
+
+
 @app.route("/api/connect", methods=["POST"])
 def connect():
     global k6_transport, k6_connected, k6_version
@@ -578,6 +584,28 @@ def calibration_generate():  # noqa: C901
                 (0, 0, work_area_px - 1, work_area_px - 1), outline=0, width=2
             )
 
+
+        elif pattern == "bottom-test":
+            # Bottom-out test: one pixel at top-left, line+marks at bottom
+            work_area_px = mm_to_px(80.0)
+            mark_spacing_px = mm_to_px(10.0)
+            mark_height_px = mm_to_px(10.0)
+            height_px = mark_height_px + 10  # bottom region
+
+            img = Image.new("1", (work_area_px, work_area_px), 1)  # full height
+            draw = ImageDraw.Draw(img)
+
+            # Top-left pixel
+            img.putpixel((0, 0), 0)
+
+            # Bottom line and marks
+            bottom_y = work_area_px - 1
+            draw.line((0, bottom_y, work_area_px - 1, bottom_y), fill=0, width=2)
+            x = 0
+            while x <= work_area_px:
+                draw.line((x, bottom_y, x, bottom_y - mark_height_px), fill=0, width=2)
+                x += mark_spacing_px
+
         else:
             return jsonify({"success": False, "error": "Invalid pattern"}), 400
 
@@ -713,6 +741,581 @@ def calibration_burn_bounds():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route("/api/calibration/set-speed-power", methods=["POST"])
+def calibration_set_speed_power():
+    """Test SET_SPEED_POWER (0x25) command - no observable effect expected"""
+    if not k6_connected or not k6_transport:
+        return jsonify({"success": False, "error": "Not connected"}), 400
+
+    try:
+        data = request.get_json()
+        speed = int(data.get("speed", 115))
+        power = int(data.get("power", 1000))
+
+        # Validate
+        speed = max(0, min(65535, speed))  # 16-bit value
+        power = max(0, min(1000, power))
+
+        success = k6_driver.set_speed_power_transport(
+            k6_transport, speed=speed, power=power
+        )
+
+        if success:
+            return jsonify(
+                {
+                    "success": True,
+                    "message": "SET_SPEED_POWER (0x25) command sent",
+                    "speed": speed,
+                    "power": power,
+                }
+            )
+        else:
+            return jsonify({"success": False, "error": "Command failed"}), 500
+
+    except Exception as e:
+        logger.error(f"Set speed/power failed: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/calibration/set-focus-angle", methods=["POST"])
+def calibration_set_focus_angle():
+    """Test SET_FOCUS_ANGLE (0x28) command - no observable effect expected"""
+    if not k6_connected or not k6_transport:
+        return jsonify({"success": False, "error": "Not connected"}), 400
+
+    try:
+        data = request.get_json()
+        focus = int(data.get("focus", 20))
+        angle = int(data.get("angle", 0))
+
+        # Validate
+        focus = max(0, min(200, focus))
+        angle = max(0, min(255, angle))  # 8-bit value
+
+        success = k6_driver.set_focus_angle_transport(
+            k6_transport, focus=focus, angle=angle
+        )
+
+        if success:
+            return jsonify(
+                {
+                    "success": True,
+                    "message": "SET_FOCUS_ANGLE (0x28) command sent",
+                    "focus": focus,
+                    "angle": angle,
+                }
+            )
+        else:
+            return jsonify({"success": False, "error": "Command failed"}), 500
+
+    except Exception as e:
+        logger.error(f"Set focus/angle failed: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/qr/generate", methods=["POST"])
+def qr_generate():
+    """Generate WiFi QR code and return as base64 for preview"""
+    try:
+        import qrcode
+        import io
+        import base64
+        from PIL import ImageFont
+
+        data = request.get_json()
+        ssid = data.get("ssid", "")
+        password = data.get("password", "")
+        security = data.get("security", "WPA")
+        description = data.get("description", "")
+
+        if not ssid:
+            return jsonify({"success": False, "error": "SSID required"}), 400
+
+        # WiFi QR format
+        wifi_data = f"WIFI:T:{security};S:{ssid};P:{password};H:false;;"
+
+        # Generate QR with high error correction
+        qr = qrcode.QRCode(
+            version=None,
+            error_correction=qrcode.constants.ERROR_CORRECT_H,
+            box_size=10,
+            border=2,
+        )
+        qr.add_data(wifi_data)
+        qr.make(fit=True)
+        qr_img = qr.make_image(fill_color="black", back_color="white")
+
+        # K6 burn area: 75mm × 53.98mm = 1500 × 1080 px @ 0.05 mm/px
+        burn_width = 1500
+        burn_height = 1080
+
+        canvas = Image.new("RGB", (burn_width, burn_height), "white")
+        draw = ImageDraw.Draw(canvas)
+
+        # Position QR centered on physical card (card is 85.6mm, burn is 75mm)
+        card_width_px = 1712  # 85.6mm at 0.05 mm/px
+        offset_right = (card_width_px - burn_width) // 2  # ~106px shift
+
+        # Load fonts
+        try:
+            font_large = ImageFont.truetype(
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 36
+            )
+            font_small = ImageFont.truetype(
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24
+            )
+        except (OSError, IOError):
+            font_large = ImageFont.load_default()
+            font_small = ImageFont.load_default()
+
+        # Measure text
+        ssid_text = f"SSID: {ssid}"
+        ssid_bbox = draw.textbbox((0, 0), ssid_text, font=font_large)
+        ssid_h = ssid_bbox[3] - ssid_bbox[1]
+
+        desc_h = 0
+        line_gap = 8
+        if description:
+            desc_bbox = draw.textbbox((0, 0), description, font=font_small)
+            desc_h = desc_bbox[3] - desc_bbox[1]
+
+        text_block_height = ssid_h + (line_gap + desc_h if desc_h else 0)
+        gap = 20
+        min_margin = 60  # 3mm at 0.05 mm/px
+
+        # Calculate QR size
+        max_qr_w = burn_width - 40 - offset_right
+        available_height = burn_height - (2 * min_margin) - gap - text_block_height
+        qr_size = min(max_qr_w, available_height)
+
+        qr_img = qr_img.resize((qr_size, qr_size), Image.Resampling.LANCZOS)
+
+        # Position QR
+        total_block_height = qr_size + gap + text_block_height
+        qr_y = max(min_margin, (burn_height - total_block_height) // 2)
+        if qr_y + total_block_height + min_margin > burn_height:
+            qr_y = burn_height - total_block_height - min_margin
+            if qr_y < min_margin:
+                qr_y = min_margin
+
+        qr_x = (burn_width - qr_size) // 2 + offset_right
+        canvas.paste(qr_img, (qr_x, qr_y))
+
+        # Add text
+        text_y = qr_y + qr_size + gap
+        text_bbox = draw.textbbox((0, 0), ssid_text, font=font_large)
+        text_width = text_bbox[2] - text_bbox[0]
+        draw.text(
+            ((burn_width - text_width) // 2 + offset_right, text_y),
+            ssid_text,
+            fill="black",
+            font=font_large,
+        )
+
+        if description:
+            desc_y = text_y + ssid_h + line_gap
+            desc_bbox = draw.textbbox((0, 0), description, font=font_small)
+            desc_width = desc_bbox[2] - desc_bbox[0]
+            draw.text(
+                ((burn_width - desc_width) // 2 + offset_right, desc_y),
+                description,
+                fill="black",
+                font=font_small,
+            )
+
+        # Convert to base64 for preview
+        buffer = io.BytesIO()
+        canvas.save(buffer, format="PNG")
+        img_base64 = base64.b64encode(buffer.getvalue()).decode()
+
+        return jsonify(
+            {
+                "success": True,
+                "image": f"data:image/png;base64,{img_base64}",
+                "width": burn_width,
+                "height": burn_height,
+                "size_mm": "75 × 53.98mm",
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"QR generation failed: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/qr/burn", methods=["POST"])
+def qr_burn():
+    """Burn WiFi QR code at specified position"""
+    if not k6_connected or not k6_transport:
+        return jsonify({"success": False, "error": "Not connected"}), 400
+
+    try:
+        import qrcode
+        import tempfile
+        from PIL import ImageFont
+
+        # Clear cancel flag
+        global burn_cancel_event
+        burn_cancel_event.clear()
+
+        data = request.get_json()
+        ssid = data.get("ssid", "")
+        password = data.get("password", "")
+        security = data.get("security", "WPA")
+        description = data.get("description", "")
+        power = int(data.get("power", 500))
+        depth = int(data.get("depth", 10))
+
+        if not ssid:
+            return jsonify({"success": False, "error": "SSID required"}), 400
+
+        # Validate
+        power = max(0, min(1000, power))
+        depth = max(1, min(255, depth))
+
+        # Generate same image as preview
+        wifi_data = f"WIFI:T:{security};S:{ssid};P:{password};H:false;;"
+
+        qr = qrcode.QRCode(
+            version=None,
+            error_correction=qrcode.constants.ERROR_CORRECT_H,
+            box_size=10,
+            border=2,
+        )
+        qr.add_data(wifi_data)
+        qr.make(fit=True)
+        qr_img = qr.make_image(fill_color="black", back_color="white")
+
+        burn_width = 1500
+        burn_height = 1080
+
+        canvas = Image.new("RGB", (burn_width, burn_height), "white")
+        draw = ImageDraw.Draw(canvas)
+
+        card_width_px = 1712
+        offset_right = (card_width_px - burn_width) // 2
+
+        try:
+            font_large = ImageFont.truetype(
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 36
+            )
+            font_small = ImageFont.truetype(
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24
+            )
+        except (OSError, IOError):
+            font_large = ImageFont.load_default()
+            font_small = ImageFont.load_default()
+
+        ssid_text = f"SSID: {ssid}"
+        ssid_bbox = draw.textbbox((0, 0), ssid_text, font=font_large)
+        ssid_h = ssid_bbox[3] - ssid_bbox[1]
+
+        desc_h = 0
+        line_gap = 8
+        if description:
+            desc_bbox = draw.textbbox((0, 0), description, font=font_small)
+            desc_h = desc_bbox[3] - desc_bbox[1]
+
+        text_block_height = ssid_h + (line_gap + desc_h if desc_h else 0)
+        gap = 20
+        min_margin = 60
+
+        max_qr_w = burn_width - 40 - offset_right
+        available_height = burn_height - (2 * min_margin) - gap - text_block_height
+        qr_size = min(max_qr_w, available_height)
+
+        qr_img = qr_img.resize((qr_size, qr_size), Image.Resampling.LANCZOS)
+
+        total_block_height = qr_size + gap + text_block_height
+        qr_y = max(min_margin, (burn_height - total_block_height) // 2)
+        if qr_y + total_block_height + min_margin > burn_height:
+            qr_y = burn_height - total_block_height - min_margin
+            if qr_y < min_margin:
+                qr_y = min_margin
+
+        qr_x = (burn_width - qr_size) // 2 + offset_right
+        canvas.paste(qr_img, (qr_x, qr_y))
+
+        text_y = qr_y + qr_size + gap
+        text_bbox = draw.textbbox((0, 0), ssid_text, font=font_large)
+        text_width = text_bbox[2] - text_bbox[0]
+        draw.text(
+            ((burn_width - text_width) // 2 + offset_right, text_y),
+            ssid_text,
+            fill="black",
+            font=font_large,
+        )
+
+        if description:
+            desc_y = text_y + ssid_h + line_gap
+            desc_bbox = draw.textbbox((0, 0), description, font=font_small)
+            desc_width = desc_bbox[2] - desc_bbox[0]
+            draw.text(
+                ((burn_width - desc_width) // 2 + offset_right, desc_y),
+                description,
+                fill="black",
+                font=font_small,
+            )
+
+        # Save and burn
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            canvas.save(tmp.name)
+            tmp_path = tmp.name
+
+        # Clear progress queue
+        while not progress_queue.empty():
+            try:
+                progress_queue.get_nowait()
+            except queue.Empty:
+                break
+
+        emit_progress("start", 0, "Starting WiFi QR burn")
+        emit_progress("prepare", 10, f"SSID: {ssid}, {burn_width}x{burn_height}px")
+
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            csv_path = DATA_DIR / f"qr-wifi-{timestamp}.csv"
+
+            class ProgressCSVLogger(CSVLogger):
+                def __init__(self, *args, **kwargs):
+                    super().__init__(*args, **kwargs)
+                    self.total_chunks = 0
+                    self.current_chunk = 0
+                    self.setup_commands = 0
+
+                def log_operation(
+                    self,
+                    phase,
+                    operation,
+                    duration_ms,
+                    bytes_transferred=0,
+                    status_pct=None,
+                    state="ACTIVE",
+                    response_type="",
+                    retry_count=0,
+                    device_state="IDLE",
+                ):
+                    if burn_cancel_event.is_set():
+                        logger.info("Burn cancelled by user")
+                        emit_progress("stopped", 0, "Burn cancelled by user")
+                        raise KeyboardInterrupt("Burn cancelled by user")
+
+                    super().log_operation(
+                        phase=phase,
+                        operation=operation,
+                        duration_ms=duration_ms,
+                        bytes_transferred=bytes_transferred,
+                        status_pct=status_pct,
+                        state=state,
+                        response_type=response_type,
+                        retry_count=retry_count,
+                        device_state=device_state,
+                    )
+
+                    if phase == "connect" or phase == "setup":
+                        self.setup_commands += 1
+                        progress = min(int(self.setup_commands * 25), 100)
+                        emit_progress("setup", progress, f"{operation}")
+
+                    elif phase == "burn":
+                        if "chunk" in operation.lower() and "/" in operation:
+                            try:
+                                for part in operation.split():
+                                    if "/" in part:
+                                        current, total = part.split("/")
+                                        self.current_chunk = int(current)
+                                        self.total_chunks = int(total)
+                                        chunk_pct = (
+                                            self.current_chunk / self.total_chunks
+                                        )
+                                        progress = int(chunk_pct * 100)
+                                        emit_progress(
+                                            "upload",
+                                            progress,
+                                            f"Chunk {current}/{total}",
+                                        )
+                                        break
+                            except (ValueError, IndexError):
+                                emit_progress("upload", 50, f"{operation}")
+                        else:
+                            emit_progress("upload", 50, f"{operation}")
+
+                    elif phase == "wait" or phase == "finalize":
+                        if status_pct is not None:
+                            progress = int(status_pct)
+                            emit_progress(
+                                "burning", progress, f"{operation} ({status_pct}%)"
+                            )
+                        else:
+                            emit_progress("burning", 80, f"{operation}")
+
+            # Position at center (default for left-aligned card)
+            center_x = (burn_width // 2) + 67
+            center_y = 800
+
+            with ProgressCSVLogger(str(csv_path)) as csv_logger:
+                emit_progress("setup", 0, "Starting burn sequence...")
+                result = k6_driver.engrave_transport(
+                    k6_transport,
+                    tmp_path,
+                    power=power,
+                    depth=depth,
+                    center_x=center_x,
+                    center_y=center_y,
+                    csv_logger=csv_logger,
+                )
+
+            Path(tmp_path).unlink(missing_ok=True)
+
+            if burn_cancel_event.is_set():
+                emit_progress("stopped", 0, "Burn cancelled by user")
+                return jsonify({"success": False, "error": "Cancelled by user"}), 400
+
+            if result["ok"]:
+                emit_progress(
+                    "complete", 100, f"Burn complete in {result['total_time']:.1f}s"
+                )
+                return jsonify(
+                    {
+                        "success": True,
+                        "message": result["message"],
+                        "total_time": result["total_time"],
+                        "chunks": result["chunks"],
+                        "csv_log": str(csv_path),
+                    }
+                )
+            else:
+                emit_progress("error", 0, result["message"])
+                return jsonify({"success": False, "error": result["message"]}), 500
+
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+
+    except KeyboardInterrupt:
+        logger.info("QR burn cancelled by user")
+        emit_progress("stopped", 0, "Burn cancelled")
+        if "tmp_path" in locals():
+            Path(tmp_path).unlink(missing_ok=True)
+        return jsonify({"success": False, "error": "Cancelled by user"}), 400
+    except Exception as e:
+        logger.error(f"QR burn failed: {e}")
+        emit_progress("error", 0, str(e))
+        if "tmp_path" in locals():
+            Path(tmp_path).unlink(missing_ok=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/qr/alignment", methods=["POST"])
+def qr_alignment():
+    """Burn alignment box for credit card positioning"""
+    if not k6_connected or not k6_transport:
+        return jsonify({"success": False, "error": "Not connected"}), 400
+
+    try:
+        import tempfile
+        from PIL import ImageFont
+
+        data = request.get_json()
+        power = int(data.get("power", 300))
+        depth = int(data.get("depth", 5))
+
+        power = max(0, min(1000, power))
+        depth = max(1, min(255, depth))
+
+        # Generate alignment box (75mm × 53.98mm)
+        burn_width = 1500
+        burn_height = 1080
+
+        canvas = Image.new("RGB", (burn_width, burn_height), "white")
+        draw = ImageDraw.Draw(canvas)
+
+        # Card positioning offset
+        card_width_px = 1712
+        offset_right = (card_width_px - burn_width) // 2
+
+        # Draw box with border
+        border = 10
+        left = border + offset_right
+        right = burn_width - border
+        draw.rectangle(
+            [(left, border), (right, burn_height - border)], outline="black", width=3
+        )
+
+        # Corner marks
+        corner_size = 20
+        for x, y in [
+            (left, border),
+            (right, border),
+            (left, burn_height - border),
+            (right, burn_height - border),
+        ]:
+            draw.line([(x - corner_size, y), (x + corner_size, y)], fill="black", width=2)
+            draw.line([(x, y - corner_size), (x, y + corner_size)], fill="black", width=2)
+
+        # Label
+        try:
+            font = ImageFont.truetype(
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24
+            )
+        except (OSError, IOError):
+            font = ImageFont.load_default()
+
+        label = "K6 Burn Area (75 × 53.98 mm)"
+        bbox = draw.textbbox((0, 0), label, font=font)
+        text_width = bbox[2] - bbox[0]
+        draw.text(
+            ((burn_width - text_width) // 2, burn_height // 2 - 12),
+            label,
+            fill="black",
+            font=font,
+        )
+
+        # Save and burn
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            canvas.save(tmp.name)
+            tmp_path = tmp.name
+
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            csv_path = DATA_DIR / f"qr-alignment-{timestamp}.csv"
+
+            # Position at center
+            center_x = (burn_width // 2) + 67
+            center_y = 800
+
+            with CSVLogger(str(csv_path)) as logger:
+                result = k6_driver.engrave_transport(
+                    k6_transport,
+                    tmp_path,
+                    power=power,
+                    depth=depth,
+                    center_x=center_x,
+                    center_y=center_y,
+                    csv_logger=logger,
+                )
+
+            if result["ok"]:
+                return jsonify(
+                    {
+                        "success": True,
+                        "message": "Alignment box burned",
+                        "total_time": result["total_time"],
+                        "csv_log": str(csv_path),
+                    }
+                )
+            else:
+                return jsonify({"success": False, "error": result["message"]}), 500
+
+        finally:
+            Path(tmp_path).unlink(missing_ok=True)
+
+    except Exception as e:
+        logger.error(f"Alignment burn failed: {e}")
+        if "tmp_path" in locals():
+            Path(tmp_path).unlink(missing_ok=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/api/calibration/burn", methods=["POST"])
 def calibration_burn():  # noqa: C901
     """Burn calibration pattern"""
@@ -830,8 +1433,45 @@ def calibration_burn():  # noqa: C901
                 (0, 0, work_area_px - 1, work_area_px - 1), outline=0, width=2
             )
 
+        elif pattern == "bottom-test":
+            # Bottom-out test pattern: horizontal line at bottom with 1cm vertical marks
+            # Tests Y-axis limits to find where bottom row gets cropped
+            work_area_px = mm_to_px(80.0)
+            mark_spacing_px = mm_to_px(10.0)  # 1cm = 10mm spacing
+            mark_height_px = mm_to_px(10.0)   # 1cm = 10mm height
+
+            # Only create image for the region with content (bottom 10mm + margin)
+            # This avoids sending 1400+ blank lines that the device rejects
+            height_px = mark_height_px + 10  # marks + small margin
+            
+            img = Image.new("1", (work_area_px, height_px), 1)
+            draw = ImageDraw.Draw(img)
+
+            # Draw horizontal line at the bottom of this region
+            bottom_y = height_px - 1
+            draw.line((0, bottom_y, work_area_px - 1, bottom_y), fill=0, width=2)
+
+            # Draw vertical marks every 1cm, rising 1cm from the line
+            x = 0
+            while x <= work_area_px:
+                # Vertical mark from bottom_y up to (bottom_y - mark_height_px)
+                draw.line((x, bottom_y, x, bottom_y - mark_height_px), fill=0, width=2)
+                x += mark_spacing_px
+
         else:
             return jsonify({"success": False, "error": "Invalid pattern"}), 400
+
+        # Calculate center coordinates for positioning
+        # Work area: 1600x1520px (76mm actual Y-axis, not 80mm)
+        # Default: center in work area (center_x = img.width/2 + 67, center_y = 760)
+        center_x = (img.width // 2) + 67  # Standard X offset
+        
+        if pattern == "bottom-test":
+            # Position at bottom of work area, leave 10px margin from firmware limit
+            center_y = 1510 - (img.height // 2)
+        else:
+            # Default: center in work area (760 = middle of 1520px)
+            center_y = 760
 
         # Save and burn
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
@@ -962,6 +1602,8 @@ def calibration_burn():  # noqa: C901
                     tmp_path,
                     power=power,
                     depth=depth,
+                    center_x=center_x,
+                    center_y=center_y,
                     csv_logger=csv_logger,
                 )
 

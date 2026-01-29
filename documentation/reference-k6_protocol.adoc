@@ -361,6 +361,24 @@ Packet layout (per chunk):
 
 Observed retry behavior: chunk is retransmitted if ACK not received.
 
+[WARNING]
+====
+**Device rejects raster data with excessive blank lines (error 0x08).**
+
+Test results (28-Jan-2026):
+
+* Sending 1600x1600 image with 1400+ blank lines at top → device returns error 0x08
+* Sending only non-blank region (e.g., 1600x210 for bottom content) → success
+
+**Workaround:** Crop images to only the region with content before sending. Use center_y coordinate in JOB_HEADER to position at bottom/top as needed.
+
+* For bottom positioning: `center_y = 1600 - (height / 2)`
+* For center positioning: `center_y = 800` (middle of 1600px work area)
+* For top positioning: `center_y = height / 2`
+
+This appears to be a firmware limitation or optimization - the device may reject jobs with excessive preprocessing requirements.
+====
+
 Live test note:
 
 * A single long chunk timed out on Pi.

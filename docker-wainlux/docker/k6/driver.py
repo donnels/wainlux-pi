@@ -253,6 +253,100 @@ class WainluxK6:
         )
         return True, version
 
+    def set_speed_power_transport(
+        self, transport, speed: int = 115, power: int = 1000, csv_logger=None
+    ) -> bool:
+        """Send SET_SPEED_POWER (0x25) command.
+
+        Test command for opcode 0x25. No observable effect expected.
+        Included for protocol testing and completeness.
+
+        Args:
+            transport: TransportBase instance
+            speed: Speed parameter (default 115, purpose unclear)
+            power: Power parameter 0-1000 (default 1000)
+            csv_logger: Optional CSVLogger instance
+
+        Returns:
+            True on success (ACK received), False on failure
+        """
+        from . import protocol
+
+        try:
+            # Build 11-byte packet: [0x25][0x00][0x0B][speed_msb][speed_lsb][power_msb][power_lsb][0x00*4]
+            pkt = bytearray([0x25, 0x00, 0x0B])
+            pkt.extend([(speed >> 8) & 0xFF, speed & 0xFF])
+            pkt.extend([(power >> 8) & 0xFF, power & 0xFF])
+            pkt.extend([0x00] * 4)  # Reserved bytes
+
+            protocol.send_cmd_checked(
+                transport,
+                f"SET_SPEED_POWER speed={speed} power={power}",
+                bytes(pkt),
+                timeout=2.0,
+                expect_ack=True,
+                csv_logger=csv_logger,
+                phase="test",
+            )
+            return True
+        except Exception:
+            if csv_logger:
+                csv_logger.log_operation(
+                    phase="test",
+                    operation="SET_SPEED_POWER",
+                    duration_ms=0,
+                    state="ERROR",
+                    device_state="ERROR",
+                )
+            return False
+
+    def set_focus_angle_transport(
+        self, transport, focus: int = 20, angle: int = 0, csv_logger=None
+    ) -> bool:
+        """Send SET_FOCUS_ANGLE (0x28) command.
+
+        Test command for opcode 0x28. No observable effect expected.
+        Included for protocol testing and completeness.
+
+        Args:
+            transport: TransportBase instance
+            focus: Focus parameter 0-200 (default 20, typically UI_value x 2)
+            angle: Angle/mode index (default 0, purpose unclear)
+            csv_logger: Optional CSVLogger instance
+
+        Returns:
+            True on success (ACK received), False on failure
+        """
+        from . import protocol
+
+        try:
+            # Build 11-byte packet: [0x28][0x00][0x0B][focus][angle][0x00*6]
+            pkt = bytearray([0x28, 0x00, 0x0B])
+            pkt.append(focus & 0xFF)
+            pkt.append(angle & 0xFF)
+            pkt.extend([0x00] * 6)  # Reserved bytes
+
+            protocol.send_cmd_checked(
+                transport,
+                f"SET_FOCUS_ANGLE focus={focus} angle={angle}",
+                bytes(pkt),
+                timeout=2.0,
+                expect_ack=True,
+                csv_logger=csv_logger,
+                phase="test",
+            )
+            return True
+        except Exception:
+            if csv_logger:
+                csv_logger.log_operation(
+                    phase="test",
+                    operation="SET_FOCUS_ANGLE",
+                    duration_ms=0,
+                    state="ERROR",
+                    device_state="ERROR",
+                )
+            return False
+
     def connect_serial(self, port: str = "/dev/ttyUSB0") -> bool:
         """Helper: create a SerialTransport and run connect sequence."""
         from .transport import SerialTransport
@@ -266,6 +360,8 @@ class WainluxK6:
         image_path: str,
         power: int = 1000,
         depth: int = 100,
+        center_x: int = None,
+        center_y: int = None,
         csv_logger=None,
     ) -> Dict:
         """Engrave image using transport-based protocol (full sequence).
@@ -275,6 +371,8 @@ class WainluxK6:
             image_path: Path to image file
             power: Laser power 0-1000 (default 1000)
             depth: Burn depth 1-255 (default 100)
+            center_x: Center X coordinate (default: image_width/2 + 67)
+            center_y: Center Y coordinate (default: 800 = centered in work area)
             csv_logger: Optional CSVLogger instance for logging operations
 
         Returns:
@@ -355,7 +453,9 @@ class WainluxK6:
         )
 
         # JOB_HEADER - device responds with HEARTBEAT not ACK
-        header = protocol.build_job_header_raster(width, height, depth, power)
+        header = protocol.build_job_header_raster(
+            width, height, depth, power, center_x=center_x, center_y=center_y
+        )
         protocol.send_cmd_checked(
             transport,
             "JOB_HEADER",

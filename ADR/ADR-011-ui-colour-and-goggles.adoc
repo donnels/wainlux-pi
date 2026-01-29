@@ -1,0 +1,35 @@
+= ADR-011: UI Colour and Laser Safety Goggles
+
+== Status
+Accepted
+
+== Context
+Laser safety glasses block specific wavelengths. For blue lasers, glasses block green and cyan. Standard green terminal UIs become invisible. Users must see the UI clearly during burns, especially in emergencies.
+
+== Decision
+Provide multiple color themes for the web interface. Always include high-contrast options: white-on-black and black-on-white. These are visible through any safety goggles. Avoid green and cyan as primary UI colors.
+
+== Rationale
+*Safety:* In emergencies, users must see STOP and other controls instantly. High-contrast themes are always visible, regardless of goggles.
+*Usability:* Users can select a theme that works with their goggles. White/black themes reduce eye strain and work for all users.
+*Flexibility:* Multiple themes allow adaptation for different laser types and goggles.
+
+== Consequences
+*Positive:*
+- UI is always visible, even with safety glasses
+- Emergency controls are unmistakable
+- Users can choose a theme that works for their environment
+
+*Negative:*
+- Slightly more code to support multiple themes
+- Some color choices (green/cyan) may be less useful for some users
+
+== Implementation
+- Five selectable color themes stored in localStorage
+- Default: green (no glasses)
+- Red/yellow: for blue laser glasses
+- White/black: always visible
+- UI elements (buttons, progress bars) use high-contrast colors for critical actions
+
+== References
+See documentation/ui-design-decisions.adoc for rationale and details.
