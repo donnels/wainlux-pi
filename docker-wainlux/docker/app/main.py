@@ -757,10 +757,6 @@ def calibration_set_focus_angle():
 def qr_generate():
     """Generate WiFi QR code and return as base64 for preview"""
     try:
-        import qrcode
-        import io
-        import base64
-
         data = request.get_json()
         ssid = data.get("ssid", "")
         password = data.get("password", "")
@@ -770,109 +766,17 @@ def qr_generate():
         if not ssid:
             return jsonify({"success": False, "error": "SSID required"}), 400
 
-        # WiFi QR format
-        wifi_data = f"WIFI:T:{security};S:{ssid};P:{password};H:false;;"
-
-        # Generate QR with high error correction
-        qr = qrcode.QRCode(
-            version=None,
-            error_correction=qrcode.constants.ERROR_CORRECT_H,
-            box_size=10,
-            border=2,
+        # Use QRService to generate preview
+        data_url, metadata = qr_service.generate_qr_preview_base64(
+            ssid, password, security, description
         )
-        qr.add_data(wifi_data)
-        qr.make(fit=True)
-        qr_img = qr.make_image(fill_color="black", back_color="white")
-
-        # K6 burn area: 75mm × 53.98mm = 1500 × 1080 px @ 0.05 mm/px
-        burn_width = 1500
-        burn_height = 1080
-
-        canvas = Image.new("RGB", (burn_width, burn_height), "white")
-        draw = ImageDraw.Draw(canvas)
-
-        # Position QR centered on physical card (card is 85.6mm, burn is 75mm)
-        card_width_px = 1712  # 85.6mm at 0.05 mm/px
-        offset_right = (card_width_px - burn_width) // 2  # ~106px shift
-
-        # Load fonts
-        try:
-            font_large = ImageFont.truetype(
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 36
-            )
-            font_small = ImageFont.truetype(
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24
-            )
-        except (OSError, IOError):
-            font_large = ImageFont.load_default()
-            font_small = ImageFont.load_default()
-
-        # Measure text
-        ssid_text = f"SSID: {ssid}"
-        ssid_bbox = draw.textbbox((0, 0), ssid_text, font=font_large)
-        ssid_h = ssid_bbox[3] - ssid_bbox[1]
-
-        desc_h = 0
-        line_gap = 8
-        if description:
-            desc_bbox = draw.textbbox((0, 0), description, font=font_small)
-            desc_h = desc_bbox[3] - desc_bbox[1]
-
-        text_block_height = ssid_h + (line_gap + desc_h if desc_h else 0)
-        gap = 20
-        min_margin = 60  # 3mm at 0.05 mm/px
-
-        # Calculate QR size
-        max_qr_w = burn_width - 40 - offset_right
-        available_height = burn_height - (2 * min_margin) - gap - text_block_height
-        qr_size = min(max_qr_w, available_height)
-
-        qr_img = qr_img.resize((qr_size, qr_size), Image.Resampling.LANCZOS)
-
-        # Position QR
-        total_block_height = qr_size + gap + text_block_height
-        qr_y = max(min_margin, (burn_height - total_block_height) // 2)
-        if qr_y + total_block_height + min_margin > burn_height:
-            qr_y = burn_height - total_block_height - min_margin
-            if qr_y < min_margin:
-                qr_y = min_margin
-
-        qr_x = (burn_width - qr_size) // 2 + offset_right
-        canvas.paste(qr_img, (qr_x, qr_y))
-
-        # Add text
-        text_y = qr_y + qr_size + gap
-        text_bbox = draw.textbbox((0, 0), ssid_text, font=font_large)
-        text_width = text_bbox[2] - text_bbox[0]
-        draw.text(
-            ((burn_width - text_width) // 2 + offset_right, text_y),
-            ssid_text,
-            fill="black",
-            font=font_large,
-        )
-
-        if description:
-            desc_y = text_y + ssid_h + line_gap
-            desc_bbox = draw.textbbox((0, 0), description, font=font_small)
-            desc_width = desc_bbox[2] - desc_bbox[0]
-            draw.text(
-                ((burn_width - desc_width) // 2 + offset_right, desc_y),
-                description,
-                fill="black",
-                font=font_small,
-            )
-
-        # Convert to base64 for preview
-        buffer = io.BytesIO()
-        canvas.save(buffer, format="PNG")
-        img_base64 = base64.b64encode(buffer.getvalue()).decode()
 
         return jsonify(
             {
                 "success": True,
-                "image": f"data:image/png;base64,{img_base64}",
-                "width": burn_width,
-                "height": burn_height,
+                "image": data_url,
+                "width": metadata["width"],
+                "height": metadata["height"],
                 "size_mm": "75 × 53.98mm",
             }
         )
