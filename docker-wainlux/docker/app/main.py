@@ -15,28 +15,25 @@ import json
 import time
 import queue
 import threading
-import numpy as np
-from PIL import Image, ImageDraw, ImageFont
 
 # Add k6 library to path (located in /app/k6 in container)
 # From /app/app/main.py, parent is /app/app, parent.parent is /app
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from k6.driver import WainluxK6
-from k6.transport import SerialTransport
 from k6.csv_logger import CSVLogger
-from k6 import protocol
+from services import ImageService, K6Service, QRService
+from services.k6_service import K6DeviceManager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__, template_folder="../templates", static_folder="../static")
 
-# K6 driver and transport
-k6_driver = WainluxK6()
-k6_transport = None
-k6_connected = False
-k6_version = None  # Store firmware version string
+# Device manager and services
+device_manager = K6DeviceManager()
+k6_service = K6Service(device_manager)
+image_service = ImageService()
+qr_service = QRService()
 
 # Progress tracking for SSE
 progress_queue = queue.Queue()
@@ -58,10 +55,6 @@ K6_DEFAULT_CENTER_Y = 800  # px default position
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "bmp", "gif"}
 
 
-def allowed_file(filename):
-    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
-
-
 def emit_progress(phase: str, progress: int, message: str):
     """Emit a progress event to all SSE listeners."""
     event = {
@@ -77,46 +70,6 @@ def emit_progress(phase: str, progress: int, message: str):
     except queue.Full:
         logger.warning("EMIT_PROGRESS: queue full, dropped event")
         pass  # Drop events if queue is full
-
-
-def color_aware_grayscale(img, laser_color="blue"):
-    """Convert RGB image to grayscale optimized for laser wavelength.
-
-    Args:
-        img: PIL Image in RGB mode
-        laser_color: 'blue', 'red', 'green', or 'neutral'
-
-    Returns:
-        PIL Image in 'L' mode (grayscale)
-
-    Color wavelengths absorb differently:
-    - Blue laser (450nm): Absorbs red+green, reflects blue
-    - Red laser (650nm): Absorbs blue+green, reflects red
-    - Green laser (532nm): Absorbs red+blue, reflects green
-
-    For best engraving contrast, emphasize colors the laser absorbs.
-    """
-    if img.mode != "RGB":
-        img = img.convert("RGB")
-
-    arr = np.array(img, dtype=np.float32)
-    r, g, b = arr[:, :, 0], arr[:, :, 1], arr[:, :, 2]
-
-    if laser_color == "blue":
-        # Blue laser: emphasize R+G channels (absorb), de-emphasize B (reflects)
-        gray = 0.45 * r + 0.45 * g + 0.10 * b
-    elif laser_color == "red":
-        # Red laser: emphasize B+G channels, de-emphasize R
-        gray = 0.10 * r + 0.45 * g + 0.45 * b
-    elif laser_color == "green":
-        # Green laser: emphasize R+B channels, de-emphasize G
-        gray = 0.45 * r + 0.10 * g + 0.45 * b
-    else:  # neutral
-        # Standard luminance conversion
-        gray = 0.299 * r + 0.587 * g + 0.114 * b
-
-    gray = np.clip(gray, 0, 255).astype(np.uint8)
-    return Image.fromarray(gray, mode="L")
 
 
 class ProgressCSVLogger(CSVLogger):
@@ -204,67 +157,56 @@ class ProgressCSVLogger(CSVLogger):
 
 @app.route("/")
 def index():
-    return render_template("index.html", connected=k6_connected)
+    return render_template("index.html", connected=device_manager.is_connected())
 
 
 @app.route("/calibration")
 def calibration():
     """Advanced calibration and testing page"""
-    return render_template("calibration.html", connected=k6_connected)
+    return render_template("calibration.html", connected=device_manager.is_connected())
 
 
 @app.route("/qr")
 def qr_page():
     """WiFi QR code generation and burn page"""
-    return render_template("qr.html", connected=k6_connected)
+    return render_template("qr.html", connected=device_manager.is_connected())
 
 
 @app.route("/api/connect", methods=["POST"])
 def connect():
-    global k6_transport, k6_connected, k6_version
-
     try:
-        # Create transport and connect
-        k6_transport = SerialTransport(
+        success, version = device_manager.connect(
             port="/dev/ttyUSB0", baudrate=115200, timeout=2.0
         )
-        success, version = k6_driver.connect_transport(k6_transport)
-        k6_connected = True
-        k6_version = f"v{version[0]}.{version[1]}.{version[2]}"
-        logger.info(f"Connected to K6 {k6_version}")
-        return jsonify({"success": True, "connected": True, "version": k6_version})
+        if success:
+            version_str = f"v{version[0]}.{version[1]}.{version[2]}"
+            logger.info(f"Connected to K6 {version_str}")
+            return jsonify({"success": True, "connected": True, "version": version_str})
+        else:
+            return jsonify({"success": False, "connected": False, "error": "Connection failed"}), 500
     except Exception as e:
         logger.error(f"Connect failed: {e}")
-        k6_connected = False
-        k6_transport = None
         return jsonify({"success": False, "connected": False, "error": str(e)}), 500
 
 
 @app.route("/api/disconnect", methods=["POST"])
 def disconnect():
-    global k6_transport, k6_connected, k6_version
-
-    if k6_transport:
-        try:
-            k6_transport.close()
-        except Exception as e:
-            logger.warning(f"Disconnect warning: {e}")
-
-    k6_transport = None
-    k6_connected = False
-    k6_version = None
-    logger.info("Disconnected from K6")
-    return jsonify({"success": True, "connected": False})
+    try:
+        device_manager.disconnect()
+        logger.info("Disconnected from K6")
+        return jsonify({"success": True, "connected": False})
+    except Exception as e:
+        logger.warning(f"Disconnect warning: {e}")
+        return jsonify({"success": True, "connected": False})
 
 
 @app.route("/api/test/bounds", methods=["POST"])
 def test_bounds():
-    if not k6_connected or not k6_transport:
+    if not device_manager.is_connected():
         return jsonify({"success": False, "error": "Not connected"}), 400
 
     try:
-        # Use transport-based method
-        success = k6_driver.draw_bounds_transport(k6_transport)
+        success = k6_service.draw_bounds()
         return jsonify({"success": success})
     except Exception as e:
         logger.error(f"Bounds test failed: {e}")
@@ -273,29 +215,12 @@ def test_bounds():
 
 @app.route("/api/test/home", methods=["POST"])
 def test_home():
-    if not k6_connected or not k6_transport:
+    if not device_manager.is_connected():
         return jsonify({"success": False, "error": "Not connected"}), 400
 
     try:
-        # Send FRAMING (0x21) to stop preview mode started by BOUNDS (0x20)
-        # Note: This returns laser to CENTER position from BOUNDS, not origin
-        protocol.send_cmd_checked(
-            k6_transport,
-            "FRAMING (stop preview)",
-            bytes([0x21, 0x00, 0x04, 0x00]),
-            timeout=2.0,
-            expect_ack=True,
-        )
-
-        # Then send HOME to return to origin (0,0)
-        protocol.send_cmd_checked(
-            k6_transport,
-            "HOME",
-            bytes([0x17, 0x00, 0x04, 0x00]),
-            timeout=10.0,
-            expect_ack=True,
-        )
-        return jsonify({"success": True})
+        success = k6_service.home()
+        return jsonify({"success": success})
     except Exception as e:
         logger.error(f"Home test failed: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
@@ -304,7 +229,7 @@ def test_home():
 @app.route("/api/jog", methods=["POST"])
 def jog():
     """Move laser head to absolute position using BOUNDS positioning"""
-    if not k6_connected or not k6_transport:
+    if not device_manager.is_connected():
         return jsonify({"success": False, "error": "Not connected"}), 400
 
     try:
@@ -313,29 +238,10 @@ def jog():
         center_y = int(data.get("y", 800))
         disable_limits = data.get("disable_limits", False)
 
-        # Clamp to work area unless limits disabled
-        if not disable_limits:
-            center_x = max(0, min(K6_MAX_WIDTH, center_x))
-            center_y = max(0, min(K6_MAX_HEIGHT, center_y))
-        else:
-            # Still apply reasonable max to prevent overflow (hardware max unknown)
-            center_x = max(-200, min(2000, center_x))
-            center_y = max(-200, min(2000, center_y))
-
-        # Use BOUNDS command to move laser to position
-        # Small bounds (1x1px) effectively positions the laser
-        success = k6_driver.draw_bounds_transport(
-            k6_transport, width=1, height=1, center_x=center_x, center_y=center_y
-        )
+        success, result = k6_service.jog(center_x, center_y, disable_limits)
 
         if success:
-            return jsonify(
-                {
-                    "success": True,
-                    "position": {"x": center_x, "y": center_y},
-                    "limits_disabled": disable_limits,
-                }
-            )
+            return jsonify(result)
         else:
             return jsonify({"success": False, "error": "BOUNDS command failed"}), 500
 
@@ -347,7 +253,7 @@ def jog():
 @app.route("/api/mark", methods=["POST"])
 def mark():
     """Burn a single pixel mark at current position"""
-    if not k6_connected or not k6_transport:
+    if not device_manager.is_connected():
         return jsonify({"success": False, "error": "Not connected"}), 400
 
     try:
@@ -357,21 +263,10 @@ def mark():
         power = int(data.get("power", 500))
         depth = int(data.get("depth", 10))
 
-        # Burn a single pixel at position
-        success = k6_driver.mark_position_transport(
-            k6_transport, center_x=center_x, center_y=center_y, power=power, depth=depth
-        )
+        success, result = k6_service.mark(center_x, center_y, power, depth)
 
         if success:
-            return jsonify(
-                {
-                    "success": True,
-                    "position": {"x": center_x, "y": center_y},
-                    "power": power,
-                    "depth": depth,
-                    "message": f"Marked position ({center_x}, {center_y})",
-                }
-            )
+            return jsonify(result)
         else:
             return jsonify({"success": False, "error": "Mark failed"}), 500
 
@@ -383,32 +278,19 @@ def mark():
 @app.route("/api/crosshair", methods=["POST"])
 def crosshair():
     """Toggle crosshair/positioning laser (0x06 ON, 0x07 OFF)"""
-    if not k6_connected or not k6_transport:
+    if not device_manager.is_connected():
         return jsonify({"success": False, "error": "Not connected"}), 400
 
     try:
         data = request.get_json()
         enable = data.get("enable", False)
 
-        # Send CROSSHAIR ON (0x06) or OFF (0x07)
-        opcode = 0x06 if enable else 0x07
-        cmd_name = "CROSSHAIR ON" if enable else "CROSSHAIR OFF"
+        success, result = k6_service.crosshair(enable)
 
-        protocol.send_cmd_checked(
-            k6_transport,
-            cmd_name,
-            bytes([opcode, 0x00, 0x04, 0x00]),
-            timeout=2.0,
-            expect_ack=True,
-        )
-
-        return jsonify(
-            {
-                "success": True,
-                "enabled": enable,
-                "message": f"Crosshair {('ON' if enable else 'OFF')}",
-            }
-        )
+        if success:
+            return jsonify(result)
+        else:
+            return jsonify({"success": False, "error": "Crosshair command failed"}), 500
 
     except Exception as e:
         logger.error(f"Crosshair toggle failed: {e}")
@@ -424,37 +306,19 @@ def test_stop():
     burn_cancel_event.set()
     logger.info("Burn cancellation requested")
 
-    # Allow STOP even if not "connected" - best effort
-    if k6_transport:
-        try:
-            # Send STOP command first
-            k6_transport.write(bytes([0x16, 0x00, 0x04, 0x00]))
-            time.sleep(0.1)
+    success, message = k6_service.stop()
 
-            # Send CONNECT command to reset device state
-            protocol.send_cmd_checked(
-                k6_transport,
-                "CONNECT #1",
-                bytes([0x0A, 0x00, 0x04, 0x00]),
-                timeout=2.0,
-                expect_ack=True,
-            )
-
-            logger.info("STOP + CONNECT sent, device reset")
-            emit_progress("stopped", 0, "Burn cancelled and device reset")
-            return jsonify({"success": True, "message": "Burn cancelled, device reset"})
-        except Exception as e:
-            logger.warning(f"Stop/reset partial: {e}")
-            emit_progress("stopped", 0, "Burn cancelled (device reset may have failed)")
-            return jsonify({"success": True, "message": "Cancel signal sent"})
+    if success:
+        emit_progress("stopped", 0, message)
+        return jsonify({"success": True, "message": message})
     else:
-        emit_progress("stopped", 0, "Burn cancelled")
-        return jsonify({"success": True, "message": "Cancel signal sent"})
+        emit_progress("stopped", 0, message)
+        return jsonify({"success": True, "message": message})
 
 
 @app.route("/api/engrave", methods=["POST"])
 def engrave():
-    if not k6_connected or not k6_transport:
+    if not device_manager.is_connected():
         return jsonify({"success": False, "error": "Not connected"}), 400
 
     if "image" not in request.files:
@@ -464,7 +328,7 @@ def engrave():
     if file.filename == "":
         return jsonify({"success": False, "error": "No file selected"}), 400
 
-    if not allowed_file(file.filename):
+    if not image_service.allowed_file(file.filename, ALLOWED_EXTENSIONS):
         return jsonify({"success": False, "error": "Invalid file type"}), 400
 
     try:
@@ -474,21 +338,15 @@ def engrave():
             tmp_path = tmp.name
 
         # Validate image size before processing
+        from PIL import Image
         with Image.open(tmp_path) as img:
             width, height = img.size
-            # K6 work area: 80x80mm @ 0.05mm/px resolution
-            # Y-axis is actually 1520px (76mm measured)
-            if width > K6_MAX_WIDTH or height > K6_MAX_HEIGHT:
+            valid, error_msg = image_service.validate_image_size(
+                width, height, K6_MAX_WIDTH, K6_MAX_HEIGHT
+            )
+            if not valid:
                 Path(tmp_path).unlink(missing_ok=True)
-                return (
-                    jsonify(
-                        {
-                            "success": False,
-                            "error": f"Image too large: {width}x{height}px (max {K6_MAX_WIDTH}x{K6_MAX_HEIGHT})",
-                        }
-                    ),
-                    400,
-                )
+                return jsonify({"success": False, "error": error_msg}), 400
 
         # Get parameters
         depth = int(request.form.get("depth", 100))
@@ -497,15 +355,13 @@ def engrave():
         power = max(0, min(1000, power))
 
         # Generate CSV log filename
-        from datetime import datetime
-
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         csv_path = DATA_DIR / f"burn-{timestamp}.csv"
 
         # Engrave with CSV logging
-        with CSVLogger(str(csv_path)) as logger:
-            result = k6_driver.engrave_transport(
-                k6_transport, tmp_path, power=power, depth=depth, csv_logger=logger
+        with CSVLogger(str(csv_path)) as csv_logger:
+            result = k6_service.engrave(
+                tmp_path, power=power, depth=depth, csv_logger=csv_logger
             )
 
         # Clean up temp file
@@ -535,16 +391,18 @@ def engrave():
 @app.route("/api/status", methods=["GET"])
 def status():
     """Get current K6 status"""
+    connected = device_manager.is_connected()
     response = {
-        "connected": k6_connected,
-        "state": "idle" if k6_connected else "disconnected",
+        "connected": connected,
+        "state": "idle" if connected else "disconnected",
         "progress": 0,
-        "message": "Ready" if k6_connected else "Not connected",
+        "message": "Ready" if connected else "Not connected",
         "max_width": K6_MAX_WIDTH,
         "max_height": K6_MAX_HEIGHT,
     }
-    if k6_version:
-        response["version"] = k6_version
+    version = device_manager.version
+    if version:
+        response["version"] = f"v{version[0]}.{version[1]}.{version[2]}"
     return jsonify(response)
 
 
@@ -580,7 +438,7 @@ def progress_stream():
 @app.route("/api/calibration/generate", methods=["POST"])
 def calibration_generate():  # noqa: C901
     """Generate calibration test pattern"""
-    if not k6_connected or not k6_transport:
+    if not device_manager.is_connected():
         return jsonify({"success": False, "error": "Not connected"}), 400
 
     try:
@@ -719,7 +577,7 @@ def calibration_generate():  # noqa: C901
 @app.route("/api/calibration/preview", methods=["POST"])
 def calibration_preview():
     """Draw preview bounds using fast 0x20 BOUNDS command"""
-    if not k6_connected or not k6_transport:
+    if not device_manager.is_connected():
         return jsonify({"success": False, "error": "Not connected"}), 400
 
     try:
@@ -732,8 +590,8 @@ def calibration_preview():
         height = max(1, min(K6_MAX_HEIGHT, height))
 
         # Use fast BOUNDS command (0x20)
-        success = k6_driver.draw_bounds_transport(
-            k6_transport, width=width, height=height
+        success = device_manager.driver.draw_bounds_transport(
+            device_manager.transport, width=width, height=height
         )
 
         if success:
@@ -756,10 +614,12 @@ def calibration_preview():
 @app.route("/api/calibration/burn-bounds", methods=["POST"])
 def calibration_burn_bounds():
     """Burn bounds frame - creates physical positioning guide"""
-    if not k6_connected or not k6_transport:
+    if not device_manager.is_connected():
         return jsonify({"success": False, "error": "Not connected"}), 400
 
     try:
+        from PIL import Image, ImageDraw
+        
         data = request.get_json()
         width = int(data.get("width", K6_MAX_WIDTH))
         height = int(data.get("height", K6_MAX_HEIGHT))
@@ -793,9 +653,7 @@ def calibration_burn_bounds():
             start_time = time.time()
 
             # Burn the frame
-            result = k6_driver.engrave_transport(
-                k6_transport, tmp_path, power=power, depth=depth
-            )
+            result = k6_service.engrave(tmp_path, power=power, depth=depth)
 
             elapsed = time.time() - start_time
 
@@ -825,7 +683,7 @@ def calibration_burn_bounds():
 @app.route("/api/calibration/set-speed-power", methods=["POST"])
 def calibration_set_speed_power():
     """Test SET_SPEED_POWER (0x25) command - no observable effect expected"""
-    if not k6_connected or not k6_transport:
+    if not device_manager.is_connected():
         return jsonify({"success": False, "error": "Not connected"}), 400
 
     try:
@@ -837,8 +695,8 @@ def calibration_set_speed_power():
         speed = max(0, min(65535, speed))  # 16-bit value
         power = max(0, min(1000, power))
 
-        success = k6_driver.set_speed_power_transport(
-            k6_transport, speed=speed, power=power
+        success = device_manager.driver.set_speed_power_transport(
+            device_manager.transport, speed=speed, power=power
         )
 
         if success:
@@ -861,7 +719,7 @@ def calibration_set_speed_power():
 @app.route("/api/calibration/set-focus-angle", methods=["POST"])
 def calibration_set_focus_angle():
     """Test SET_FOCUS_ANGLE (0x28) command - no observable effect expected"""
-    if not k6_connected or not k6_transport:
+    if not device_manager.is_connected():
         return jsonify({"success": False, "error": "Not connected"}), 400
 
     try:
@@ -873,8 +731,8 @@ def calibration_set_focus_angle():
         focus = max(0, min(200, focus))
         angle = max(0, min(255, angle))  # 8-bit value
 
-        success = k6_driver.set_focus_angle_transport(
-            k6_transport, focus=focus, angle=angle
+        success = device_manager.driver.set_focus_angle_transport(
+            device_manager.transport, focus=focus, angle=angle
         )
 
         if success:
@@ -1026,7 +884,7 @@ def qr_generate():
 @app.route("/api/qr/burn", methods=["POST"])
 def qr_burn():
     """Burn WiFi QR code at specified position"""
-    if not k6_connected or not k6_transport:
+    if not device_manager.is_connected():
         return jsonify({"success": False, "error": "Not connected"}), 400
 
     try:
@@ -1160,8 +1018,7 @@ def qr_burn():
 
             with ProgressCSVLogger(str(csv_path)) as csv_logger:
                 emit_progress("setup", 0, "Starting burn sequence...")
-                result = k6_driver.engrave_transport(
-                    k6_transport,
+                result = k6_service.engrave(
                     tmp_path,
                     power=power,
                     depth=depth,
@@ -1213,7 +1070,7 @@ def qr_burn():
 @app.route("/api/qr/alignment", methods=["POST"])
 def qr_alignment():
     """Burn alignment box for credit card positioning"""
-    if not k6_connected or not k6_transport:
+    if not device_manager.is_connected():
         return jsonify({"success": False, "error": "Not connected"}), 400
 
     try:
@@ -1285,15 +1142,14 @@ def qr_alignment():
             center_x = (burn_width // 2) + K6_CENTER_X_OFFSET
             center_y = K6_DEFAULT_CENTER_Y
 
-            with CSVLogger(str(csv_path)) as logger:
-                result = k6_driver.engrave_transport(
-                    k6_transport,
+            with CSVLogger(str(csv_path)) as csv_logger:
+                result = k6_service.engrave(
                     tmp_path,
                     power=power,
                     depth=depth,
                     center_x=center_x,
                     center_y=center_y,
-                    csv_logger=logger,
+                    csv_logger=csv_logger,
                 )
 
             if result["ok"]:
@@ -1321,7 +1177,7 @@ def qr_alignment():
 @app.route("/api/calibration/burn", methods=["POST"])
 def calibration_burn():  # noqa: C901
     """Burn calibration pattern"""
-    if not k6_connected or not k6_transport:
+    if not device_manager.is_connected():
         return jsonify({"success": False, "error": "Not connected"}), 400
 
     try:
@@ -1331,13 +1187,7 @@ def calibration_burn():  # noqa: C901
 
         # Re-home the device before starting new burn (in case STOP was pressed)
         try:
-            protocol.send_cmd_checked(
-                k6_transport,
-                "HOME",
-                bytes([0x17, 0x00, 0x04, 0x00]),
-                timeout=10.0,
-                expect_ack=True,
-            )
+            k6_service.home()
         except Exception as e:
             logger.warning(f"Pre-burn HOME failed: {e}")
 
@@ -1505,8 +1355,7 @@ def calibration_burn():  # noqa: C901
                 emit_progress(
                     "setup", 0, "Image processing complete, starting protocol..."
                 )
-                result = k6_driver.engrave_transport(
-                    k6_transport,
+                result = k6_service.engrave(
                     tmp_path,
                     power=power,
                     depth=depth,

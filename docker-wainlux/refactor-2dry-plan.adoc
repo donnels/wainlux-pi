@@ -23,7 +23,7 @@ Last Updated: 2026-01-29
 |k6/*.py |~2500 |Clean library
 |===
 
-**What Works**
+.**What Works**
 * All pages use base.html + macros.html pattern
 * Shared CSS/JS components (Progress, Log, API)
 * Connection verification optional (not mandatory)
@@ -34,7 +34,7 @@ Last Updated: 2026-01-29
 * API timeout added (30s)
 * Deployed and tested on Pi Zero W
 
-**What's Left**
+.**What's Left**
 * Pre-commit checks (linter, tests)
 * Optional: Backend architecture refactor (30-40h)
 
@@ -42,7 +42,7 @@ Last Updated: 2026-01-29
 
 === Immediate: Pre-commit ⏳
 
-**Run checks**
+.**Run checks**
 [source,bash]
 ----
 cd docker-wainlux/docker
@@ -81,14 +81,14 @@ git push
 
 ==== Problem: God Object (main.py 1567 lines)
 
-**Current structure**:
+.**Current structure**:
 * 26 route handlers in one file
 * Business logic mixed with Flask routes
 * Global state (k6_transport, progress_queue)
 * No service layer, no testing
 * SSE shared queue (multi-client issues)
 
-**Proposed refactor** (30-40 hours):
+.**Proposed refactor** (30-40 hours):
 1. Extract services/k6_service.py - laser operations
 2. Extract services/image_service.py - image processing
 3. Extract services/progress_service.py - per-client SSE
