@@ -4,118 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WiFi QR Code Burn</title>
+    <link rel="stylesheet" href="/static/css/shared.css">
+    <link rel="stylesheet" href="/static/css/components.css">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: monospace;
-            background: #000;
-            color: #fff;
-            padding: 20px;
-        }
-        .container { max-width: 900px; margin: 0 auto; }
-        h1 { margin-bottom: 20px; border-bottom: 1px solid #fff; padding-bottom: 10px; }
-        h2 { margin-top: 20px; margin-bottom: 10px; font-size: 1.2em; }
-        .nav {
-            margin-bottom: 20px;
-            padding: 10px;
-            border: 1px solid #fff;
-        }
-        .nav a {
-            color: #fff;
-            text-decoration: none;
-            margin-right: 15px;
-        }
-        .nav a:hover { text-decoration: underline; }
-        .status {
-            margin: 20px 0;
-            padding: 10px;
-            border: 1px solid #fff;
-        }
-        .status.disconnected { border: 3px solid #fff; font-weight: bold; }
-        .section {
-            margin: 20px 0;
-            padding: 20px;
-            border: 1px solid #fff;
-        }
-        .form-row {
-            margin: 15px 0;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .form-row label {
-            min-width: 150px;
-        }
-        select, input[type="text"], input[type="password"], input[type="number"] {
-            background: #000;
-            color: #fff;
-            border: 1px solid #fff;
-            padding: 5px;
-            font-family: monospace;
+        /* Page-specific styles only */
+        .container { max-width: 900px; }
+        .form-row input[type="text"], 
+        .form-row input[type="password"], 
+        .form-row input[type="number"] {
             flex: 1;
             max-width: 400px;
-        }
-        button {
-            background: #000;
-            color: #fff;
-            border: 1px solid #fff;
-            padding: 10px 20px;
-            margin: 5px;
-            cursor: pointer;
-            font-family: monospace;
-        }
-        button:hover { background: #fff; color: #000; }
-        button:disabled {
-            opacity: 0.3;
-            cursor: not-allowed;
-        }
-        .info {
-            margin: 10px 0;
-            padding: 10px;
-            border-left: 3px solid #fff;
-            font-size: 0.9em;
-        }
-        .warning {
-            border: 3px solid #fff;
-            font-weight: bold;
-        }
-        #message {
-            margin: 10px 0;
-            padding: 10px;
-            display: none;
-        }
-        #message.show { display: block; }
-        #message.error { border: 3px solid #fff; font-weight: bold; }
-        #message.success { border: 1px solid #fff; }
-        #previewSection {
-            margin-top: 20px;
-            padding: 20px;
-            border: 1px solid #fff;
-            text-align: center;
-        }
-        #previewImage {
-            max-width: 100%;
-            background: #fff;
-            border: 2px solid #fff;
-            margin: 20px 0;
         }
         #progressSection {
             margin-top: 20px;
             padding: 20px;
             border: 1px solid #fff;
-        }
-        .progress-bar {
-            width: 100%;
-            height: 30px;
-            background: #000;
-            border: 3px solid #fff;
-            position: relative;
-            margin: 10px 0;
-        }
-        .progress-fill {
-            height: 100%;
-            background: #fff;
-            transition: width 0.3s;
         }
         .progress-text {
             position: absolute;
@@ -223,7 +126,7 @@
                 <input type="number" id="alignDepth" value="5" min="1" max="255" style="width: 100px;">
             </div>
             
-            <button id="btnAlignment" {% if not connected %}disabled{% endif %}>BURN ALIGNMENT BOX</button>
+            <button id="btnAlignment">BURN ALIGNMENT BOX</button>
             
             <h3 style="margin-top: 30px; margin-bottom: 10px;">2. QR CODE (burn after alignment)</h3>
             <div class="info" style="margin-bottom: 15px;">
@@ -241,7 +144,7 @@
                 <input type="number" id="qrDepth" value="10" min="1" max="255" style="width: 100px;">
             </div>
             
-            <button id="btnBurn" {% if not connected %}disabled{% endif %}>BURN QR CODE</button>
+            <button id="btnBurn">BURN QR CODE</button>
             <button id="btnStop" style="font-weight: bold;">EMERGENCY STOP</button>
         </div>
         
@@ -281,6 +184,9 @@
         <div id="message"></div>
     </div>
     
+    <script src="/static/js/api.js"></script>
+    <script src="/static/js/progress.js"></script>
+    <script src="/static/js/log.js"></script>
     <script>
         const ssid = document.getElementById('ssid');
         const password = document.getElementById('password');
@@ -316,28 +222,6 @@
             message.textContent = text;
             message.className = isError ? 'show error' : 'show success';
             setTimeout(() => message.className = '', 5000);
-        }
-        
-        async function apiCall(endpoint, method = 'POST', body = null) {
-            try {
-                const opts = {
-                    method,
-                    headers: { 'Content-Type': 'application/json' }
-                };
-                if (body) opts.body = JSON.stringify(body);
-                
-                const res = await fetch(endpoint, opts);
-                const data = await res.json();
-                
-                if (!res.ok || !data.success) {
-                    throw new Error(data.error || 'Request failed');
-                }
-                
-                return data;
-            } catch (err) {
-                showMessage(err.message, true);
-                throw err;
-            }
         }
         
         btnGenerate.addEventListener('click', async () => {
@@ -403,73 +287,39 @@
             btnBurn.disabled = true;
             btnStop.disabled = false;
             
-            // Show progress
-            progressSection.style.display = 'block';
-            const setupFill = document.getElementById('setupFill');
-            const setupText = document.getElementById('setupText');
-            const uploadFill = document.getElementById('uploadFill');
-            const uploadText = document.getElementById('uploadText');
-            const burnFill = document.getElementById('burnFill');
-            const burnText = document.getElementById('burnText');
-            const logBox = document.getElementById('logBox');
+            // Initialize components
+            const progress = new ProgressTracker();
+            const log = new LogManager();
             
-            setupFill.style.width = '0%';
-            setupText.textContent = '0%';
-            uploadFill.style.width = '0%';
-            uploadText.textContent = '0%';
-            burnFill.style.width = '0%';
-            burnText.textContent = '0%';
-            logBox.innerHTML = '';
+            progress.show();
+            progress.reset();
+            log.clear();
             
-            function addLog(msg) {
-                const timestamp = new Date().toLocaleTimeString();
-                logBox.innerHTML += `[${timestamp}] ${msg}\n`;
-                logBox.scrollTop = logBox.scrollHeight;
-            }
-            
-            addLog('Connecting to progress stream...');
+            log.add('Connecting to progress stream...');
             
             // Connect to SSE
             currentEventSource = new EventSource('/api/progress/stream');
             
             currentEventSource.onmessage = function(event) {
                 const data = JSON.parse(event.data);
-                addLog(`${data.phase}: ${data.message}`);
                 
-                if (data.phase === 'setup') {
-                    setupFill.style.width = data.progress + '%';
-                    setupText.textContent = data.progress + '%';
-                    setupText.style.color = data.progress > 10 ? '#000' : '#fff';
-                } else if (data.phase === 'upload') {
-                    uploadFill.style.width = data.progress + '%';
-                    uploadText.textContent = data.progress + '%';
-                    uploadText.style.color = data.progress > 10 ? '#000' : '#fff';
-                } else if (data.phase === 'burning') {
-                    burnFill.style.width = data.progress + '%';
-                    burnText.textContent = data.progress + '%';
-                    burnText.style.color = data.progress > 10 ? '#000' : '#fff';
-                } else if (data.phase === 'complete') {
-                    setupFill.style.width = '100%';
-                    uploadFill.style.width = '100%';
-                    burnFill.style.width = '100%';
-                    setupText.textContent = '100%';
-                    uploadText.textContent = '100%';
-                    burnText.textContent = '100%';
-                    setupText.style.color = '#000';
-                    uploadText.style.color = '#000';
-                    burnText.style.color = '#000';
-                    currentEventSource.close();
-                } else if (data.phase === 'error' || data.phase === 'stopped') {
+                // Update progress bars
+                progress.handleProgressEvent(data);
+                
+                // Add to log
+                log.add(`${data.phase}: ${data.message}`);
+                
+                if (data.phase === 'complete' || data.phase === 'error' || data.phase === 'stopped') {
                     currentEventSource.close();
                 }
             };
             
             currentEventSource.onerror = function() {
-                addLog('Progress stream disconnected');
+                log.add('Progress stream disconnected');
                 currentEventSource.close();
             };
             
-            addLog('Starting burn...');
+            log.add('Starting burn...');
             showMessage('Burning QR code...');
             
             try {

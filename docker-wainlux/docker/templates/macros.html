@@ -1,0 +1,127 @@
+{# 
+Jinja2 macros for shared UI components
+Usage: {% from 'macros.html' import macro_name %}
+#}
+
+{# Navigation section with page title and link to home #}
+{% macro navigation(current_page, connected=false) %}
+<div class="section">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h1>{{ current_page }}</h1>
+        {% if current_page != "WAINLUX K6" %}
+        <a href="/" style="color: #fff; text-decoration: none;">← BACK TO HOME</a>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}
+
+{# Status display with optional verification state #}
+{% macro status_display(connected=false, version="") %}
+<div id="status" class="status {% if not connected %}disconnected{% endif %}">
+    {% if connected %}
+        {% if version %}
+            VERIFIED: K6 {{ version }}
+        {% else %}
+            VERIFIED
+        {% endif %}
+    {% else %}
+        NOT VERIFIED (verify optional)
+    {% endif %}
+</div>
+{% endmacro %}
+
+{# Connection verification - optional test, not required for operation #}
+{% macro connection_controls(connected=false) %}
+<div class="section">
+    <h2>VERIFY K6 ONLINE (optional)</h2>
+    <button id="btnConnect" {% if connected %}disabled{% endif %}>VERIFY CONNECTION</button>
+    <button id="btnDisconnect" {% if not connected %}disabled{% endif %}>DISCONNECT</button>
+</div>
+{% endmacro %}
+
+{# Test control buttons - work regardless of connection state #}
+{% macro test_controls(connected=false) %}
+<div class="section">
+    <h2>TEST</h2>
+    <button id="btnBounds">DRAW BOUNDS</button>
+    <button id="btnHome">HOME</button>
+    <button id="btnStop">EMERGENCY STOP</button>
+</div>
+{% endmacro %}
+
+{# Power input field #}
+{% macro power_input(id, label="POWER:", value=1000, connected=false) %}
+<div class="form-row">
+    <label for="{{ id }}">{{ label }}</label>
+    <input type="number" id="{{ id }}" value="{{ value }}" min="0" max="1000" step="10" 
+           style="width: 100px;" {% if not connected %}disabled{% endif %}>
+    <span class="info" style="font-size: 0.85em;">(0-1000)</span>
+</div>
+{% endmacro %}
+
+{# Depth input field #}
+{% macro depth_input(id, label="DEPTH:", value=100, connected=false) %}
+<div class="form-row">
+    <label for="{{ id }}">{{ label }}</label>
+    <input type="number" id="{{ id }}" value="{{ value }}" min="1" max="255" 
+           style="width: 100px;" {% if not connected %}disabled{% endif %}>
+    <span class="info" style="font-size: 0.85em;">(1-255)</span>
+</div>
+{% endmacro %}
+
+{# Progress bars section #}
+{% macro progress_bars() %}
+<div id="progressSection" style="display: none; margin-top: 20px;">
+    <h3>BURN PROGRESS</h3>
+    
+    <div style="margin-bottom: 15px;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+            <span>SETUP</span>
+            <span id="setupText" style="font-weight: bold;">0%</span>
+        </div>
+        <div class="progress-bar">
+            <div id="setupFill" class="progress-fill"></div>
+        </div>
+    </div>
+    
+    <div style="margin-bottom: 15px;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+            <span>UPLOAD</span>
+            <span id="uploadText" style="font-weight: bold;">0%</span>
+        </div>
+        <div class="progress-bar">
+            <div id="uploadFill" class="progress-fill"></div>
+        </div>
+    </div>
+    
+    <div style="margin-bottom: 15px;">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+            <span>BURN</span>
+            <span id="burnText" style="font-weight: bold;">0%</span>
+        </div>
+        <div class="progress-bar">
+            <div id="burnFill" class="progress-fill"></div>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+{# Log display box #}
+{% macro log_display() %}
+<div style="margin-top: 20px;">
+    <h3>LOG</h3>
+    <div id="logBox"></div>
+</div>
+{% endmacro %}
+
+{# Message display area #}
+{% macro message_display() %}
+<div id="message"></div>
+{% endmacro %}
+
+{# Info box with optional warning style #}
+{% macro info_box(text, is_warning=false) %}
+<div class="info {% if is_warning %}warning{% endif %}" style="margin-bottom: 15px;">
+    {{ text }}
+</div>
+{% endmacro %}

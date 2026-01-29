@@ -1,1239 +1,184 @@
-= DRY Refactor Plan
-
-.Todo list. 
-* Get to KISS. 
-* Get to DRY. 
-* Pass the pre-commit hook.
-
-== Current State
-
-* Code repeats. 
-* Progress bars in two files. 
-* Settings in two files. 
-* Logs in two files. 
-* Same CSS. 
-* Same JS. 
-
-Change one. Forget the other. Bug appears. This is bad.
-
-== The Work
-
-=== Step 1: Extract CSS
-* [ ] Create `static/css/shared.css`
-* [ ] Move common styles: body, buttons, sections, status, message
-* [ ] Create `static/css/components.css`
-* [ ] Move: progress bars, log box, form rows, info boxes
-* [ ] Link from all pages
-* [ ] Delete duplicates
-
-=== Step 2: Extract JS API
-* [ ] Create `static/js/api.js`
-* [ ] Move: `apiCall()`, connection status check
-* [ ] Export functions
-* [ ] Import in all pages
-* [ ] Delete duplicates
-
-=== Step 3: Build Progress Component
-* [ ] Create `static/js/progress.js`
-* [ ] Class `ProgressTracker`: init, update, reset
-* [ ] Handles three bars: setup, upload, burn
-* [ ] Text color logic: white when empty, black when filled
-* [ ] Use in calibration.html, qr.html
-* [ ] Delete duplicate code
-
-=== Step 4: Build Log Component
-* [ ] Create `static/js/log.js`
-* [ ] Class `LogManager`: add, clear, auto-scroll
-* [ ] Timestamp formatting
-* [ ] Use in calibration.html, qr.html
-* [ ] Delete duplicate code
-
-=== Step 5: Build Message Component
-* [ ] Create `static/js/message.js`
-* [ ] Function `showMessage(text, isError)`
-* [ ] Timeout logic
-* [ ] Use in all pages
-* [ ] Delete duplicates
-
-=== Step 6: Build Settings Component
-* [ ] Create template macro for power/depth inputs
-* [ ] Validation logic in JS
-* [ ] Use in calibration, qr pages
-* [ ] Delete duplicates
-
-=== Step 7: Build Jog Component
-* [ ] Create template macro for jog controls
-* [ ] JS class `JogController`: move, home, track position
-* [ ] Use in calibration, qr (maybe index for testing)
-* [ ] Delete duplicate code
-
-=== Step 8: Build Stop Component
-* [ ] Template macro for emergency stop button
-* [ ] JS handler: no confirmation, immediate
-* [ ] Use in all pages
-* [ ] Delete duplicates
-
-=== Step 9: Build Status Component
-* [ ] Template macro for status display
-* [ ] JS: poll status, update UI
-* [ ] Use in all pages
-* [ ] Delete duplicates
-
-=== Step 10: Build Nav Component
-* [ ] Template macro for navigation
-* [ ] Active page highlighting
-* [ ] Use in all pages
-* [ ] Delete duplicates
-
-=== Step 11: Create Base Template
-* [ ] Create `templates/base.html`
-* [ ] Head, body structure
-* [ ] Link all shared CSS, JS
-* [ ] Block for page content
-* [ ] All pages extend base
-* [ ] Delete duplicate HTML structure
-
-=== Step 12: Test Everything
-* [ ] Load each page
-* [ ] Verify UI works
-* [ ] Run burn test
-* [ ] Check progress bars visible
-* [ ] Check logs scroll
-* [ ] Check emergency stop works
-* [ ] Verify no regressions
-
-=== Step 13: Pre-commit
-* [ ] Run linter
-* [ ] Fix errors
-* [ ] Commit
-* [ ] Push
-
-== The Goal
-
-One place. One change. No duplicates. KISS. DRY. Done.
-
-== Benefits
-
-Fix progress bars once. Fixed everywhere.
-Add jog controls once. Available everywhere.
-Change API once. All pages updated.
-Test one component. Trust it everywhere.
-
-== Risk
-
-Big refactor. Many files change. Test carefully. Do it in steps. Commit often.
-
-
-== RISKS AND PROBLEMS
-
-=== Critical Issues
-
-**Static file serving not tested**
-
-Flask configured `static_folder="../static"`.
-Directory exists but empty (only .gitkeep).
-Never verified Flask serves `/static/css/shared.css` correctly.
-MUST test before moving files:
-
-* Create test.css in static/css/
-* Add `<link href="/static/css/test.css">` to index.html
-* Load page, verify CSS applies
-* Check browser console for 404 errors
-
-**SSE variable name inconsistencies**
-
-calibration.html uses different phase names than qr.html:
-
-* calibration: `'prepare'` phase → setupFill
-* qr: no `'prepare'` phase handling
-* calibration: checks `'wait'` and `'finalize'` → burnFill
-* qr: only checks `'burning'` → burnFill
-
-Backend emits: `'setup'`, `'prepare'`, `'upload'`, `'burning'`, `'wait'`, `'finalize'`, `'complete'`, `'error'`, `'stopped'`.
-
-MUST standardize before creating shared component:
-
-* Document all phase names backend uses
-* Create mapping logic in shared component
-* Test both calibration and QR burns work identically
-
-**Log function differences**
-
-calibration.html:
-```javascript
-function addLog(msg) {
-    const line = document.createElement('div');
-    line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-    logBox.appendChild(line);
-    logBox.scrollTop = logBox.scrollHeight;
-}
-```
-
-qr.html:
-```javascript
-function addLog(msg) {
-    const timestamp = new Date().toLocaleTimeString();
-    logBox.innerHTML += `[${timestamp}] ${msg}\n`;
-    logBox.scrollTop = logBox.scrollHeight;
-}
-```
-
-calibration creates DOM nodes (safe, no XSS risk).
-qr uses innerHTML (XSS risk if msg contains HTML).
-
-MUST use calibration approach (createElement) in shared component.
-
-**Progress text color logic duplicated with subtle differences**
-
-Both files:
-```javascript
-setupText.style.color = data.progress > 10 ? '#000' : '#fff';
-```
-
-This threshold (10%) is arbitrary.
-If changed, must change in 2 places.
-Should be constant in shared code.
-
-**Jinja template variables**
-
-All templates receive `connected` variable from Flask.
-index.html: uses in JS to track state
-calibration.html: uses {% if not connected %}disabled{% endif %}
-qr.html: uses {% if not connected %}disabled{% endif %}
-
-Shared component needs access to initial `connected` state.
-Cannot assume global variable exists.
-
-MUST pass as parameter to component constructor:
-```javascript
-const status = new StatusDisplay({{ 'true' if connected else 'false' }});
-```
-
-**No Jinja macro experience in codebase**
-
-Zero existing macros.
-Syntax untested:
-```jinja
-{% macro progress_bars() %}
-...
-{% endmacro %}
-
-{% from 'macros.html' import progress_bars %}
-{{ progress_bars() }}
-```
-
-MUST test macro import mechanism before building Step 6.
-
-**CSS specificity conflicts**
-
-Shared CSS loaded first.
-Page-specific CSS loaded second.
-Page-specific rules override shared rules.
-
-If shared.css has `.button { padding: 10px }` and calibration has `.button { padding: 15px }`, calibration wins.
-
-This breaks DRY if we later change shared padding.
-
-MUST use CSS architecture:
-
-* Shared: base styles only (.btn, .status, .progress-bar)
-* Page-specific: only truly unique styles
-* Document override policy
-
-**Hard-coded URLs**
-
-All templates use hard-coded paths:
-
-* `/api/connect`
-* `/api/test/home`
-* `/api/progress/stream`
-* `/calibration`
-* `/qr`
-
-If Flask `url_for()` used instead, URLs change if routes change.
-
-Current approach is acceptable (routes unlikely to change) but not best practice.
-
-Not blocking, but document decision.
-
-**EventSource connection leak**
-
-Both files track `currentEventSource` globally.
-If user clicks burn twice rapidly:
-
-* First EventSource opens
-* Second EventSource opens
-* First never closed (leak)
-
-Current code tries to prevent with `btnBurn.disabled = true` but race condition possible.
-
-MUST add defensive close in shared component:
-```javascript
-startBurn() {
-    if (this.eventSource) {
-        this.eventSource.close();
-    }
-    this.eventSource = new EventSource('/api/progress/stream');
-}
-```
-
-**Browser EventSource support**
-
-EventSource is modern API.
-Very old browsers (IE11) don't support.
-
-Pi's Chromium supports it.
-Document browser requirements in README.
-
-Not blocking for Pi deployment.
-
-**Progress bar race condition**
-
-Backend emits events via `progress_queue.put_nowait()`.
-If queue full (maxsize not set), drops events silently.
-
-Frontend expects events in order: setup → upload → burn.
-If events drop, progress bars freeze.
-
-Backend code:
-```python
-try:
-    progress_queue.put_nowait(event)
-except queue.Full:
-    pass  # Drop events if queue is full
-```
-
-MUST check queue creation - no maxsize set = infinite queue = no drops.
-
-**Static file caching**
-
-Browsers cache `/static/css/shared.css` aggressively.
-After refactor, old CSS may persist.
-
-MUST document deployment procedure:
-
-* Clear browser cache
-* Use versioned URLs: `/static/css/shared.css?v=2`
-* Or set Flask cache headers for development
-
-**No error recovery in SSE**
-
-If SSE stream errors mid-burn:
-
-* `onerror` fires
-* Stream closes
-* Progress bars freeze at last known state
-* User doesn't know if burn completed
-
-MUST add recovery logic:
-
-* Retry connection on error (max 3 attempts)
-* OR poll `/api/status` endpoint as fallback
-* OR show clear error message to user
-
-**apiCall() has no request timeout**
-
-Fetch API has no default timeout.
-If backend hangs, request waits forever.
-
-User has no feedback.
-
-MUST add timeout to shared apiCall():
-```javascript
-async function apiCall(endpoint, method = 'POST', body = null) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000); // 30s
-    
-    try {
-        const response = await fetch(endpoint, {
-            method,
-            body: body instanceof FormData ? body : JSON.stringify(body),
-            signal: controller.signal
-        });
-        // ...
-    } finally {
-        clearTimeout(timeout);
-    }
-}
-```
-
-**Content-Type header missing for JSON**
-
-Current apiCall():
-```javascript
-const opts = { method };
-if (body) opts.body = body;
-```
-
-If body is JSON object, should set `Content-Type: application/json`.
-FormData should not set Content-Type (browser sets multipart boundary).
-
-Flask might be lenient but this is wrong.
-
-MUST fix:
-```javascript
-if (body instanceof FormData) {
-    opts.body = body;
-} else if (body) {
-    opts.headers = { 'Content-Type': 'application/json' };
-    opts.body = JSON.stringify(body);
-}
-```
-
-=== Non-Blocking Issues
-
-**CSS units inconsistent**
-
-Some use `px`, some use `em`, some use `%`.
-
-Not breaking but harder to maintain.
-
-Consider standardizing.
-
-**Magic numbers everywhere**
-
-`10px`, `20px`, `15px`, `1px solid #fff`, etc.
-
-Should use CSS variables:
-```css
-:root {
-    --border-width: 1px;
-    --border-color: #fff;
-    --spacing-sm: 10px;
-    --spacing-md: 20px;
-}
-```
-
-Not blocking but makes theme changes easier.
-
-**No mobile responsive design**
-
-All templates assume desktop/tablet viewport.
-
-Pi touchscreen is 800x480 or 1024x600.
-
-May need media queries.
-
-Not blocking for current use case.
-
-**Accessibility concerns**
-
-No ARIA labels.
-No keyboard navigation support.
-No screen reader support.
-
-Not required for Pi kiosk mode but good practice.
-
-**No logging level control**
-
-All logs go to browser console and `#logBox`.
-
-No way to filter by severity.
-
-Not blocking but useful for debugging.
-
-=== Testing Requirements
-
-**Before starting refactor**
-
-1. Test static file serving
-2. Document all SSE phase names
-3. Verify Jinja macro syntax
-4. Add timeout to apiCall()
-5. Fix Content-Type headers
-
-**After each step**
-
-1. Load all three pages
-2. Check browser console for errors
-3. Verify styles apply correctly
-4. Test one action per page
-
-**After completion**
-
-1. Full test matrix:
-   * Connect/disconnect
-   * Draw bounds
-   * Home
-   * Emergency stop
-   * Calibration burn (all patterns)
-   * QR generation
-   * QR burn
-   * Alignment burn
-2. Check logs for errors
-3. Verify progress bars update
-4. Verify SSE stream closes properly
-
-**Docker rebuild required**
-
-Refactor changes files in docker/ context.
-
-MUST rebuild image:
-```bash
-cd docker-wainlux
-docker compose down
-docker compose build
-docker compose up -d
-```
-
-Test in container, not on host.
-
-=== Mitigation Plan
-
-**Checkpoint commits**
-
-After each step, commit:
-```bash
+= Refactor Status & Plan
+:toc:
+:toclevels: 2
+
+Last Updated: 2026-01-29
+
+== Summary
+
+**Frontend**: DRY complete, deployed, tested ✓  
+**Backend**: Cleaned up imports and constants ✓  
+**Next**: Pre-commit checks, then optional backend architecture refactor
+
+=== Current State
+
+**Files**
+[options="header"]
+|===
+|File |Lines |Status
+|app/main.py |1567 |Cleaned (was 1660)
+|templates/*.html |3317 |DRY complete
+|static/css/*.css |248 |Shared
+|static/js/*.js |188 |Components
+|k6/*.py |~2500 |Clean library
+|===
+
+**What Works**
+* All pages use base.html + macros.html pattern
+* Shared CSS/JS components (Progress, Log, API)
+* Connection verification optional (not mandatory)
+* Image import bugs fixed
+* Magic numbers replaced with constants
+* ProgressCSVLogger extracted (was duplicated 2×)
+* XSS vulnerability fixed
+* API timeout added (30s)
+* Deployed and tested on Pi Zero W
+
+**What's Left**
+* Pre-commit checks (linter, tests)
+* Optional: Backend architecture refactor (30-40h)
+
+== Next Steps
+
+=== Immediate: Pre-commit ⏳
+
+**Run checks**
+[source,bash]
+----
+cd docker-wainlux/docker
+python3 -m py_compile app/*.py k6/*.py  # ✓ Already passing
+python3 -m flake8 app/ k6/ --max-line-length=100  # Run linter
+python3 -m black --check app/ k6/  # Check formatting
+----
+
+**If linter fails**: Fix issues, re-test
+
+**Commit**
+[source,bash]
+----
 git add -A
-git commit -m "refactor: step N - [description]"
-```
+git commit -m "refactor: frontend DRY + backend cleanup complete
 
-If step breaks, revert:
-```bash
-git reset --hard HEAD~1
-```
+Frontend (-548 lines duplicate):
+- Shared CSS/JS components
+- base.html + macros.html pattern
+- Fixed XSS, timeout, Image imports
+- Connection verification optional
 
-**Keep old code commented**
+Backend (-93 lines, +constants):
+- Extracted ProgressCSVLogger class
+- Moved 9 imports to top
+- Replaced 40+ magic numbers with K6_* constants
+- main.py: 1660 → 1567 lines
+
+Total: -641 lines (-13%), tested on Pi"
+git push
+----
 
-During extraction, comment old inline code:
-```html
-<!-- OLD INLINE CSS
-<style>
-...
-</style>
--->
+=== Optional: Backend Architecture Refactor
 
-<link rel="stylesheet" href="/static/css/shared.css">
-```
+**Only if needed. Current code works and is maintainable.**
+
+==== Problem: God Object (main.py 1567 lines)
 
-If new approach fails, uncomment old code.
-
-Remove comments only after full test pass.
-
-**Parallel development branch**
-
-Create feature branch:
-```bash
-git checkout -b refactor/dry-templates
-```
-
-Work in branch.
-Test thoroughly.
-Merge to main only when complete.
-
-**Rollback procedure**
-
-If refactor fails in production:
-
-1. Checkout previous commit
-2. Rebuild container
-3. Redeploy
-4. Fix issues in branch
-5. Retry
-
-Always have working commit tagged:
-```bash
-git tag -a v0.1-pre-refactor -m "Before DRY refactor"
-```
-
-=== Priority Order
-
-**Fix BEFORE starting refactor:**
-
-1. Add timeout to apiCall() ← prevents hangs
-2. Fix Content-Type header ← prevents Flask errors
-3. Test static file serving ← prevents all CSS from breaking
-4. Document SSE phases ← prevents logic errors in component
-
-**Fix DURING refactor:**
-
-5. Standardize addLog() ← Step 8 (JS components)
-6. Add EventSource defensive close ← Step 8 (JS components)
-7. Standardize SSE phase handling ← Step 8 (JS components)
-
-**Fix AFTER refactor (optional):**
-
-8. Add SSE error recovery
-9. Add CSS variables
-10. Add mobile responsive design
-11. Add accessibility features
-12. Add logging levels
-
-=== Estimated Additional Time
-
-Pre-refactor fixes: 1 hour
-Testing per step: 15 minutes × 13 steps = 3.25 hours
-Post-refactor testing: 1 hour
-Total risk mitigation: ~5.25 hours
-
-Original estimate: 4.5 hours
-New estimate: 9.75 hours (~2 working days)
-
-OR spread over multiple days with checkpoints.
-
-== ARCHITECTURAL PROBLEMS
-
-=== Layer Violations and Coupling
-
-**main.py is God Object (1660 lines)**
-
-Single file contains:
-
-* 20+ route handlers
-* Image processing logic (color_aware_grayscale)
-* Progress tracking (SSE, emit_progress)
-* State management (global variables)
-* Validation logic (allowed_file, size checks)
-* QR generation with PIL layout calculations
-* Calibration pattern generation
-* Business logic for burns
-* CSV logger wrapper classes
-
-Violates Single Responsibility Principle.
-No separation of concerns.
-Testing impossible without mocking entire Flask app.
-
-**Business logic embedded in route handlers**
-
-calibration_burn() contains 200+ lines:
-
-* Pattern generation (center, corners, frame, grid, bottom-test)
-* PIL drawing operations
-* Positioning calculations
-* ProgressCSVLogger class definition (nested!)
-* Burn execution
-* Error handling
-* Progress emission
-
-Route handler should delegate to service layer.
-Current: Controller + Service + Presenter all in one function.
-
-**No service layer**
-
-Route handlers directly call:
-
-* k6_driver methods
-* protocol functions
-* PIL image operations
-* qrcode library
-* tempfile operations
-
-No abstraction.
-No business logic isolation.
-Cannot unit test burn logic without HTTP requests.
-
-**Tight coupling to Flask**
-
-emit_progress() uses module-level progress_queue.
-ProgressCSVLogger uses emit_progress() directly.
-Cannot use burn logic outside Flask context.
-
-Should be: Service → Events → Adapter → SSE
-Current: Business logic → Global queue → SSE
-
-**Global state management**
-
-Module-level globals:
-
-```python
-k6_driver = WainluxK6()
-k6_transport = None
-k6_connected = False
-k6_version = None
-progress_queue = queue.Queue()
-burn_in_progress = False
-burn_cancel_event = threading.Event()
-```
-
-Thread-unsafe.
-Race conditions possible (multiple simultaneous requests).
-Cannot run multiple K6 instances.
-Cannot test without polluting module state.
-
-Should use: App context, dependency injection, or session management.
-
-**Direct protocol calls from routes**
-
-test_home() directly calls protocol.send_cmd_checked().
-Bypasses driver layer abstraction.
-Some routes use k6_driver, some use protocol directly.
-
-Inconsistent layering.
-No clear API boundary.
-
-**CSV logger class defined inside route handler**
-
-ProgressCSVLogger defined inside calibration_burn() and qr_burn().
-~70 lines of class definition repeated 2×.
-Couples progress tracking to CSV logging.
-
-Should be: Separate module, injected dependency.
-
-=== State Management Issues
-
-**No connection lifecycle**
-
-k6_transport created in connect().
-Used globally across requests.
-Never verified still alive before use.
-
-What if device disconnects?
-What if USB cable unplugged?
-No heartbeat, no health check.
-
-Should: Check connection before each operation or implement reconnect logic.
-
-**No request serialization**
-
-Multiple users can POST /api/calibration/burn simultaneously.
-Both access k6_transport.
-Serial port doesn't support concurrent operations.
-
-Result: Interleaved commands, device confusion, burns fail.
-
-Should: Lock mechanism, queue, or reject concurrent burns.
-
-**burn_in_progress flag unused**
-
-Flag set but never checked.
-burn_cancel_event only checked inside ProgressCSVLogger.
-No enforcement of single burn at a time.
-
-Dead code or incomplete implementation.
-
-**SSE stream lifecycle unmanaged**
-
-Each /api/progress/stream creates generator.
-Generator reads from shared progress_queue.
-Multiple concurrent streams all receive same events.
-
-If 3 browsers open, all 3 get all events.
-No stream isolation.
-No way to send progress to specific client.
-
-Should: Per-request queue or connection ID filtering.
-
-**No cleanup on disconnect**
-
-Disconnect doesn't cancel active burns.
-Doesn't close SSE streams.
-progress_queue still receives events.
-
-Memory leak if device disconnected mid-burn.
-
-=== Error Handling Architecture
-
-**Inconsistent error handling**
-
-Some routes:
-```python
-except Exception as e:
-    return jsonify({"success": False, "error": str(e)}), 500
-```
-
-Others:
-```python
-except Exception as e:
-    logger.error(f"...")
-    return jsonify({"success": False, "error": str(e)}), 500
-```
-
-No centralized error handling.
-No error codes (just HTTP 400/500).
-No structured error responses.
-
-**No validation layer**
-
-Validation scattered in route handlers:
-
-* engrave(): checks file extension, image size
-* mark(): no validation on x/y bounds
-* jog(): validates bounds inline
-* calibration_burn(): validates pattern inline
-
-Repeated logic.
-No reusable validators.
-Inconsistent error messages.
-
-**Silent failures in driver**
-
-driver.py methods return bool (True/False).
-No exception propagation.
-Caller cannot distinguish error types.
-
-Connection timeout? Device reject? Syntax error?
-All same: `return False`
-
-Should: Raise specific exceptions, let caller decide.
-
-**No rollback on partial failure**
-
-calibration_burn():
-
-1. Creates temp file
-2. Generates image
-3. Burns
-4. Deletes temp file
-
-If step 3 fails, step 4 still runs (finally).
-But device state not restored.
-If CONNECT sent, device may be mid-operation.
-
-No transaction semantics.
-No state rollback.
-
-=== API Design Issues
-
-**Inconsistent response structure**
-
-Success responses vary:
-
-* connect: `{"success": True, "connected": True, "version": "..."}`
-* engrave: `{"success": True, "message": "...", "total_time": ..., "chunks": ...}`
-* mark: `{"success": True, "position": {...}, "power": ..., ...}`
-
-No standard envelope.
-Clients must handle each endpoint differently.
-
-Should: Consistent `{"data": {...}, "meta": {...}}` structure.
-
-**No API versioning**
-
-Routes: /api/connect, /api/test/home, etc.
-No /api/v1/ prefix.
-Future changes break clients.
-
-**No rate limiting**
-
-User can spam /api/calibration/burn.
-Creates temp files, queues progress events, stresses device.
-
-DoS risk (accidental or malicious).
-
-**No authentication**
-
-Anyone on network can control laser.
-No API keys, no passwords.
-
-Acceptable for local Pi but document security model.
-
-**RESTful violations**
-
-* POST /api/test/home (should be POST /api/device/home or PUT /api/device/position)
-* POST /api/connect (should be POST /api/device/connection or PUT /api/device/state)
-* GET /api/status (good)
-* POST /api/calibration/generate (generates but doesn't burn - confusing)
-
-Inconsistent resource modeling.
-
-=== Separation of Concerns
-
-**Image processing in web layer**
-
-color_aware_grayscale() defined in main.py.
-Used by... nothing (dead code?).
-Should be in k6.processing module.
-
-**QR layout logic in route handler**
-
-qr_generate() and qr_burn() contain 150+ lines of:
-
-* Font loading
-* Text measurement
-* QR sizing calculation
-* Canvas positioning
-* Pixel offset math
-
-This is business logic.
-Should be: QRService.generate(ssid, password) → PIL Image.
-
-**Calibration patterns in route handler**
-
-calibration_generate() has massive if/elif chain:
-
-* center: 10 lines
-* corners: 15 lines
-* frame: 5 lines
-* grid: 20 lines
-* bottom-test: 15 lines
-
-Each pattern is separate concern.
-Should be: PatternFactory.create(type, size) → PIL Image.
-
-**CSV logging concerns mixed**
-
-ProgressCSVLogger wraps CSVLogger.
-Adds progress emission.
-Couples two concerns: logging to file + UI updates.
-
-Should be: Observer pattern - CSVLogger and ProgressEmitter both observe burn events.
-
-=== Module Organization
-
-**Flat app structure**
-
-```
-docker/
-  app/
-    main.py (1660 lines, everything)
-  k6/
-    driver.py
-    protocol.py
-    transport.py
-    ...
-  templates/
-  static/
-```
-
-No app/services/, app/models/, app/validators/.
-No domain layer, no application layer.
-
-**k6 module responsibilities unclear**
-
-k6.driver: Has engrave_transport() method that calls protocol and processing.
-k6.processing: Image prep functions.
-k6.protocol: Low-level packet building.
-
-But main.py also does image processing.
-And main.py calls protocol directly sometimes.
-
-Unclear boundaries.
-
-**No dependency injection**
-
-k6_driver instantiated at module level.
-Hard-coded SerialTransport in connect().
-Hard-coded /dev/ttyUSB0.
-
-Cannot swap implementations.
-Cannot mock for testing.
-Cannot support multiple devices.
-
-=== Threading and Concurrency
-
-**SSE generator blocks Flask worker**
-
-progress_stream() runs blocking generator:
-```python
-while True:
-    event = progress_queue.get(timeout=30)
-    yield ...
-```
-
-Ties up one Flask worker per connected client.
-Default Flask dev server: 1 worker = 1 SSE client max.
-
-Should: Use async framework (aiohttp) or SSE library (flask-sse with Redis).
-
-**burn_cancel_event race condition**
-
-Set in test_stop().
-Checked in ProgressCSVLogger.log_operation().
-
-If log_operation() between check and burn operation:
-
-1. Check: event not set
-2. STOP pressed: event set
-3. Burn operation executes anyway
-
-Race window.
-
-**No thread safety on global state**
-
-Multiple requests can modify:
-
-* k6_connected
-* k6_transport
-* k6_version
-
-No locks.
-Read-modify-write race conditions.
-
-**Threading.Event used incorrectly**
-
-burn_cancel_event cleared in calibration_burn() start.
-But what if previous burn still checking it?
-
-Two burns can't use same event safely.
-
-Should: Per-burn cancellation token.
-
-=== Testing Architecture
-
-**No testability**
-
-1660-line main.py with:
-
-* Flask app initialization at module level
-* Global state
-* Nested class definitions
-* Hardware dependencies (SerialTransport)
-* File I/O (temp files, CSV logs)
-* Network I/O (SSE streams)
-
-Cannot unit test burn logic.
-Cannot integration test without real device.
-No test fixtures, no mocks, no stubs.
-
-**No interfaces**
-
-Direct dependencies on concrete classes:
-
-* WainluxK6 (no ILaserDriver interface)
-* SerialTransport (no ITransport interface - wait, there is TransportBase!)
-* CSVLogger (no ILogger interface)
-
-Cannot substitute test doubles.
-
-**Business logic untestable**
-
-Pattern generation logic in route handler.
-QR layout logic in route handler.
-Cannot test without Flask test client + mocking request context.
-
-Should: Pure functions, testable services.
-
-=== Configuration Management
-
-**Hard-coded constants**
-
-* /dev/ttyUSB0 (serial port)
-* 115200 (baud rate)
-* 1600×1600 (max image size)
-* Port 8080
-* /usr/share/fonts/... (font paths)
-* DATA_DIR = parents[1] / "data"
-
-No config file.
-No environment variables.
-No way to customize without code changes.
-
-**Magic numbers everywhere**
-
-* 0.05 (mm/px resolution)
-* 1500, 1080 (QR burn dimensions)
-* 1712 (card width px)
-* 106 (offset_right calculation)
-* 30 (SSE timeout seconds)
-
-Should: Named constants, config module.
-
-**No environment awareness**
-
-Production vs development same.
-No DEBUG flag behavior.
-FLASK_ENV=production read but not used differently.
-
-=== Scalability Issues
-
-**Single K6 instance only**
-
-Global k6_driver, k6_transport.
-Cannot support multiple laser engravers.
-Cannot partition by user/project.
-
-**No job queue**
-
-Burn requests processed immediately.
-No queuing, no scheduling, no priority.
-
-If 10 users request burns: chaos.
-
-**No persistent state**
-
-Server restart loses:
-
-* Connection state
-* Active burn progress
-* Queued jobs
-
-Users lose work.
-
-**File-based CSV logs**
-
-Logs written to local filesystem.
-No rotation, no cleanup, no archival.
-Disk fills up eventually.
-
-No database, no external storage.
-
-=== Security Architecture
-
-**No input sanitization**
-
-QR burn accepts ssid, password, description.
-Rendered with PIL but what if SSID contains special chars?
-No length limits documented.
-
-**Temp file handling**
-
-tempfile.NamedTemporaryFile(delete=False)
-Manual cleanup in finally.
-
-If finally doesn't run (process killed): temp files leak.
-
-Should: Use context manager properly or delete=True + copy elsewhere.
-
-**No CORS policy**
-
-Any website can call API.
-If Pi exposed to internet: vulnerable.
-
-**No HTTPS**
-
-Credentials sent over HTTP.
-If remote access used: eavesdropping risk.
-
-=== Documentation and Observability
-
-**No logging strategy**
-
-logger.info() and logger.error() scattered.
-No structured logging (JSON).
-No log levels used consistently.
-No trace IDs for request correlation.
-
-**No metrics**
-
-No burn success/failure counts.
-No timing histograms.
-No device error tracking.
-No SSE connection counts.
-
-Cannot monitor system health.
-
-**No health check endpoint**
-
-No /api/health or /api/ping.
-Cannot verify service alive without knowing API.
-
-**No API documentation**
-
-No OpenAPI/Swagger spec.
-No docstrings on routes (some have, inconsistent).
-Frontend must reverse-engineer protocol.
-
-=== Recommended Architecture
-
-**Layered architecture:**
-
-```
-main.py (Flask app, routes only)
-app/
-  api/
-    routes.py (HTTP handlers)
-    schemas.py (request/response validation)
-  services/
-    burn_service.py (business logic)
-    pattern_service.py (calibration patterns)
-    qr_service.py (QR generation)
-    device_service.py (K6 lifecycle)
-  models/
-    burn_request.py (domain objects)
-    device_state.py
-  events/
-    progress_emitter.py (observer pattern)
-  config.py (centralized config)
-k6/
-  (hardware abstraction - already good)
-```
-
-**Dependency injection:**
-
-```python
-class BurnService:
-    def __init__(self, device: ILaserDevice, logger: ILogger, emitter: IProgressEmitter):
-        self.device = device
-        self.logger = logger
-        self.emitter = emitter
-```
-
-**State management:**
-
-```python
-class DeviceManager:
-    def __init__(self):
-        self._lock = threading.Lock()
-        self._device = None
-        
-    def with_device(self, func):
-        with self._lock:
-            if not self._device:
-                raise DeviceNotConnected()
-            return func(self._device)
-```
-
-**Event-driven progress:**
-
-```python
-class ProgressEvent:
-    phase: str
-    progress: int
-    message: str
-    
-class ProgressEmitter:
-    def emit(self, event: ProgressEvent):
-        # Implementations: SSEEmitter, CSVEmitter, LogEmitter
-```
-
-**Request serialization:**
-
-```python
-burn_queue = queue.Queue()
-burn_worker_thread = threading.Thread(target=process_burns)
-# Or: Use Celery for distributed task queue
-```
-
-=== Priority for Fixes
-
-**Critical (blocking refactor):**
-
-1. Extract business logic from routes (breaks God Object)
-2. Remove global state (enables testing)
-3. Add request serialization (prevents concurrent burn bugs)
-4. Separate progress tracking from CSV logging (reduces coupling)
-
-**High (improve architecture):**
-
-5. Create service layer
-6. Add dependency injection
-7. Implement proper state management
-8. Add connection lifecycle management
-
-**Medium (improve quality):**
-
-9. Add validation layer
-10. Standardize error handling
-11. Add configuration management
-12. Improve logging strategy
-
-**Low (nice to have):**
-
-13. Add metrics
-14. Add API documentation
-15. Add health checks
-16. Implement job queue
-
-=== Effort Estimate
-
-Architectural refactor (beyond DRY):
-
-* Extract services: 8 hours
-* Add DI + state management: 6 hours
-* Request serialization: 4 hours
-* Validation layer: 3 hours
-* Error handling: 2 hours
-* Config management: 2 hours
-* Testing infrastructure: 6 hours
-
-Total: ~31 hours (~1 week full-time)
-
-Combined with DRY refactor: 40 hours total
-
-Recommendation: Do DRY refactor first (9.75 hours), then architectural refactor (31 hours).
-Step 9-11: 1 hour. Status, nav, base template.
-Step 12-13: 30 min. Test, lint, commit.
-
-Total: 4.5 hours for complete DRY refactor.
-
-Or: Do it in chunks. One step per day. Less risk.
+**Current structure**:
+* 26 route handlers in one file
+* Business logic mixed with Flask routes
+* Global state (k6_transport, progress_queue)
+* No service layer, no testing
+* SSE shared queue (multi-client issues)
+
+**Proposed refactor** (30-40 hours):
+1. Extract services/k6_service.py - laser operations
+2. Extract services/image_service.py - image processing
+3. Extract services/progress_service.py - per-client SSE
+4. Extract services/qr_service.py - QR generation
+5. Remove global state → K6DeviceManager class
+6. Fix SSE → per-client streams with IDs
+7. Add unit tests with MockTransport
+8. Configuration management
+
+**Result**: main.py ~400 lines, testable services
+
+==== Problem: SSE Multi-Client (Shared Queue)
+
+**Current**: All clients receive all events from shared progress_queue  
+**Impact**: Multiple browsers see each other's progress  
+**Fix**: Per-client Queue stored in active_streams dict
+
+**Priority**: LOW (single-user device, works fine)
+
+==== Problem: No Request Serialization
+
+**Current**: Multiple burns can run simultaneously  
+**Impact**: Serial port command interleaving  
+**Fix**: Lock mechanism or burn queue
+
+**Priority**: LOW (single-user device)
+
+==== Problem: No Validation Layer
+
+**Current**: Validation scattered in routes  
+**Impact**: Repeated logic, inconsistent checks  
+**Fix**: Centralized validator functions
+
+**Priority**: LOW (current validation adequate)
+
+== Decision Matrix
+
+[options="header"]
+|===
+|Action |Time |Value |Priority |Decision
+|Pre-commit checks |1h |High |HIGH |DO NOW
+|Extract services |20h |Medium |LOW |DEFER
+|Fix SSE isolation |4h |Low |LOW |DEFER
+|Add testing |10h |High |MEDIUM |DEFER
+|Validation layer |3h |Low |LOW |SKIP
+|===
+
+**Recommendation**: Commit now, defer backend refactor until needed.
+
+== Architectural Issues (Documented, Not Urgent)
+
+**For future reference when backend refactor needed:**
+
+=== Layer Violations
+* God Object: 26 routes + business logic in main.py
+* No service layer: Routes call driver/protocol directly
+* Global state: k6_transport, progress_queue module-level
+* ProgressCSVLogger was nested in functions (now extracted ✓)
+
+=== State Management
+* No connection lifecycle (heartbeat, reconnect)
+* No request serialization (concurrent burns possible)
+* burn_in_progress flag unused
+* SSE stream lifecycle unmanaged
+
+=== Error Handling
+* Inconsistent patterns across routes
+* No centralized handler
+* No error codes beyond HTTP 400/500
+* Validation scattered
+
+=== Code Quality Issues (FIXED ✓)
+* [x] Duplicate ProgressCSVLogger class → extracted
+* [x] Inline PIL/numpy imports → moved to top
+* [x] Magic numbers → K6_* constants
+* [x] XSS in qr.html log display → createElement
+* [x] API timeout missing → 30s AbortController
+* [x] Image import errors → fixed
+
+**Total Issues**: 60+ documented  
+**Priority**: None critical, all "nice to have"  
+**Current Code**: Works correctly for single-user Pi Zero W use case
+
+== Summary
+
+✅ **Frontend DRY**: Complete, tested, deployed  
+✅ **Backend Cleanup**: Imports, constants, deduplication done  
+⏳ **Pre-commit**: Run linter, commit  
+⏸️ **Backend Refactor**: Defer (30-40h), not urgent
+
+**Code quality**: Good enough  
+**Functionality**: Working correctly  
+**Next milestone**: Ship v0.2, refactor later if needed

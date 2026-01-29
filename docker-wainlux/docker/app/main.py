@@ -15,6 +15,8 @@ import json
 import time
 import queue
 import threading
+import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 
 # Add k6 library to path (located in /app/k6 in container)
 # From /app/app/main.py, parent is /app/app, parent.parent is /app
@@ -44,6 +46,14 @@ burn_cancel_event = threading.Event()  # Signal to cancel active burn
 # Data directory for logs
 DATA_DIR = Path(__file__).parents[1] / "data"
 DATA_DIR.mkdir(exist_ok=True)
+
+# K6 hardware constants
+K6_MAX_WIDTH = 1600  # px (80mm at 0.05mm/px resolution)
+K6_MAX_HEIGHT = 1520  # px (76mm actual Y-axis measured)
+K6_CENTER_X_OFFSET = 67  # px offset for centered positioning
+K6_CENTER_Y = 760  # px (middle of 1520px work area)
+K6_DEFAULT_CENTER_X = 800  # px default position
+K6_DEFAULT_CENTER_Y = 800  # px default position
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "bmp", "gif"}
 
@@ -86,8 +96,6 @@ def color_aware_grayscale(img, laser_color="blue"):
 
     For best engraving contrast, emphasize colors the laser absorbs.
     """
-    import numpy as np
-
     if img.mode != "RGB":
         img = img.convert("RGB")
 
@@ -108,9 +116,90 @@ def color_aware_grayscale(img, laser_color="blue"):
         gray = 0.299 * r + 0.587 * g + 0.114 * b
 
     gray = np.clip(gray, 0, 255).astype(np.uint8)
-    from PIL import Image
-
     return Image.fromarray(gray, mode="L")
+
+
+class ProgressCSVLogger(CSVLogger):
+    """CSV logger that emits SSE progress events during burn operations.
+    
+    Tracks burn phases and emits progress updates via emit_progress():
+    - setup/connect: Initial setup commands (0-100%)
+    - upload: Data chunk transmission (0-100%)
+    - burning: Laser burn progress from device status (0-100%)
+    
+    Also checks burn_cancel_event to allow user cancellation.
+    """
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.total_chunks = 0
+        self.current_chunk = 0
+        self.setup_commands = 0
+
+    def log_operation(
+        self,
+        phase,
+        operation,
+        duration_ms,
+        bytes_transferred=0,
+        status_pct=None,
+        state="ACTIVE",
+        response_type="",
+        retry_count=0,
+        device_state="IDLE",
+    ):
+        # Check for user cancellation
+        if burn_cancel_event.is_set():
+            logger.info("Burn cancelled by user")
+            emit_progress("stopped", 0, "Burn cancelled by user")
+            raise KeyboardInterrupt("Burn cancelled by user")
+
+        # Call parent logger
+        super().log_operation(
+            phase=phase,
+            operation=operation,
+            duration_ms=duration_ms,
+            bytes_transferred=bytes_transferred,
+            status_pct=status_pct,
+            state=state,
+            response_type=response_type,
+            retry_count=retry_count,
+            device_state=device_state,
+        )
+
+        # Emit progress based on phase
+        if phase == "connect" or phase == "setup":
+            # Setup phase: FRAMING, JOB_HEADER, CONNECT x2 = ~4 commands
+            self.setup_commands += 1
+            progress = min(int(self.setup_commands * 25), 100)
+            emit_progress("setup", progress, f"{operation}")
+
+        elif phase == "burn":
+            # Upload phase: track chunk progress
+            if "chunk" in operation.lower() and "/" in operation:
+                try:
+                    for part in operation.split():
+                        if "/" in part:
+                            current, total = part.split("/")
+                            self.current_chunk = int(current)
+                            self.total_chunks = int(total)
+                            chunk_pct = self.current_chunk / self.total_chunks
+                            progress = int(chunk_pct * 100)
+                            emit_progress("upload", progress, f"Chunk {current}/{total}")
+                            break
+                except (ValueError, IndexError) as e:
+                    logger.error(f"Chunk parse error: {e}, operation={operation}")
+                    emit_progress("upload", 50, f"{operation}")
+            else:
+                emit_progress("upload", 50, f"{operation}")
+
+        elif phase == "wait" or phase == "finalize":
+            # Burning phase: use device status if available
+            if status_pct is not None:
+                progress = int(status_pct)
+                emit_progress("burning", progress, f"{operation} ({status_pct}%)")
+            else:
+                emit_progress("burning", 80, f"{operation}")
 
 
 @app.route("/")
@@ -224,10 +313,10 @@ def jog():
         center_y = int(data.get("y", 800))
         disable_limits = data.get("disable_limits", False)
 
-        # Clamp to work area (0-1600) unless limits disabled
+        # Clamp to work area unless limits disabled
         if not disable_limits:
-            center_x = max(0, min(1600, center_x))
-            center_y = max(0, min(1600, center_y))
+            center_x = max(0, min(K6_MAX_WIDTH, center_x))
+            center_y = max(0, min(K6_MAX_HEIGHT, center_y))
         else:
             # Still apply reasonable max to prevent overflow (hardware max unknown)
             center_x = max(-200, min(2000, center_x))
@@ -263,8 +352,8 @@ def mark():
 
     try:
         data = request.get_json()
-        center_x = int(data.get("x", 800))
-        center_y = int(data.get("y", 800))
+        center_x = int(data.get("x", K6_DEFAULT_CENTER_X))
+        center_y = int(data.get("y", K6_DEFAULT_CENTER_Y))
         power = int(data.get("power", 500))
         depth = int(data.get("depth", 10))
 
@@ -385,19 +474,17 @@ def engrave():
             tmp_path = tmp.name
 
         # Validate image size before processing
-        from PIL import Image
-
         with Image.open(tmp_path) as img:
             width, height = img.size
-            # K6 work area: 80x80mm = 1600x1600px @ 0.05mm/px or 1067x1067px @ 0.075mm/px
-            # Allow up to 1600x1600 for full resolution testing
-            if width > 1600 or height > 1600:
+            # K6 work area: 80x80mm @ 0.05mm/px resolution
+            # Y-axis is actually 1520px (76mm measured)
+            if width > K6_MAX_WIDTH or height > K6_MAX_HEIGHT:
                 Path(tmp_path).unlink(missing_ok=True)
                 return (
                     jsonify(
                         {
                             "success": False,
-                            "error": f"Image too large: {width}x{height}px (max 1600x1600)",
+                            "error": f"Image too large: {width}x{height}px (max {K6_MAX_WIDTH}x{K6_MAX_HEIGHT})",
                         }
                     ),
                     400,
@@ -453,8 +540,8 @@ def status():
         "state": "idle" if k6_connected else "disconnected",
         "progress": 0,
         "message": "Ready" if k6_connected else "Not connected",
-        "max_width": 1600,
-        "max_height": 1600,
+        "max_width": K6_MAX_WIDTH,
+        "max_height": K6_MAX_HEIGHT,
     }
     if k6_version:
         response["version"] = k6_version
@@ -501,8 +588,6 @@ def calibration_generate():  # noqa: C901
         resolution = float(data.get("resolution", 0.05))
         pattern = data.get("pattern", "center")  # center, corners, frame, grid
         size_mm = float(data.get("size_mm", 10.0))
-
-        from PIL import Image, ImageDraw
 
         def mm_to_px(mm: float) -> int:
             return int(round(mm / resolution))
@@ -639,12 +724,12 @@ def calibration_preview():
 
     try:
         data = request.get_json()
-        width = int(data.get("width", 1600))
-        height = int(data.get("height", 1600))
+        width = int(data.get("width", K6_MAX_WIDTH))
+        height = int(data.get("height", K6_MAX_HEIGHT))
 
         # Validate dimensions
-        width = max(1, min(1600, width))
-        height = max(1, min(1600, height))
+        width = max(1, min(K6_MAX_WIDTH, width))
+        height = max(1, min(K6_MAX_HEIGHT, height))
 
         # Use fast BOUNDS command (0x20)
         success = k6_driver.draw_bounds_transport(
@@ -675,19 +760,15 @@ def calibration_burn_bounds():
         return jsonify({"success": False, "error": "Not connected"}), 400
 
     try:
-        from PIL import Image, ImageDraw
-        import tempfile
-        import time
-
         data = request.get_json()
-        width = int(data.get("width", 1600))
-        height = int(data.get("height", 1600))
+        width = int(data.get("width", K6_MAX_WIDTH))
+        height = int(data.get("height", K6_MAX_HEIGHT))
         power = int(data.get("power", 500))
         depth = int(data.get("depth", 10))
 
         # Validate
-        width = max(1, min(1600, width))
-        height = max(1, min(1600, height))
+        width = max(1, min(K6_MAX_WIDTH, width))
+        height = max(1, min(K6_MAX_HEIGHT, height))
         power = max(0, min(1000, power))
         depth = max(1, min(255, depth))
 
@@ -820,7 +901,6 @@ def qr_generate():
         import qrcode
         import io
         import base64
-        from PIL import ImageFont
 
         data = request.get_json()
         ssid = data.get("ssid", "")
@@ -951,8 +1031,6 @@ def qr_burn():
 
     try:
         import qrcode
-        import tempfile
-        from PIL import ImageFont
 
         # Clear cancel flag
         global burn_cancel_event
@@ -1076,82 +1154,9 @@ def qr_burn():
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
             csv_path = DATA_DIR / f"qr-wifi-{timestamp}.csv"
 
-            class ProgressCSVLogger(CSVLogger):
-                def __init__(self, *args, **kwargs):
-                    super().__init__(*args, **kwargs)
-                    self.total_chunks = 0
-                    self.current_chunk = 0
-                    self.setup_commands = 0
-
-                def log_operation(
-                    self,
-                    phase,
-                    operation,
-                    duration_ms,
-                    bytes_transferred=0,
-                    status_pct=None,
-                    state="ACTIVE",
-                    response_type="",
-                    retry_count=0,
-                    device_state="IDLE",
-                ):
-                    if burn_cancel_event.is_set():
-                        logger.info("Burn cancelled by user")
-                        emit_progress("stopped", 0, "Burn cancelled by user")
-                        raise KeyboardInterrupt("Burn cancelled by user")
-
-                    super().log_operation(
-                        phase=phase,
-                        operation=operation,
-                        duration_ms=duration_ms,
-                        bytes_transferred=bytes_transferred,
-                        status_pct=status_pct,
-                        state=state,
-                        response_type=response_type,
-                        retry_count=retry_count,
-                        device_state=device_state,
-                    )
-
-                    if phase == "connect" or phase == "setup":
-                        self.setup_commands += 1
-                        progress = min(int(self.setup_commands * 25), 100)
-                        emit_progress("setup", progress, f"{operation}")
-
-                    elif phase == "burn":
-                        if "chunk" in operation.lower() and "/" in operation:
-                            try:
-                                for part in operation.split():
-                                    if "/" in part:
-                                        current, total = part.split("/")
-                                        self.current_chunk = int(current)
-                                        self.total_chunks = int(total)
-                                        chunk_pct = (
-                                            self.current_chunk / self.total_chunks
-                                        )
-                                        progress = int(chunk_pct * 100)
-                                        emit_progress(
-                                            "upload",
-                                            progress,
-                                            f"Chunk {current}/{total}",
-                                        )
-                                        break
-                            except (ValueError, IndexError):
-                                emit_progress("upload", 50, f"{operation}")
-                        else:
-                            emit_progress("upload", 50, f"{operation}")
-
-                    elif phase == "wait" or phase == "finalize":
-                        if status_pct is not None:
-                            progress = int(status_pct)
-                            emit_progress(
-                                "burning", progress, f"{operation} ({status_pct}%)"
-                            )
-                        else:
-                            emit_progress("burning", 80, f"{operation}")
-
             # Position at center (default for left-aligned card)
-            center_x = (burn_width // 2) + 67
-            center_y = 800
+            center_x = (burn_width // 2) + K6_CENTER_X_OFFSET
+            center_y = K6_DEFAULT_CENTER_Y
 
             with ProgressCSVLogger(str(csv_path)) as csv_logger:
                 emit_progress("setup", 0, "Starting burn sequence...")
@@ -1212,9 +1217,6 @@ def qr_alignment():
         return jsonify({"success": False, "error": "Not connected"}), 400
 
     try:
-        import tempfile
-        from PIL import ImageFont
-
         data = request.get_json()
         power = int(data.get("power", 300))
         depth = int(data.get("depth", 5))
@@ -1280,8 +1282,8 @@ def qr_alignment():
             csv_path = DATA_DIR / f"qr-alignment-{timestamp}.csv"
 
             # Position at center
-            center_x = (burn_width // 2) + 67
-            center_y = 800
+            center_x = (burn_width // 2) + K6_CENTER_X_OFFSET
+            center_y = K6_DEFAULT_CENTER_Y
 
             with CSVLogger(str(csv_path)) as logger:
                 result = k6_driver.engrave_transport(
@@ -1349,8 +1351,6 @@ def calibration_burn():  # noqa: C901
         # Validate
         power = max(0, min(1000, power))
         depth = max(1, min(255, depth))
-
-        from PIL import Image, ImageDraw
 
         def mm_to_px(mm: float) -> int:
             return int(round(mm / resolution))
@@ -1463,15 +1463,14 @@ def calibration_burn():  # noqa: C901
 
         # Calculate center coordinates for positioning
         # Work area: 1600x1520px (76mm actual Y-axis, not 80mm)
-        # Default: center in work area (center_x = img.width/2 + 67, center_y = 760)
-        center_x = (img.width // 2) + 67  # Standard X offset
+        center_x = (img.width // 2) + K6_CENTER_X_OFFSET
         
         if pattern == "bottom-test":
             # Position at bottom of work area, leave 10px margin from firmware limit
-            center_y = 1510 - (img.height // 2)
+            center_y = (K6_MAX_HEIGHT - 10) - (img.height // 2)
         else:
-            # Default: center in work area (760 = middle of 1520px)
-            center_y = 760
+            # Default: center in work area
+            center_y = K6_CENTER_Y
 
         # Save and burn
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
@@ -1501,97 +1500,6 @@ def calibration_burn():  # noqa: C901
             csv_path = (
                 DATA_DIR / f"calibration-{pattern}-{resolution}mm-{timestamp}.csv"
             )
-
-            # Create a custom CSV logger that emits progress
-            # Phase mapping: setup=0-33%, upload=33-66%, burn=66-100%
-            class ProgressCSVLogger(CSVLogger):
-                def __init__(self, *args, **kwargs):
-                    super().__init__(*args, **kwargs)
-                    self.total_chunks = 0
-                    self.current_chunk = 0
-                    self.setup_commands = 0
-
-                def log_operation(
-                    self,
-                    phase,
-                    operation,
-                    duration_ms,
-                    bytes_transferred=0,
-                    status_pct=None,
-                    state="ACTIVE",
-                    response_type="",
-                    retry_count=0,
-                    device_state="IDLE",
-                ):
-                    # Check for cancellation
-                    if burn_cancel_event.is_set():
-                        logger.info("Burn cancelled by user")
-                        emit_progress("stopped", 0, "Burn cancelled by user")
-                        raise KeyboardInterrupt("Burn cancelled by user")
-
-                    # Call parent with correct parameters
-                    super().log_operation(
-                        phase=phase,
-                        operation=operation,
-                        duration_ms=duration_ms,
-                        bytes_transferred=bytes_transferred,
-                        status_pct=status_pct,
-                        state=state,
-                        response_type=response_type,
-                        retry_count=retry_count,
-                        device_state=device_state,
-                    )
-
-                    # Debug logging
-                    logger.info(f"CSV log: phase={phase}, operation={operation}")
-
-                    # Phase-based progress: setup(0-100%), upload(0-100%), burn(0-100%)
-                    if phase == "connect" or phase == "setup":
-                        # Setup phase: each command contributes to 0-100%
-                        self.setup_commands += 1
-                        # FRAMING, JOB_HEADER, CONNECT x2 = ~4 commands → 25% each
-                        progress = min(int(self.setup_commands * 25), 100)
-                        emit_progress("setup", progress, f"{operation}")
-
-                    elif phase == "burn":
-                        # Upload phase: 0-100% for upload bar
-                        if "chunk" in operation.lower() and "/" in operation:
-                            # Parse "DATA chunk X/Y (line N)"
-                            try:
-                                for part in operation.split():
-                                    if "/" in part:
-                                        current, total = part.split("/")
-                                        self.current_chunk = int(current)
-                                        self.total_chunks = int(total)
-                                        # Upload bar shows 0-100% of chunks
-                                        chunk_pct = (
-                                            self.current_chunk / self.total_chunks
-                                        )
-                                        progress = int(chunk_pct * 100)
-                                        emit_progress(
-                                            "upload",
-                                            progress,
-                                            f"Chunk {current}/{total}",
-                                        )
-                                        break
-                            except (ValueError, IndexError) as e:
-                                logger.error(
-                                    f"Chunk parse error: {e}, operation={operation}"
-                                )
-                                emit_progress("upload", 50, f"{operation}")
-                        else:
-                            emit_progress("upload", 50, f"{operation}")
-
-                    elif phase == "wait" or phase == "finalize":
-                        # Burn/wait phase: 0-100% for burn bar
-                        if status_pct is not None:
-                            # Use device status percentage if available
-                            progress = int(status_pct)
-                            emit_progress(
-                                "burning", progress, f"{operation} ({status_pct}%)"
-                            )
-                        else:
-                            emit_progress("burning", 80, f"{operation}")
 
             with ProgressCSVLogger(str(csv_path)) as csv_logger:
                 emit_progress(

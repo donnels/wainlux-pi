@@ -1,0 +1,164 @@
+/* Shared base styles for K6 laser control UI */
+
+/* Base reset and layout */
+* { 
+    margin: 0; 
+    padding: 0; 
+    box-sizing: border-box; 
+}
+
+body {
+    font-family: monospace;
+    background: #000;
+    color: #fff;
+    padding: 20px;
+}
+
+.container { 
+    max-width: 800px; 
+    margin: 0 auto; 
+}
+
+/* Typography */
+h1 { 
+    margin-bottom: 20px; 
+    border-bottom: 1px solid #fff; 
+    padding-bottom: 10px; 
+}
+
+h2 { 
+    margin-top: 20px; 
+    margin-bottom: 10px; 
+    font-size: 1.2em; 
+}
+
+h3 {
+    margin-top: 20px;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+}
+
+/* Navigation */
+.nav {
+    margin-bottom: 20px;
+    padding: 10px;
+    border: 1px solid #fff;
+}
+
+.nav a {
+    color: #fff;
+    text-decoration: none;
+    margin-right: 15px;
+}
+
+.nav a:hover { 
+    text-decoration: underline; 
+}
+
+/* Status display */
+.status {
+    margin: 20px 0;
+    padding: 10px;
+    border: 1px solid #fff;
+}
+
+.status.disconnected { 
+    border: 3px solid #fff; 
+    font-weight: bold; 
+}
+
+/* Sections */
+.section {
+    margin: 20px 0;
+    padding: 20px;
+    border: 1px solid #fff;
+}
+
+/* Forms */
+.form-row {
+    margin: 15px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.form-row label {
+    min-width: 150px;
+}
+
+select, 
+input[type="text"], 
+input[type="password"], 
+input[type="number"] {
+    background: #000;
+    color: #fff;
+    border: 1px solid #fff;
+    padding: 5px;
+    font-family: monospace;
+}
+
+/* Buttons */
+button {
+    background: #000;
+    color: #fff;
+    border: 1px solid #fff;
+    padding: 10px 20px;
+    margin: 5px;
+    cursor: pointer;
+    font-family: monospace;
+}
+
+button:hover { 
+    background: #fff; 
+    color: #000; 
+}
+
+button:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+/* Info boxes */
+.info {
+    margin: 10px 0;
+    padding: 10px;
+    border-left: 3px solid #fff;
+    font-size: 0.9em;
+}
+
+.warning {
+    border: 3px solid #fff;
+    font-weight: bold;
+}
+
+/* Messages */
+#message {
+    margin: 10px 0;
+    padding: 10px;
+    display: none;
+}
+
+#message.show { 
+    display: block; 
+}
+
+#message.error { 
+    border: 3px solid #fff; 
+    font-weight: bold; 
+}
+
+#message.success { 
+    border: 1px solid #fff; 
+}
+
+/* Results */
+.result {
+    margin-top: 10px;
+    padding: 10px;
+    border: 1px solid #fff;
+    display: none;
+}
+
+.result.show { 
+    display: block; 
+}

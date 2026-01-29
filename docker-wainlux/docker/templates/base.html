@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Wainlux K6{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/shared.css">
+    <link rel="stylesheet" href="/static/css/components.css">
+    {% block extra_css %}{% endblock %}
+    <style>
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        {% block page_styles %}{% endblock %}
+    </style>
+</head>
+<body>
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+    
+    <script src="/static/js/api.js"></script>
+    {% block extra_js %}{% endblock %}
+    <script>
+        // Shared utilities
+        function showMessage(text, isError = false) {
+            const message = document.getElementById('message');
+            if (message) {
+                message.textContent = text;
+                message.className = isError ? 'show error' : 'show success';
+                setTimeout(() => message.className = '', 3000);
+            }
+        }
+        
+        {% block page_script %}{% endblock %}
+    </script>
+</body>
+</html>

@@ -1,0 +1,84 @@
+/* Component styles for progress bars, logs, and interactive elements */
+
+/* Progress bars - high contrast for laser goggles visibility */
+.progress-bar {
+    position: relative;
+    width: 100%;
+    height: 30px;
+    background: #000;
+    border: 3px solid #fff;
+    margin: 5px 0;
+}
+
+.progress-fill {
+    height: 100%;
+    background: #fff;
+    transition: width 0.3s ease;
+}
+
+.progress-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-weight: bold;
+    font-size: 14px;
+    text-shadow: 0 0 3px #000, 0 0 3px #000;
+    pointer-events: none;
+}
+
+/* Log display */
+#logBox {
+    font-family: monospace;
+    font-size: 0.9em;
+    white-space: pre-wrap;
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #fff;
+    padding: 10px;
+    margin-top: 15px;
+    background: #000;
+    color: #fff;
+}
+
+/* Preview sections */
+#previewSection {
+    margin-top: 20px;
+    padding: 20px;
+    border: 1px solid #fff;
+    text-align: center;
+}
+
+#previewImage {
+    max-width: 100%;
+    background: #fff;
+    border: 2px solid #fff;
+    margin: 20px 0;
+}
+
+/* Joystick controls */
+.jog-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 60px);
+    grid-template-rows: repeat(3, 60px);
+    gap: 5px;
+    margin: 20px auto;
+    width: fit-content;
+}
+
+.jog-btn {
+    width: 60px;
+    height: 60px;
+    font-size: 20px;
+    padding: 0;
+}
+
+.jog-btn[data-pos="center"] {
+    background: #333;
+    cursor: default;
+}
+
+.jog-btn[data-pos="center"]:hover {
+    background: #333;
+    color: #fff;
+}
