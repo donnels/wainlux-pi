@@ -15,6 +15,7 @@ import json
 import time
 import queue
 import threading
+from PIL import Image, ImageDraw
 
 # Add k6 library to path (located in /app/k6 in container)
 # From /app/app/main.py, parent is /app/app, parent.parent is /app
@@ -339,7 +340,6 @@ def engrave():
             tmp_path = tmp.name
 
         # Validate image size before processing
-        from PIL import Image
         with Image.open(tmp_path) as img:
             width, height = img.size
             valid, error_msg = image_service.validate_image_size(
@@ -443,8 +443,6 @@ def calibration_generate():  # noqa: C901
         return jsonify({"success": False, "error": "Not connected"}), 400
 
     try:
-        from PIL import Image, ImageDraw
-
         data = request.get_json()
         resolution = float(data.get("resolution", 0.05))
         pattern = data.get("pattern", "center")  # center, corners, frame, grid
@@ -621,8 +619,6 @@ def calibration_burn_bounds():
         return jsonify({"success": False, "error": "Not connected"}), 400
 
     try:
-        from PIL import Image, ImageDraw
-        
         data = request.get_json()
         width = int(data.get("width", K6_MAX_WIDTH))
         height = int(data.get("height", K6_MAX_HEIGHT))
@@ -1088,8 +1084,6 @@ def calibration_burn():  # noqa: C901
         return jsonify({"success": False, "error": "Not connected"}), 400
 
     try:
-        from PIL import Image, ImageDraw
-
         # Clear cancel flag at start of new burn
         global burn_cancel_event
         burn_cancel_event.clear()
