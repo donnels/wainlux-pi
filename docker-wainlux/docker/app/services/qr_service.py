@@ -53,13 +53,14 @@ class QRService:
         canvas = Image.new("RGB", (QRService.BURN_WIDTH, QRService.BURN_HEIGHT), "white")
         draw = ImageDraw.Draw(canvas)
 
-        # Load fonts
+        # Load fonts - sizes for credit card readability
+        # At 0.05mm/px: 120px = 6mm, 90px = 4.5mm
         try:
             font_large = ImageFont.truetype(
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 36
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 120
             )
             font_small = ImageFont.truetype(
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 24
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 90
             )
         except (OSError, IOError):
             font_large = ImageFont.load_default()
@@ -71,13 +72,13 @@ class QRService:
         ssid_h = ssid_bbox[3] - ssid_bbox[1]
 
         desc_h = 0
-        line_gap = 8
+        line_gap = 16  # Increased gap between text lines
         if description:
             desc_bbox = draw.textbbox((0, 0), description, font=font_small)
             desc_h = desc_bbox[3] - desc_bbox[1]
 
         text_block_height = ssid_h + (line_gap + desc_h if desc_h else 0)
-        gap = 20
+        gap = 30  # Gap between QR and text
         min_margin = 60  # 3mm at 0.05 mm/px
 
         # Calculate QR size
