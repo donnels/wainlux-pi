@@ -443,6 +443,8 @@ def calibration_generate():  # noqa: C901
         return jsonify({"success": False, "error": "Not connected"}), 400
 
     try:
+        from PIL import Image, ImageDraw
+
         data = request.get_json()
         resolution = float(data.get("resolution", 0.05))
         pattern = data.get("pattern", "center")  # center, corners, frame, grid
