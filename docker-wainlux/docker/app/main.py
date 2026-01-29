@@ -1088,6 +1088,8 @@ def calibration_burn():  # noqa: C901
         return jsonify({"success": False, "error": "Not connected"}), 400
 
     try:
+        from PIL import Image, ImageDraw
+
         # Clear cancel flag at start of new burn
         global burn_cancel_event
         burn_cancel_event.clear()
