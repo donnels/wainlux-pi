@@ -19,6 +19,7 @@ import threading
 # Add k6 library to path (located in /app/k6 in container)
 # From /app/app/main.py, parent is /app/app, parent.parent is /app
 sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent))  # Add /app/app for services module
 
 from k6.csv_logger import CSVLogger
 from services import ImageService, K6Service, QRService
