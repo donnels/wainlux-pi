@@ -31,10 +31,16 @@ RUN pip3 install --upgrade pip setuptools wheel && \
 # Copy k6 library
 COPY k6/ ./k6/
 
-# App
+# App (remove Python cache to force fresh compilation)
 COPY app/ ./app/
+RUN find /app -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+RUN find /app -type f -name '*.pyc' -delete 2>/dev/null || true
+
 COPY static/ ./static/
 COPY templates/ ./templates/
+
+# Prevent Python from writing pyc files
+ENV PYTHONDONTWRITEBYTECODE=1
 
 EXPOSE 8080
 
