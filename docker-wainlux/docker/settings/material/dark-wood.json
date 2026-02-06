@@ -1,0 +1,8 @@
+{
+  "name": "Dark Wood",
+  "description": "Dark hardwood surface",
+  "power": 1000,
+  "depth": 30,
+  "repeat": 2,
+  "notes": "Requires deeper burn and multiple passes"
+}

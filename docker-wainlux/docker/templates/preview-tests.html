@@ -1,0 +1,776 @@
+{% extends "base.html" %}
+{% from "macros.html" import navigation, message_display %}
+
+{% block title %}Preview Tests{% endblock %}
+
+{% block page_styles %}
+.test-section { margin: 30px 0; border: 1px solid #fff; padding: 20px; }
+.test-section h2 { margin-bottom: 15px; }
+.test-case { margin: 20px 0; padding: 15px; border-left: 3px solid #666; }
+.test-case.passed { border-left-color: #0A0; }
+.test-case.failed { border-left-color: #A00; }
+.preview-container { margin: 15px 0; background: #222; padding: 10px; }
+.preview-container img { max-width: 100%; height: auto; border: 1px solid #444; }
+.test-controls { margin: 10px 0; }
+.test-result { margin: 10px 0; font-family: monospace; }
+.test-result pre { background: #111; padding: 10px; overflow-x: auto; }
+{% endblock %}
+
+{% block content %}
+{{ navigation("PREVIEW ENGINE TESTS") }}
+
+<div class="test-section">
+    <h2>Test 1: Empty Job (Burn Area Only)</h2>
+    <p>Expected: Gray canvas with white burn area rectangle (1600×1520 px), black border, label.</p>
+    
+    <div class="test-controls">
+        <button id="test1Run">Run Test</button>
+    </div>
+    
+    <div class="test-result" id="test1Result" style="display: none;">
+        <div class="preview-container">
+            <img id="test1Preview" alt="Test 1 Preview">
+        </div>
+        <pre id="test1Data"></pre>
+    </div>
+</div>
+
+<div class="test-section">
+    <h2>Test 2: Burn Area Bounding Frame</h2>
+    <p>Expected: Rectangle frame drawn INSIDE burn area (would be burned). Tests actual burn positioning.</p>
+    
+    <div class="test-controls">
+        <button id="test2Run">Run Test</button>
+    </div>
+    
+    <div class="test-result" id="test2Result" style="display: none;">
+        <div class="preview-container">
+            <img id="test2Preview" alt="Test 2 Preview">
+        </div>
+        <pre id="test2Data"></pre>
+    </div>
+</div>
+
+<div class="test-section">
+    <h2>Test 3: Graph Paper Pattern (1600×1600)</h2>
+    <p>Expected: Square grid exceeds Y-axis (1520px limit). Preview shows crop, burn should warn/reject.</p>
+    
+    <div class="test-controls">
+        <button id="test3Run">Run Test</button>
+    </div>
+    
+    <div class="test-result" id="test3Result" style="display: none;">
+        <div class="preview-container">
+            <img id="test3Preview" alt="Test 3 Preview">
+        </div>
+        <pre id="test3Data"></pre>
+    </div>
+</div>
+
+<div class="test-section">
+    <h2>Test 4: Tiger Image (t11.png) - Centered on Burn Area</h2>
+    <p>Expected: Real image loaded from /images/t11.png, centered on burn area. Tests actual image workflow.</p>
+    
+    <div class="test-controls">
+        <button id="test4Run">Run Test</button>
+    </div>
+    
+    <div class="test-result" id="test4Result" style="display: none;">
+        <div class="preview-container">
+            <img id="test4Preview" alt="Test 4 Preview">
+        </div>
+        <pre id="test4Data"></pre>
+    </div>
+</div>
+
+<div class="test-section">
+    <h2>Test 5: Tiger Image (t11.png) - Centered on Credit Card</h2>
+    <p>Expected: t11.png centered on left-aligned credit card material. Tests image-on-material positioning.</p>
+    
+    <div class="test-controls">
+        <button id="test5Run">Run Test</button>
+    </div>
+    
+    <div class="test-result" id="test5Result" style="display: none;">
+        <div class="preview-container">
+            <img id="test5Preview" alt="Test 5 Preview">
+        </div>
+        <pre id="test5Data"></pre>
+    </div>
+</div>
+
+<div class="test-section">
+    <h2>Test 6: Job with 200×200 Circle (Centered)</h2>
+    <p>Expected: Burn area + centered black circle image.</p>
+    
+    <div class="test-controls">
+        <button id="test6Run">Run Test</button>
+    </div>
+    
+    <div class="test-result" id="test6Result" style="display: none;">
+        <div class="preview-container">
+            <img id="test6Preview" alt="Test 6 Preview">
+        </div>
+        <pre id="test6Data"></pre>
+    </div>
+</div>
+
+<div class="test-section">
+    <h2>Test 7: Credit Card Material (Left-Aligned)</h2>
+    <p>Expected: Burn area + blue dashed outline for credit card (85.6×53.98 mm), left-aligned. Warning: Material exceeds burn area by 5.6mm (right).</p>
+    
+    <div class="test-controls">
+        <button id="test7Run">Run Test</button>
+    </div>
+    
+    <div class="test-result" id="test7Result" style="display: none;">
+        <div class="preview-container">
+            <img id="test7Preview" alt="Test 7 Preview">
+        </div>
+        <pre id="test7Data"></pre>
+    </div>
+</div>
+
+<div class="test-section">
+    <h2>Test 8: Circle on Credit Card (Composite)</h2>
+    <p>Expected: Burn area + material outline + circle image centered on card + crop indicator + warnings.</p>
+    
+    <div class="test-controls">
+        <button id="test8Run">Run Test</button>
+    </div>
+    
+    <div class="test-result" id="test8Result" style="display: none;">
+        <div class="preview-container">
+            <img id="test8Preview" alt="Test 8 Preview">
+        </div>
+        <pre id="test8Data"></pre>
+    </div>
+</div>
+
+<div class="test-section">
+    <h2>Test 9: QR on Credit Card (Positioned)</h2>
+    <p>Expected: 1500×1080px QR positioned 10mm from left, 5mm from top of left-aligned card.</p>
+    
+    <div class="test-controls">
+        <button id="test9Run">Run Test</button>
+    </div>
+    
+    <div class="test-result" id="test9Result" style="display: none;">
+        <div class="preview-container">
+            <img id="test9Preview" alt="Test 9 Preview">
+        </div>
+        <pre id="test9Data"></pre>
+    </div>
+</div>
+
+<div class="test-section">
+    <h2>Test 10: Raw QR Preview (No Material)</h2>
+    <p>Expected: QR image alone, centered on burn area. Tests if QR generation is centered.</p>
+    
+    <div class="test-controls">
+        <button id="test10Run">Run Test</button>
+    </div>
+    
+    <div class="test-result" id="test10Result" style="display: none;">
+        <div class="preview-container">
+            <img id="test10Preview" alt="Test 10 Preview">
+        </div>
+        <pre id="test10Data"></pre>
+    </div>
+</div>
+
+{{ message_display() }}
+{% endblock %}
+
+{% block page_script %}
+// Format job data for display - organize by stage/phase
+function formatJobData(job, previewResponse) {
+    // Create structured display showing which stage contributes what data
+    const display = {
+        "=== CURRENT STAGE ===": previewResponse.stage || "unknown",
+        "=== PREVIEW METADATA ===": {
+            dimensions: previewResponse.dimensions,
+            warnings: previewResponse.warnings
+        }
+    };
+    
+    // Stage 1: Upload/Generation (image source)
+    if (job.stages && job.stages.upload) {
+        const uploadData = job.stages.upload.data || {};
+        display["=== UPLOAD STAGE ==="] = {
+            status: job.stages.upload.status,
+            source: uploadData.source || "unknown",
+            original_filename: uploadData.original_filename || "unknown",
+            temp_path: uploadData.image_path ? uploadData.image_path.split('/').pop() : null,
+            width_px: uploadData.width,
+            height_px: uploadData.height,
+            size_mm: uploadData.width && uploadData.height ? 
+                `${(uploadData.width * 0.05).toFixed(1)}×${(uploadData.height * 0.05).toFixed(1)}mm` : null,
+            image_base64: uploadData.image_base64 ? `<embedded: ${(uploadData.image_base64.length / 1024).toFixed(1)}KB>` : "not embedded"
+        };
+    } else {
+        display["=== UPLOAD STAGE ==="] = "not yet processed";
+    }
+    
+    // Stage 2: Generation settings (if pattern/QR generated)
+    if (job.generation) {
+        display["=== GENERATION STAGE ==="] = job.generation;
+    }
+    
+    // Stage 3: Material definition
+    if (job.material && job.material.target) {
+        display["=== MATERIAL STAGE ==="] = {
+            shape: job.material.target.shape,
+            width_mm: job.material.target.width_mm,
+            height_mm: job.material.target.height_mm,
+            width_px: job.material.target.width_mm ? Math.round(job.material.target.width_mm / 0.05) : null,
+            height_px: job.material.target.height_mm ? Math.round(job.material.target.height_mm / 0.05) : null,
+            power: job.material.target.power,
+            depth: job.material.target.depth
+        };
+    } else if (job.material && Object.keys(job.material).length === 0) {
+        display["=== MATERIAL STAGE ==="] = "no material (burn directly on area)";
+    } else {
+        display["=== MATERIAL STAGE ==="] = "not yet defined";
+    }
+    
+    // Stage 4: Layout/Positioning
+    if (job.layout && Object.keys(job.layout).length > 0) {
+        const layoutData = {};
+        
+        if (job.layout.material_on_burn_area) {
+            layoutData.material_on_burn_area = {
+                center_x_mm: job.layout.material_on_burn_area.center_x_mm,
+                center_y_mm: job.layout.material_on_burn_area.center_y_mm,
+                center_x_px: Math.round(job.layout.material_on_burn_area.center_x_mm / 0.05),
+                center_y_px: Math.round(job.layout.material_on_burn_area.center_y_mm / 0.05)
+            };
+        }
+        
+        if (job.layout.image_on_material) {
+            layoutData.image_on_material = {
+                center_x_mm: job.layout.image_on_material.center_x_mm,
+                center_y_mm: job.layout.image_on_material.center_y_mm,
+                note: "material-relative coords: (0,0) = material center"
+            };
+        } else if (job.material && job.material.target) {
+            layoutData.image_on_material = "not positioned (will default to material center)";
+        }
+        
+        display["=== LAYOUT STAGE ==="] = layoutData;
+    } else if (job.material && Object.keys(job.material).length === 0) {
+        display["=== LAYOUT STAGE ==="] = "default: image centered on burn area";
+    } else {
+        display["=== LAYOUT STAGE ==="] = "not yet calculated";
+    }
+    
+    return display;
+}
+
+// Test runner
+async function runTest(testNum, jobData) {
+    console.log(`Running test ${testNum}...`);
+    const resultDiv = document.getElementById(`test${testNum}Result`);
+    const previewImg = document.getElementById(`test${testNum}Preview`);
+    const dataPreformatted = document.getElementById(`test${testNum}Data`);
+    
+    // Clear previous preview immediately
+    previewImg.src = '';
+    previewImg.style.display = 'none';
+    dataPreformatted.textContent = 'Loading...';
+    resultDiv.style.display = 'block';
+    
+    try {
+        const response = await fetch('/api/preview', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(jobData)
+        });
+        
+        const data = await response.json();
+        console.log(`Test ${testNum} response:`, data);
+        
+        if (!data.success) {
+            dataPreformatted.textContent = `ERROR: ${data.error}`;
+            resultDiv.style.display = 'block';
+            return;
+        }
+        
+        // Show preview
+        previewImg.src = data.preview;
+        previewImg.style.display = 'block';  // Re-show after loading
+        
+        // Show structured data organized by stage
+        const formattedData = formatJobData(jobData.job, data);
+        dataPreformatted.textContent = JSON.stringify(formattedData, null, 2);
+        
+        resultDiv.style.display = 'block';
+        showMessage(`Test ${testNum} complete`);
+        
+    } catch (err) {
+        console.error(`Test ${testNum} failed:`, err);
+        dataPreformatted.textContent = `ERROR: ${err.message}`;
+        resultDiv.style.display = 'block';
+        showMessage(`Test ${testNum} failed: ${err.message}`, true);
+    }
+}
+
+// Test 1: Empty job
+document.getElementById('test1Run').addEventListener('click', async () => {
+    const job = {
+        version: "1.0",
+        stages: {},
+        material: {},
+        layout: {}
+    };
+    await runTest(1, {job, stage: "layout"});
+});
+
+// Test 2: Burn area bounding frame
+document.getElementById('test2Run').addEventListener('click', async () => {
+    // Generate frame pattern (1600×1520 black frame, 20px thick)
+    const canvas = document.createElement('canvas');
+    canvas.width = 1600;
+    canvas.height = 1520;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, 1600, 1520);
+    ctx.strokeStyle = 'black';
+    ctx.lineWidth = 20;
+    ctx.strokeRect(10, 10, 1580, 1500);
+    
+    // Upload to server
+    const blob = await new Promise(resolve => canvas.toBlob(resolve));
+    const formData = new FormData();
+    formData.append('image', blob, 'test-bounds-frame.png');
+    
+    const uploadResp = await fetch('/api/engrave/prepare', {
+        method: 'POST',
+        body: formData
+    });
+    const uploadData = await uploadResp.json();
+    
+    if (!uploadData.success) {
+        showMessage('Failed to upload bounds frame: ' + uploadData.error, true);
+        return;
+    }
+    
+    const job = {
+        version: "1.0",
+        generation: {
+            type: "pattern",
+            pattern: "bounds_frame",
+            width_px: 1600,
+            height_px: 1520,
+            border_width: 20
+        },
+        stages: {
+            upload: {
+                status: "complete",
+                data: {
+                    image_path: uploadData.temp_path,
+                    image_base64: uploadData.image_base64,  // OPTION 2: embed base64
+                    original_filename: "bounds_frame (generated)",
+                    source: "generation",
+                    width: 1600,
+                    height: 1520
+                }
+            }
+        },
+        material: {},
+        layout: {}
+    };
+    await runTest(2, {job, stage: "layout"});
+});
+
+// Test 3: Graph paper pattern (1600×1600 - exceeds Y bounds)
+document.getElementById('test3Run').addEventListener('click', async () => {
+    // Generate 1600×1600 grid (exceeds Y-axis: 1520px limit)
+    // This is the real test case: square image on rectangular burn area
+    const gridSpacing = 200;  // 10mm at 0.05mm/px
+    const canvas = document.createElement('canvas');
+    canvas.width = 1600;
+    canvas.height = 1600;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, 1600, 1600);
+    
+    // Draw 10mm grid (200px at 0.05mm/px)
+    ctx.strokeStyle = 'black';
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= 1600; x += gridSpacing) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, 1600);
+        ctx.stroke();
+    }
+    for (let y = 0; y <= 1600; y += gridSpacing) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(1600, y);
+        ctx.stroke();
+    }
+    
+    // Upload to server
+    const blob = await new Promise(resolve => canvas.toBlob(resolve));
+    const formData = new FormData();
+    formData.append('image', blob, 'test-graph-1600x1600.png');
+    
+    const uploadResp = await fetch('/api/engrave/prepare', {
+        method: 'POST',
+        body: formData
+    });
+    const uploadData = await uploadResp.json();
+    
+    if (!uploadData.success) {
+        showMessage('Failed to upload graph pattern: ' + uploadData.error, true);
+        return;
+    }
+    
+    const job = {
+        version: "1.0",
+        generation: {
+            type: "pattern",
+            pattern: "graph_paper",
+            width_px: 1600,
+            height_px: 1600,
+            grid_spacing_px: gridSpacing,
+            grid_spacing_mm: gridSpacing * 0.05
+        },
+        stages: {
+            upload: {
+                status: "complete",
+                data: {
+                    image_path: uploadData.temp_path,
+                    image_base64: uploadData.image_base64,  // OPTION 2: embed base64
+                    original_filename: "graph_paper (generated)",
+                    source: "generation",
+                    width: 1600,
+                    height: 1600
+                }
+            }
+        },
+        material: {},
+        layout: {}
+    };
+    await runTest(3, {job, stage: "layout"});
+});
+
+// Test 4: t11.png centered on burn area
+document.getElementById('test4Run').addEventListener('click', async () => {
+    // Load real tiger image via /api/images/serve endpoint
+    const imgResp = await fetch('/api/images/serve/t11.png');
+    if (!imgResp.ok) {
+        showMessage('Failed to fetch t11.png', true);
+        return;
+    }
+    
+    // Upload to server for processing
+    const blob = await imgResp.blob();
+    const formData = new FormData();
+    formData.append('image', blob, 't11.png');
+    
+    const uploadResp = await fetch('/api/engrave/prepare', {
+        method: 'POST',
+        body: formData
+    });
+    const uploadData = await uploadResp.json();
+    
+    if (!uploadData.success) {
+        showMessage('Failed to upload t11.png: ' + uploadData.error, true);
+        return;
+    }
+    
+    // Create job with uploaded image (centered on burn area)
+    const job = {
+        version: "1.0",
+        stages: {
+            upload: {
+                status: "complete",
+                data: {
+                    image_path: uploadData.temp_path,
+                    image_base64: uploadData.image_base64,  // OPTION 2: embed base64
+                    original_filename: uploadData.original_filename,
+                    source: uploadData.source,
+                    width: uploadData.width,
+                    height: uploadData.height
+                }
+            }
+        },
+        material: {},  // No material - image centered on burn area
+        layout: {}     // Default centering
+    };
+    await runTest(4, {job, stage: "layout"});
+});
+
+// Test 5: t11.png centered on credit card
+document.getElementById('test5Run').addEventListener('click', async () => {
+    // Load tiger image
+    const imgResp = await fetch('/api/images/serve/t11.png');
+    if (!imgResp.ok) {
+        showMessage('Failed to fetch t11.png', true);
+        return;
+    }
+    
+    // Upload to server
+    const blob = await imgResp.blob();
+    const formData = new FormData();
+    formData.append('image', blob, 't11.png');
+    
+    const uploadResp = await fetch('/api/engrave/prepare', {
+        method: 'POST',
+        body: formData
+    });
+    const uploadData = await uploadResp.json();
+    
+    if (!uploadData.success) {
+        showMessage('Failed to upload t11.png: ' + uploadData.error, true);
+        return;
+    }
+    
+    // Create job with image on left-aligned credit card
+    const job = {
+        version: "1.0",
+        stages: {
+            upload: {
+                status: "complete",
+                data: {
+                    image_path: uploadData.temp_path,
+                    image_base64: uploadData.image_base64,  // OPTION 2: embed base64
+                    original_filename: uploadData.original_filename,
+                    source: uploadData.source,
+                    width: uploadData.width,
+                    height: uploadData.height
+                }
+            }
+        },
+        material: {
+            target: {
+                shape: "credit_card",
+                width_mm: 85.6,
+                height_mm: 53.98,
+                power: 1000,
+                depth: 15
+            }
+        },
+        layout: {
+            material_on_burn_area: {
+                center_x_mm: 42.8,  // Left-aligned card
+                center_y_mm: 48.0   // Moved down 10mm for visibility
+            },
+            image_on_material: {
+                center_x_mm: 0,  // Centered on card (material-relative coords)
+                center_y_mm: 0
+            }
+        }
+    };
+    await runTest(5, {job, stage: "layout"});
+});
+
+// Test 6: Circle image (centered)
+document.getElementById('test6Run').addEventListener('click', async () => {
+    // For this test, we'll create a simple job structure
+    // In real use, image would be uploaded first
+    const job = {
+        version: "1.0",
+        stages: {
+            upload: {
+                status: "complete",
+                data: {
+                    image_path: "/app/images/test-circle-200x200.png",  // We'll create this
+                    width: 200,
+                    height: 200
+                }
+            }
+        },
+        material: {},
+        layout: {}
+    };
+    await runTest(6, {job, stage: "layout"});
+});
+
+// Test 7: Credit card material (left-aligned)
+document.getElementById('test7Run').addEventListener('click', async () => {
+    // Credit card: 85.6mm wide, burn area: 80mm wide
+    // Left-align means: show left 80mm of card (right 5.6mm cropped)
+    // Card center at: 80/2 + offset_from_left = 40 + 2.8 = 42.8mm
+    const job = {
+        version: "1.0",
+        stages: {},
+        material: {
+            target: {
+                shape: "credit_card",
+                width_mm: 85.6,
+                height_mm: 53.98,
+                power: 1000,
+                depth: 15
+            }
+        },
+        layout: {
+            material_on_burn_area: {
+                center_x_mm: 42.8,  // Left-aligned: card center at 42.8mm (left 80mm visible)
+                center_y_mm: 48.0   // Moved down 10mm from center for better visibility
+            }
+        }
+    };
+    await runTest(7, {job, stage: "layout"});
+});
+
+// Test 8: Circle on credit card (centered on card)
+document.getElementById('test8Run').addEventListener('click', async () => {
+    const job = {
+        version: "1.0",
+        stages: {
+            upload: {
+                status: "complete",
+                data: {
+                    image_path: "/app/images/test-circle-200x200.png",
+                    width: 200,
+                    height: 200
+                }
+            }
+        },
+        material: {
+            target: {
+                shape: "credit_card",
+                width_mm: 85.6,
+                height_mm: 53.98,
+                power: 1000,
+                depth: 15
+            }
+        },
+        layout: {
+            material_on_burn_area: {
+                center_x_mm: 42.8,  // Left-aligned card
+                center_y_mm: 48.0   // Moved down 10mm
+            },
+            image_on_material: {
+                center_x_mm: 0,  // Centered on material (material coords, not burn area)
+                center_y_mm: 0
+            }
+        }
+    };
+    await runTest(8, {job, stage: "layout"});
+});
+
+// Test 9: WiFi QR code on credit card (inline generation)
+document.getElementById('test9Run').addEventListener('click', async () => {
+    // Generate real WiFi QR code inline
+    const qrSettings = {
+        ssid: 'TestNetwork',
+        password: 'test1234',
+        security: 'WPA',
+        description: 'Preview Test QR'
+    };
+    
+    const qrResp = await fetch('/api/qr/generate', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(qrSettings)
+    });
+    
+    const qrData = await qrResp.json();
+    if (!qrData.success) {
+        showMessage('Failed to generate QR: ' + qrData.error, true);
+        return;
+    }
+    
+    // QR: 1500×1080px (75×54mm) on credit card 85.6×53.98mm
+    // Card left-aligned and moved down 10mm
+    // QR positioned: 10mm from left edge, centered on card Y-axis
+    const job = {
+        version: "1.0",
+        generation: {
+            type: "qr_code",
+            qr_type: "wifi",
+            ...qrSettings  // Include QR generation settings
+        },
+        stages: {
+            upload: {
+                status: "complete",
+                data: {
+                    image_path: qrData.temp_path,
+                    image_base64: qrData.image_base64,  // OPTION 2: embed base64
+                    original_filename: `WiFi QR: ${qrSettings.ssid} (generated)`,
+                    source: "generation",
+                    width: qrData.width,
+                    height: qrData.height
+                }
+            }
+        },
+        material: {
+            target: {
+                shape: "credit_card",
+                width_mm: 85.6,
+                height_mm: 53.98,
+                power: 1000,
+                depth: 15
+            }
+        },
+        layout: {
+            material_on_burn_area: {
+                center_x_mm: 42.8,  // Left-aligned card
+                center_y_mm: 48.0   // Moved down 10mm
+            },
+            image_on_material: {
+                // Center QR on card (both X and Y)
+                // Material-relative coords: (0, 0) = centered on material
+                center_x_mm: 0,  // Centered on card X-axis
+                center_y_mm: 0   // Centered on card Y-axis
+            }
+        }
+    };
+    await runTest(9, {job, stage: "layout"});
+});
+
+// Test 10: Raw QR preview (no material positioning)
+document.getElementById('test10Run').addEventListener('click', async () => {
+    // Generate QR and show it raw on burn area
+    const qrSettings = {
+        ssid: 'TestNetwork',
+        password: 'test1234',
+        security: 'WPA',
+        description: 'Raw QR Test'
+    };
+    
+    const qrResp = await fetch('/api/qr/generate', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(qrSettings)
+    });
+    
+    const qrData = await qrResp.json();
+    if (!qrData.success) {
+        showMessage('Failed to generate QR: ' + qrData.error, true);
+        return;
+    }
+    
+    // Show QR without material (centered on burn area by default)
+    const job = {
+        version: "1.0",
+        generation: {
+            type: "qr_code",
+            qr_type: "wifi",
+            ...qrSettings  // Include QR generation settings
+        },
+        stages: {
+            upload: {
+                status: "complete",
+                data: {
+                    image_path: qrData.temp_path,
+                    image_base64: qrData.image_base64,  // OPTION 2: embed base64
+                    original_filename: `WiFi QR: ${qrSettings.ssid} (generated)`,
+                    source: "generation",
+                    width: qrData.width,
+                    height: qrData.height
+                }
+            }
+        },
+        material: {},  // No material
+        layout: {}     // Default centering on burn area
+    };
+    await runTest(10, {job, stage: "layout"});
+});
+
+showMessage('Preview test page loaded. Run tests to validate preview engine.');
+{% endblock %}

@@ -1,0 +1,48 @@
+= ADR-019: Distributed Architecture Capability
+:revdate: 2026-02-05
+
+== Status
+
+ACCEPTED (foundation ready, not implemented)
+
+== Context
+
+Pi Zero W (512MB RAM, ARMv6 CPU) runs monolithic Flask app. NumPy image processing takes 5-10s for 1600×1600px. May need to split UI from K6 driver later.
+
+== Decision
+
+Design job structure for optional distribution. Base64 image embedding (no filesystem dependencies).
+
+== Rationale
+
+*Portability:* Jobs are self-contained JSON. Save/load works anywhere.
+
+*Distribution ready:* UI can move to desktop. Pi becomes API-only. Same job format.
+
+*No premature optimization:* Monolith works now. Split later if needed.
+
+*Migration path:* Add `/api/engrave/from-job` endpoint when required. Accept complete job JSON with embedded base64. No data model changes.
+
+== Consequences
+
+=== Positive
+
+* Portable jobs (base64 embedded)
+* Future-proof (can split without breaking)
+* Reproducible (no missing files)
+
+=== Negative
+
+* Larger payloads (~33% base64 overhead)
+* Two-step upload still required (prepare → engrave)
+
+=== Neutral
+
+* Monolith sufficient currently
+* Distributed deployment available if Pi performance inadequate
+* Review trigger: >30s processing time on Pi Zero W
+
+== References
+
+* ADR-018: Job Data Structure (base64 embedding)
+* ADR-003: Flask (extensible to API-only mode)

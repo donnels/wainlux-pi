@@ -1,0 +1,38 @@
+= FR-002: Generate WiFi QR Code
+
+== Status
+
+Implemented
+
+== Description
+
+Generate WiFi QR codes for credit cards. User enters SSID, password, security. System generates scannable QR.
+
+== Acceptance Criteria
+
+* Accept SSID, password, security type (WPA/WEP/Open)
+* Generate QR using WIFI format (`WIFI:T:WPA;S:ssid;P:password;;`)
+* Output: 1500×1080px (75mm × 53.98mm)
+* Preview before burn
+* Positioning for left-aligned card placement
+* Optional description text
+
+== Rationale
+
+* WiFi credentials on physical card
+* Useful for guests, IoT setup, recovery
+* Credit card size fits wallet/keychain
+* Burn once, scan forever
+
+== Related ADRs
+
+* ADR-012: Pipeline architecture (QR uses same workflow)
+
+== Implementation
+
+* `/api/qr/generate` - generates QR image
+* `/api/qr/burn` - burns to material
+* `/api/qr/preview` - command sequence preview
+* `/api/qr/alignment` - alignment frame for positioning
+* `QRService` - QR code generation with positioning
+* Uses standard engrave workflow

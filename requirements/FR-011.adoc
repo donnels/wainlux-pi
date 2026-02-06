@@ -1,0 +1,62 @@
+= FR-011: Material Alignment System
+:revdate: 2026-01-31
+:revremark: Consolidated from FR-011, FR-012
+
+== Status
+*Implemented*
+
+== Description
+Custom alignment patterns for arbitrary objects. Handles oversized objects via edge selection. Backend generates frames, UI controls selection.
+
+== Acceptance Criteria
+* User specifies dimensions (width_mm, height_mm)
+* Validate against 80mm × 76mm work area
+* If oversized: warning + edge selector (left/right, top/bottom)
+* Burn position: center default, custom offsets
+* Output: PNG + metadata (center_x, center_y, crop info)
+* Returns center coordinates for precise positioning
+* Preview before download
+
+== Related ADRs
+* link:../ADR/ADR-002-serial-communication.adoc[ADR-002: Serial Communication]
+* link:../ADR/ADR-012-pipeline-architecture.adoc[ADR-012: Pipeline Architecture]
+* link:../ADR/ADR-016-material-positioning.adoc[ADR-016: Material Positioning]
+
+== Implementation
+
+=== API Endpoints
+* `POST /api/alignment/custom` - Generate box
+* `POST /api/alignment/builder` - Edge-aligned patterns
+
+=== Services
+* `PatternService.generate_alignment()` - Box generation
+* `PatternService.generate_card_alignment()` - Credit card specific
+* `ImageService.center_image_at()` - Position at coords
+
+=== UI
+* `/alignment-builder` - Web interface
+* Input: width_mm, height_mm
+* Edge selector (conditional)
+* Preview canvas
+* Download/burn buttons
+
+=== Workflow
+1. Specify dimensions
+2. Generate alignment PNG
+3. Burn alignment box
+4. Position object in marks
+5. Upload image
+6. System centers at coords
+7. Burn
+
+== Rationale
+* Precise positioning for non-standard objects
+* Alignment burn → actual burn workflow
+* Reusable for production
+* No trial-and-error
+* Supports oversized objects
+
+== Examples
+
+=== Credit Card (85.6mm × 53.98mm)
+Exceeds X by 5.6mm. User selects align_x=left. Result: left edge marked, right open.

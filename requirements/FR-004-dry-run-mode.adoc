@@ -1,0 +1,36 @@
+= FR-004: Dry Run Without Laser
+
+== Status
+
+Implemented
+
+== Description
+
+Test burn sequence without firing laser. Upload data, test protocol, verify commands, but skip laser ignition.
+
+== Acceptance Criteria
+
+* Toggle dry run mode in settings
+* Execute full protocol sequence (FRAMING, JOB_HEADER, CONNECT, DATA)
+* Skip INIT commands (0x24) that start laser
+* Device receives all data, laser never fires
+* Return success with "dry run" indicator
+* Works with all burn operations (image, QR, calibration)
+
+== Rationale
+
+* Test protocol without wasting material
+* Verify data upload pipeline
+* Calibrate timing without risk
+* Debug new patterns safely
+
+== Related ADRs
+
+* ADR-012: Pipeline architecture (dry run as driver flag)
+
+== Implementation
+
+* `driver.dry_run` property (driver-level flag)
+* `device_manager.dry_run` syncs to driver
+* Driver checks `self.dry_run` before INIT commands
+* Service/workflow layers unaware (separation of concerns)

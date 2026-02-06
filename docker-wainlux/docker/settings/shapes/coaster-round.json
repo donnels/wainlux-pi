@@ -1,0 +1,7 @@
+{
+  "name": "Round Coaster",
+  "primitive": "circle",
+  "diameter_mm": 95.0,
+  "description": "Circular drink coaster",
+  "notes": "Standard 95mm diameter coaster - circle primitive not yet implemented"
+}

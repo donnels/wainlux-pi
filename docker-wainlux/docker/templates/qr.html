@@ -1,363 +1,242 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WiFi QR Code Burn</title>
-    <link rel="stylesheet" href="/static/css/shared.css">
+{% extends "base.html" %}
+
+{% block title %}QR Generate{% endblock %}
+
+{% block extra_css %}
     <link rel="stylesheet" href="/static/css/components.css">
-    <style>
-        /* Page-specific styles only */
-        .container { max-width: 900px; }
-        .form-row input[type="text"], 
-        .form-row input[type="password"], 
-        .form-row input[type="number"] {
-            flex: 1;
-            max-width: 400px;
-        }
-        #progressSection {
-            margin-top: 20px;
-            padding: 20px;
-            border: 1px solid #fff;
-        }
-        .progress-text {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: #fff;
-            font-weight: bold;
-            font-size: 1.1em;
-            text-shadow: 0 0 3px #000;
-        }
-        #logBox {
-            font-family: monospace;
-            font-size: 0.9em;
-            white-space: pre-wrap;
-            max-height: 300px;
-            overflow-y: auto;
-            border: 1px solid #fff;
-            padding: 10px;
-            margin-top: 15px;
-            background: #000;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>WIFI QR CODE BURN</h1>
-        
-        <div class="nav">
-            <a href="/">← MAIN</a>
-            <a href="/calibration">CALIBRATION</a>
-            <a href="/qr">QR BURN</a>
-        </div>
-        
-        <div id="status" class="status {% if not connected %}disconnected{% endif %}">
-            {% if connected %}CONNECTED{% else %}DISCONNECTED{% endif %}
-        </div>
-        
-        <div class="section">
-            <h2>WIFI CREDENTIALS</h2>
-            <div class="info" style="margin-bottom: 15px;">
-                Generate WiFi QR code for credit card sized bamboo blanks (85.6mm × 53.98mm).<br>
-                QR code includes SSID and password. Password is NOT displayed as text (security).
-            </div>
-            
-            <div class="form-row">
-                <label>SSID (Network Name):</label>
-                <input type="text" id="ssid" placeholder="MyWiFiNetwork" required>
-            </div>
-            
-            <div class="form-row">
-                <label>PASSWORD:</label>
-                <input type="password" id="password" placeholder="wifi password">
-            </div>
-            
-            <div class="form-row">
-                <label>SECURITY:</label>
-                <select id="security">
-                    <option value="WPA">WPA/WPA2</option>
-                    <option value="WEP">WEP</option>
-                    <option value="nopass">No Password</option>
-                </select>
-            </div>
-            
-            <div class="form-row">
-                <label>DESCRIPTION (optional):</label>
-                <input type="text" id="description" placeholder="Guest WiFi">
-            </div>
-            
-            <button id="btnGenerate">GENERATE QR PREVIEW</button>
-        </div>
-        
-        <div id="previewSection" style="display: none;">
-            <h2>QR CODE PREVIEW</h2>
-            <div class="info">
-                Scan with phone to verify QR is correct before burning.<br>
-                Size: 75 × 53.98mm (1500 × 1080px @ 0.05mm/px K6 native resolution)
-            </div>
-            <img id="previewImage" alt="QR Preview">
-            <div id="previewInfo" style="margin-top: 10px;"></div>
-        </div>
-        
-        <div class="section">
-            <h2>BURN CONTROLS</h2>
-            
-            <div class="info warning" style="margin-bottom: 15px;">
-                IMPORTANT: Burn alignment box FIRST, then burn QR code.<br>
-                Left-align credit card in alignment box before burning QR.
-            </div>
-            
-            <h3 style="margin-top: 20px; margin-bottom: 10px;">1. ALIGNMENT BOX (burn once)</h3>
-            <div class="info" style="margin-bottom: 15px;">
-                Creates physical positioning guide (75mm width fits K6 burn area).<br>
-                Credit card is 85.6mm wide - left-align in box, right edge extends ~11mm beyond.<br>
-                Use LOW power to create visible but light marks.
-            </div>
-            
-            <div class="form-row">
-                <label>ALIGNMENT POWER:</label>
-                <input type="number" id="alignPower" value="300" min="0" max="1000" step="10" style="width: 100px;">
-            </div>
-            
-            <div class="form-row">
-                <label>ALIGNMENT DEPTH:</label>
-                <input type="number" id="alignDepth" value="5" min="1" max="255" style="width: 100px;">
-            </div>
-            
-            <button id="btnAlignment">BURN ALIGNMENT BOX</button>
-            
-            <h3 style="margin-top: 30px; margin-bottom: 10px;">2. QR CODE (burn after alignment)</h3>
-            <div class="info" style="margin-bottom: 15px;">
-                Place card in alignment box before burning.<br>
-                Use NORMAL power for clear, scannable QR code.
-            </div>
-            
-            <div class="form-row">
-                <label>QR POWER:</label>
-                <input type="number" id="qrPower" value="500" min="0" max="1000" step="10" style="width: 100px;">
-            </div>
-            
-            <div class="form-row">
-                <label>QR DEPTH:</label>
-                <input type="number" id="qrDepth" value="10" min="1" max="255" style="width: 100px;">
-            </div>
-            
-            <button id="btnBurn">BURN QR CODE</button>
-            <button id="btnStop" style="font-weight: bold;">EMERGENCY STOP</button>
-        </div>
-        
-        <div id="progressSection" style="display: none;">
-            <h2>BURN PROGRESS</h2>
-            
-            <!-- Setup Progress -->
-            <div style="margin-bottom: 15px;">
-                <label>SETUP:</label>
-                <div class="progress-bar">
-                    <div id="setupFill" class="progress-fill" style="width: 0%;"></div>
-                    <div id="setupText" class="progress-text">0%</div>
-                </div>
-            </div>
-            
-            <!-- Upload Progress -->
-            <div style="margin-bottom: 15px;">
-                <label>UPLOAD:</label>
-                <div class="progress-bar">
-                    <div id="uploadFill" class="progress-fill" style="width: 0%;"></div>
-                    <div id="uploadText" class="progress-text">0%</div>
-                </div>
-            </div>
-            
-            <!-- Burn Progress -->
-            <div style="margin-bottom: 15px;">
-                <label>BURNING:</label>
-                <div class="progress-bar">
-                    <div id="burnFill" class="progress-fill" style="width: 0%;"></div>
-                    <div id="burnText" class="progress-text">0%</div>
-                </div>
-            </div>
-            
-            <div id="logBox"></div>
-        </div>
-        
-        <div id="message"></div>
+{% endblock %}
+
+{% block page_styles %}
+.container { max-width: 900px; }
+.form-row input[type="text"], 
+.form-row input[type="password"], 
+.form-row input[type="number"] {
+    flex: 1;
+    max-width: 400px;
+}
+#progressSection {
+    margin-top: 20px;
+    padding: 20px;
+    border: 1px solid #fff;
+}
+.progress-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #fff;
+    font-weight: bold;
+    font-size: 1.1em;
+    text-shadow: 0 0 3px #000;
+}
+#logBox {
+    font-family: monospace;
+    font-size: 0.9em;
+    white-space: pre-wrap;
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #fff;
+    padding: 10px;
+    margin-top: 15px;
+    background: #000;
+}
+{% endblock %}
+
+{% block content %}
+<h1>QR GENERATE</h1>
+
+<div class="nav">
+    <a href="/">← MAIN</a>
+    <a href="/alignment-builder">MATERIAL & POSITIONING</a>
+    <a href="/qr">QR GENERATE</a>
+</div>
+
+<div id="status" class="status {% if not connected %}disconnected{% endif %}">
+    {% if connected %}Verified K6 connectivity{% else %}K6 connectivity not verified (optional){% endif %}
+</div>
+
+<div class="section">
+    <h2>QR TYPE</h2>
+    <div class="form-row">
+        <label>QR TYPE:</label>
+        <select id="qrType">
+            <option value="wifi">WiFi Credentials</option>
+        </select>
+    </div>
+</div>
+
+<div class="section" id="wifiSection">
+    <h2>WIFI CREDENTIALS</h2>
+    <div class="info" style="margin-bottom: 15px;">
+        Generate WiFi QR code. Default output: 75 × 53.98mm (fits credit card).<br>
+        QR code includes SSID and password. Password is NOT displayed as text (security).
     </div>
     
-    <script src="/static/js/api.js"></script>
+    <div class="form-row">
+        <label>SSID (Network Name):</label>
+        <input type="text" id="ssid" placeholder="MyWiFiNetwork" required>
+    </div>
+    
+    <div class="form-row">
+        <label>PASSWORD:</label>
+        <input type="password" id="password" placeholder="wifi password">
+    </div>
+    
+    <div class="form-row">
+        <label>SECURITY:</label>
+        <select id="security">
+            <option value="WPA">WPA/WPA2</option>
+            <option value="WEP">WEP</option>
+            <option value="nopass">No Password</option>
+        </select>
+    </div>
+    
+    <div class="form-row">
+        <label>DESCRIPTION (optional):</label>
+        <input type="text" id="description" placeholder="Guest WiFi">
+    </div>
+    
+    <div class="form-row">
+        <label>
+            <input type="checkbox" id="showPassword" style="width: auto; margin-right: 8px;">
+            Show password as text in image
+        </label>
+    </div>
+    
+    <button id="btnGenerate">GENERATE QR PREVIEW</button>
+</div>
+
+<div id="previewSection" style="display: none;">
+    <h2>QR CODE PREVIEW</h2>
+    <div class="info">
+        Scan with phone to verify QR is correct.<br>
+        Size: 75 × 53.98mm (1500 × 1080px @ 0.05mm/px K6 native resolution)
+    </div>
+    <img id="previewImage" alt="QR Preview">
+    <div id="previewInfo" style="margin-top: 10px;"></div>
+    
+    <div style="margin-top: 20px;">
+        <button id="btnNext" style="font-size: 1.2em; padding: 12px 24px;">NEXT: MATERIAL & POSITIONING →</button>
+    </div>
+</div>
+
+<div id="progressSection" style="display: none;">
+    <h2>SAVING TO SESSION</h2>
+    <div class="info">
+        QR code saved. Redirecting to material & positioning...
+    </div>
+    
+    <!-- Upload Progress -->
+    <div style="margin-bottom: 15px;">
+        <label>UPLOAD:</label>
+        <div class="progress-bar">
+            <div id="uploadFill" class="progress-fill" style="width: 0%;"></div>
+            <div id="uploadText" class="progress-text">0%</div>
+        </div>
+    </div>
+    
+    <!-- Burn Progress -->
+    <div style="margin-bottom: 15px;">
+        <label>BURNING:</label>
+        <div class="progress-bar">
+            <div id="burnFill" class="progress-fill" style="width: 0%;"></div>
+            <div id="burnText" class="progress-text">0%</div>
+        </div>
+    </div>
+    
+    <div id="logBox"></div>
+</div>
+
+<div id="message"></div>
+{% endblock %}
+
+{% block extra_js %}
     <script src="/static/js/progress.js"></script>
     <script src="/static/js/log.js"></script>
-    <script>
-        const ssid = document.getElementById('ssid');
-        const password = document.getElementById('password');
-        const security = document.getElementById('security');
-        const description = document.getElementById('description');
-        const btnGenerate = document.getElementById('btnGenerate');
-        const btnAlignment = document.getElementById('btnAlignment');
-        const btnBurn = document.getElementById('btnBurn');
-        const btnStop = document.getElementById('btnStop');
-        const message = document.getElementById('message');
-        const previewSection = document.getElementById('previewSection');
-        const previewImage = document.getElementById('previewImage');
-        const previewInfo = document.getElementById('previewInfo');
-        const progressSection = document.getElementById('progressSection');
-        const status = document.getElementById('status');
-        
-        let currentEventSource = null;
-        
-        // Check connection status
-        fetch('/api/status')
-            .then(res => res.json())
-            .then(data => {
-                if (data.connected) {
-                    status.textContent = data.version ? `CONNECTED TO K6 ${data.version}` : 'CONNECTED';
-                    status.className = 'status';
-                }
-            })
-            .catch(() => {
-                status.className = 'status disconnected';
-            });
-        
-        function showMessage(text, isError = false) {
-            message.textContent = text;
-            message.className = isError ? 'show error' : 'show success';
-            setTimeout(() => message.className = '', 5000);
-        }
-        
-        btnGenerate.addEventListener('click', async () => {
-            if (!ssid.value) {
-                showMessage('SSID required', true);
-                return;
-            }
-            
-            btnGenerate.disabled = true;
-            showMessage('Generating QR code...');
-            
-            try {
-                const result = await apiCall('/api/qr/generate', 'POST', {
-                    ssid: ssid.value,
-                    password: password.value,
-                    security: security.value,
-                    description: description.value
-                });
-                
-                previewImage.src = result.image;
-                previewInfo.textContent = `Size: ${result.size_mm} (${result.width}×${result.height}px)`;
-                previewSection.style.display = 'block';
-                showMessage('QR generated - scan with phone to verify');
-            } catch (err) {
-                showMessage('Generate failed: ' + err.message, true);
-            } finally {
-                btnGenerate.disabled = false;
-            }
+{% endblock %}
+
+{% block page_script %}
+const ssid = document.getElementById('ssid');
+const password = document.getElementById('password');
+const security = document.getElementById('security');
+const description = document.getElementById('description');
+const showPassword = document.getElementById('showPassword');
+const btnGenerate = document.getElementById('btnGenerate');
+const btnNext = document.getElementById('btnNext');
+const message = document.getElementById('message');
+const previewSection = document.getElementById('previewSection');
+const previewImage = document.getElementById('previewImage');
+const previewInfo = document.getElementById('previewInfo');
+const status = document.getElementById('status');
+
+let currentQRData = null;  // Store QR generation result
+
+// Check connection status (uses shared updateStatusDisplay from base.html)
+updateStatusDisplay(status);
+
+btnGenerate.addEventListener('click', async () => {
+    if (!ssid.value) {
+        showMessage('SSID required', true);
+        return;
+    }
+    
+    btnGenerate.disabled = true;
+    showMessage('Generating QR code...');
+    
+    try {
+        const result = await apiCall('/api/qr/generate', 'POST', {
+            ssid: ssid.value,
+            password: password.value,
+            security: security.value,
+            description: description.value,
+            show_password: showPassword.checked
         });
         
-        btnAlignment.addEventListener('click', async () => {
-            if (!confirm('Burn alignment box?\n\nThis creates positioning guides for card placement.')) {
-                return;
-            }
-            
-            btnAlignment.disabled = true;
-            showMessage('Burning alignment box...');
-            
-            try {
-                const result = await apiCall('/api/qr/alignment', 'POST', {
-                    power: parseInt(alignPower.value),
-                    depth: parseInt(alignDepth.value)
-                });
-                
-                showMessage(`Alignment box burned in ${result.total_time.toFixed(1)}s`);
-            } catch (err) {
-                showMessage('Alignment burn failed: ' + err.message, true);
-            } finally {
-                btnAlignment.disabled = false;
-            }
-        });
-        
-        btnBurn.addEventListener('click', async () => {
-            if (!ssid.value) {
-                showMessage('Generate QR preview first', true);
-                return;
-            }
-            
-            if (!confirm(`Burn WiFi QR for "${ssid.value}"?\n\nEnsure card is positioned in alignment box!`)) {
-                return;
-            }
-            
-            btnBurn.disabled = true;
-            btnStop.disabled = false;
-            
-            // Initialize components
-            const progress = new ProgressTracker();
-            const log = new LogManager();
-            
-            progress.show();
-            progress.reset();
-            log.clear();
-            
-            log.add('Connecting to progress stream...');
-            
-            // Connect to SSE
-            currentEventSource = new EventSource('/api/progress/stream');
-            
-            currentEventSource.onmessage = function(event) {
-                const data = JSON.parse(event.data);
-                
-                // Update progress bars
-                progress.handleProgressEvent(data);
-                
-                // Add to log
-                log.add(`${data.phase}: ${data.message}`);
-                
-                if (data.phase === 'complete' || data.phase === 'error' || data.phase === 'stopped') {
-                    currentEventSource.close();
-                }
-            };
-            
-            currentEventSource.onerror = function() {
-                log.add('Progress stream disconnected');
-                currentEventSource.close();
-            };
-            
-            log.add('Starting burn...');
-            showMessage('Burning QR code...');
-            
-            try {
-                const result = await apiCall('/api/qr/burn', 'POST', {
-                    ssid: ssid.value,
-                    password: password.value,
-                    security: security.value,
-                    description: description.value,
-                    power: parseInt(qrPower.value),
-                    depth: parseInt(qrDepth.value)
-                });
-                
-                showMessage(`QR burned in ${result.total_time.toFixed(1)}s`);
-                addLog(`Complete: ${result.message}`);
-            } catch (err) {
-                showMessage(err.message, true);
-                addLog(`Error: ${err.message}`);
-            } finally {
-                btnBurn.disabled = false;
-                btnStop.disabled = true;
-                if (currentEventSource) {
-                    currentEventSource.close();
+        previewImage.src = result.image;
+        previewInfo.textContent = `Size: ${result.size_mm} (${result.width}×${result.height}px)`;
+        previewSection.style.display = 'block';
+        currentQRData = result;  // Store full result for Next button
+        showMessage('QR generated - scan with phone to verify, then click NEXT');
+    } catch (err) {
+        showMessage('Generate failed: ' + err.message, true);
+    } finally {
+        btnGenerate.disabled = false;
+    }
+});
+
+btnNext.addEventListener('click', () => {
+    if (!currentQRData) {
+        showMessage('Generate QR first', true);
+        return;
+    }
+    
+    // Build job structure with QR data
+    const job = {
+        version: '1.0',
+        stages: {
+            upload: {
+                status: 'complete',
+                data: {
+                    image_path: currentQRData.temp_path,
+                    image_base64: currentQRData.image_base64,
+                    original_filename: `WiFi QR: ${ssid.value}`,
+                    source: 'qr_generation',
+                    width: currentQRData.width,
+                    height: currentQRData.height
                 }
             }
-        });
-        
-        btnStop.addEventListener('click', async () => {
-            btnStop.disabled = true;
-            
-            try {
-                await apiCall('/api/test/stop');
-                showMessage('STOP command sent');
-            } catch (err) {
-                showMessage('Stop failed: ' + err.message, true);
-            } finally {
-                setTimeout(() => btnStop.disabled = false, 2000);
-            }
-        });
-    </script>
-</body>
-</html>
+        },
+        material: {},
+        layout: {}
+    };
+    
+    // Save to session storage for alignment-builder
+    sessionStorage.setItem('materialConfig', JSON.stringify(job));
+    
+    // Redirect to alignment-builder
+    showMessage('Redirecting to material & positioning...');
+    setTimeout(() => {
+        window.location.href = '/alignment-builder';
+    }, 500);
+});
+{% endblock %}

@@ -2,6 +2,10 @@
 
 import numpy as np
 from PIL import Image
+import io
+import subprocess
+import tempfile
+from pathlib import Path
 
 
 class ImageService:
@@ -76,3 +80,127 @@ class ImageService:
             True if extension is allowed
         """
         return "." in filename and filename.rsplit(".", 1)[1].lower() in allowed_extensions
+
+    @staticmethod
+    def svg_to_png(svg_path: str, width: int = 800, dpi: int = 96) -> Image.Image:
+        """Convert SVG to PNG using Inkscape.
+        
+        Args:
+            svg_path: Path to SVG file
+            width: Target width in pixels (height auto-calculated from aspect ratio)
+            dpi: Rasterization DPI (affects quality)
+            
+        Returns:
+            PIL Image (RGB mode)
+            
+        Raises:
+            RuntimeError: If Inkscape not available or conversion fails
+        """
+        try:
+            # Check for Inkscape
+            result = subprocess.run(
+                ['inkscape', '--version'],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode != 0:
+                raise RuntimeError("Inkscape not available")
+                
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            raise RuntimeError("Inkscape not installed. Install: apt-get install inkscape")
+        
+        # Create temp PNG file
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+            png_path = tmp.name
+        
+        try:
+            # Convert SVG → PNG using Inkscape
+            # --export-width sets width, height auto-scaled
+            # --export-background=white for laser (burn=black on white)
+            result = subprocess.run(
+                [
+                    'inkscape',
+                    svg_path,
+                    '--export-type=png',
+                    f'--export-filename={png_path}',
+                    f'--export-width={width}',
+                    '--export-background=white',
+                    '--export-background-opacity=1.0'
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode != 0:
+                raise RuntimeError(f"Inkscape conversion failed: {result.stderr}")
+            
+            # Load PNG
+            img = Image.open(png_path)
+            return img
+            
+        finally:
+            # Clean up temp file
+            Path(png_path).unlink(missing_ok=True)
+    
+    @staticmethod
+    def image_to_base64(img: Image.Image) -> str:
+        """Convert PIL Image to base64 data URL for preview.
+        
+        Generic preview conversion - works for ANY image (QR, calibration, uploads).
+        All images end up as photons from the laser, preview should be unified.
+        
+        Args:
+            img: PIL Image to convert
+            
+        Returns:
+            Base64 data URL string
+        """
+        import base64
+        
+        buffer = io.BytesIO()
+        img.save(buffer, format="PNG")
+        img_base64 = base64.b64encode(buffer.getvalue()).decode()
+        return f"data:image/png;base64,{img_base64}"
+
+    @staticmethod
+    def center_image_at(img: Image.Image, target_width: int, target_height: int,
+                       center_x: int, center_y: int) -> Image.Image:
+        """Center image at specific coordinates within target canvas.
+        
+        Used with alignment boxes: burn alignment, get center coordinates,
+        then use those coordinates to position the actual burn image.
+        
+        Args:
+            img: PIL Image to center (any mode)
+            target_width: Canvas width in pixels
+            target_height: Canvas height in pixels
+            center_x: Center X coordinate in pixels
+            center_y: Center Y coordinate in pixels
+            
+        Returns:
+            PIL Image on white canvas, centered at specified coordinates
+        """
+        # Create canvas matching input mode
+        canvas = Image.new(img.mode, (target_width, target_height), 
+                          255 if img.mode in ("1", "L") else "white")
+        
+        # Calculate paste position (top-left corner)
+        paste_x = center_x - (img.width // 2)
+        paste_y = center_y - (img.height // 2)
+        
+        # Validate positioning
+        if paste_x < 0 or paste_y < 0:
+            raise ValueError(
+                f"Image extends beyond canvas top-left: "
+                f"paste=({paste_x},{paste_y}), size={img.size}"
+            )
+        if paste_x + img.width > target_width or paste_y + img.height > target_height:
+            raise ValueError(
+                f"Image extends beyond canvas bottom-right: "
+                f"paste=({paste_x},{paste_y}), size={img.size}, canvas=({target_width},{target_height})"
+            )
+        
+        canvas.paste(img, (paste_x, paste_y))
+        return canvas

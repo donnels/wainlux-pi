@@ -1,54 +1,74 @@
-= ADR-001: Base Image Selection
+= ADR-001: Docker Containerization on Pi Zero W
 
 == Status
 
-Accepted
+Accepted (Consolidated from ADR-001, ADR-009)
 
 == Context
 
-Pi Zero W is ARMv6. *Not a choice - it's what we have.* Hardware constraint, not decision.
+Deploy Flask app to Pi Zero W (ARMv6). Handle Python dependencies (Pillow, pyserial, Flask).
 
-Given Pi Zero W, need Docker base image.
+*Deployment options:*
+* Docker containerization
+* Bare Python + pip
+* Virtual environment + systemd
+* .deb package
 
-.Options considered
+*Base image options:*
 * Alpine Linux
-* Official Raspberry Pi images (raspbian/bullseye)
+* Official Raspberry Pi images
 * Balena IoT images
 * Debian slim
-* Ubuntu (if ARMv7+ available)
+* Ubuntu
 
 == Decision
 
-Use `balenalib/raspberry-pi:bullseye`.
+Docker with `balenalib/raspberry-pi:bullseye` base.
 
 == Rationale
 
-*ARMv6 support:* Pi Zero W requirement. Alpine dropped ARMv6 in 3.13+. Ubuntu doesn't support ARMv6.
+=== Why Docker?
 
-*Size:* 120MB vs 200MB+ official Raspberry Pi images. Debian slim 180MB.
+*Recipe-based:* Dockerfile = executable docs. No hidden steps.
 
-*Tested:* Balena production-tested for IoT. Official images stable but heavier.
+*Migration:* Container runs anywhere. Move to new Pi = copy container. Move to x86 = rebuild from same Dockerfile.
 
-*Build time:* Pre-built layers save hours on first build vs building from scratch.
+*Isolation:* System deps (libjpeg, libxcb) in container. No system pollution. Clean uninstall = remove container.
 
-*Maintenance:* Balena actively maintains ARMv6 images for IoT fleet.
+*Reproducibility:* Same Dockerfile → same environment. Every build identical.
 
-Considered Alpine (smallest) but ARMv6 support dropped. Would need to pin old version (risky).
+*Version control:* Infrastructure as code. Changes tracked.
 
-Official Raspberry Pi images work fine but 80MB larger for minimal gain.
+Rejected bare Python: Manual docs. Migration = rewrite.
 
-Debian slim is middle ground but not IoT-optimized.
+Rejected .deb: Hardest to maintain. Cross-compilation. Overkill.
+
+=== Why Balena Base?
+
+*ARMv6 support:* Pi Zero W requirement. Alpine dropped ARMv6. Ubuntu doesn't support.
+
+*Size:* 120MB vs 200MB+ official images.
+
+*Tested:* Balena production-tested for IoT.
+
+*Build time:* Pre-built layers save hours.
+
+*Maintenance:* Active ARMv6 support.
 
 == Consequences
 
 .*Positive*
+* Deployment = recipe, not procedure
+* Migration trivial
+* Dependencies isolated
+* Build reproducible
 * Stable ARMv6 platform
-* Smaller image = faster builds
-* IoT-optimized base
-* Active maintenance
+* Faster builds (120MB)
 
 .*Negative*
-* Balena-specific (less common than Alpine/Debian)
-* Locked to Balena update schedule
+* Docker adds complexity
+* Slightly slower startup
+* More disk space
+* Balena-specific (less common)
 
-*Trade-off accepted:* ARMv6 support and size win outweigh platform specificity.
+*Trade-offs accepted:* Portability + reproducibility + ARMv6 support outweigh overhead.

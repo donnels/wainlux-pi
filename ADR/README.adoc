@@ -51,9 +51,21 @@ include::ADR-007-asciidoc.adoc[leveloffset=+2]
 
 include::ADR-008-ghidra-mcp.adoc[leveloffset=+2]
 
-include::ADR-009-docker-containerization.adoc[leveloffset=+2]
-
 include::ADR-010-bytefield-diagrams.adoc[leveloffset=+2]
+
+include::ADR-011-ui-colour-and-goggles.adoc[leveloffset=+2]
+
+include::ADR-012-pipeline-architecture.adoc[leveloffset=+2]
+
+include::ADR-013-testing-modes.adoc[leveloffset=+2]
+
+include::ADR-016-material-positioning.adoc[leveloffset=+2]
+
+include::ADR-017-object-burn-workflow.adoc[leveloffset=+2]
+
+include::ADR-018-job-data-structure.adoc[leveloffset=+2]
+
+include::ADR-019-distributed-architecture.adoc[leveloffset=+2]
 
 ifdef::flag-book[]
 :imagesdir: {imagesdir-saved}

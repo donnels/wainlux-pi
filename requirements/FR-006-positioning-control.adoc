@@ -1,0 +1,38 @@
+= FR-006: Laser Head Positioning
+
+== Status
+
+Implemented
+
+== Description
+
+Move laser head to absolute positions. Mark single points. Toggle crosshair laser. HOME to origin.
+
+== Acceptance Criteria
+
+* **Jog**: Move to absolute X/Y position using BOUNDS command
+* **Mark**: Burn single pixel at specified position (power, depth configurable)
+* **Crosshair**: Toggle positioning laser ON/OFF (0x06/0x07)
+* **Home**: Return laser head to origin (0,0)
+* **Bounds preview**: Fast rectangle preview (0x20 command)
+
+== Rationale
+
+* Position material precisely
+* Test alignment before burning
+* Mark registration points
+* Calibration and testing
+
+== Related ADRs
+
+* ADR-012: Pipeline architecture
+
+== Implementation
+
+* `/api/jog` - absolute positioning (uses BOUNDS 0x20)
+* `/api/mark` - single pixel burn
+* `/api/crosshair` - toggle positioning laser
+* `/api/test/home` - return to origin
+* `/api/test/bounds` - preview rectangle
+* Work area: 1600×1520px (hardware limit)
+* Center offset: +67px X-axis for centered positioning

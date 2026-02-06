@@ -1,0 +1,215 @@
+= ADR-013: Testing Modes
+
+== Status
+
+Accepted
+
+== Context
+
+Need to test system without burning material or without K6 hardware. Problems:
+
+* *Hardware required:* Can't develop without K6 connected
+* *Material waste:* Protocol testing burns through test material
+* *CI/CD blocked:* Automated tests need mock device
+* *Learning curve:* New users want to explore without laser safety concerns
+* *Debugging workflow:* Need visibility into pipeline stages and protocol I/O
+
+Need three independent testing capabilities:
+
+1. Test *without K6 hardware* (development, CI/CD)
+2. Test *with K6 but no burn* (positioning, material tests)
+3. Test *workflow stages* (debugging, learning)
+
+== Decision
+
+Three orthogonal testing modes:
+
+=== 1. Mock Mode (Hardware Simulation)
+
+*Purpose:* Test without K6 connected
+
+*Implementation:* Environment variable `K6_MOCK_DEVICE=true`
+
+*Mechanism:* `MockTransport` replaces `SerialTransport`
+
+*Behavior:*
+* Simulates protocol responses (VERSION → v0.0.1, commands → ACK 0x09)
+* No serial hardware required
+* Works on any machine (Steam Deck, CI server, laptop)
+
+*Use cases:*
+* Development without K6
+* CI/CD automated testing
+* Steam Deck hardware-free testing
+* Demo/education without laser
+
+=== 2. Dry Run Mode (Laser Disable)
+
+*Purpose:* Test with real K6 but no laser firing
+
+*Implementation:* Toggle in Settings page or API: `POST /api/settings {"dry_run": true}`
+
+*Mechanism:* Driver-level flag (`device_manager.dry_run`) skips INIT commands (0x24)
+
+*Behavior:*
+* Sends all commands including data upload
+* Tests complete protocol flow (framing, job header, data chunks)
+* Skips INIT commands that start laser
+* Device responds with real ACKs and status frames
+* Motor positioning still occurs
+
+*Use cases:*
+* Positioning tests without material
+* New material verification (check bounds before burn)
+* Protocol debugging with real device
+* Teaching laser operation safely
+
+*Works with mock mode:* Can test dry-run logic without hardware
+
+=== 3. Operation Modes (Workflow Testing)
+
+*Purpose:* Control logging and intermediate file generation
+
+*Implementation:* Flask session-based, set via Settings page
+
+*Three modes:*
+
+[cols="1,2,2"]
+|===
+|Mode |Behavior |Use Cases
+
+|*SILENT* (default)
+|Auto-pipeline, no intermediate files, logs only on failure
+|Production burns, normal operation
+
+|*VERBOSE*
+|Auto-pipeline, save all intermediates (.npy, .bin, CSV/byte logs)
+|Debugging protocol issues, audit trail, byte-level analysis
+
+|*SINGLE-STEP*
+|Manual approval at each stage, shows preview/stats
+|Learning workflow, calibration testing, education (NOT YET IMPLEMENTED)
+|===
+
+*Stored in Flask session:* Per-browser persistence
+
+*Pipeline stages:*
+1. Upload → `.png`
+2. Process → `.npy` + preview
+3. Build → `.bin` + metadata.json
+4. Execute → `.dump` + logs
+
+== Rationale
+
+=== Why Three Separate Modes?
+
+*Orthogonality:* Each mode serves different purpose:
+* Mock mode = hardware presence
+* Dry run = laser safety
+* Operation mode = workflow visibility
+
+*Combination flexibility:*
+* Mock + Dry Run = Test dry-run logic without hardware
+* Real + Dry Run = Test positioning without burn
+* Real + Verbose = Debug protocol with full logs
+* Mock + Silent = Fast CI/CD tests
+
+=== Why Environment Variable for Mock?
+
+*Container-level decision:* Mock mode set at startup (compose-dev.yaml)
+
+*Immutable at runtime:* Can't accidentally switch to real hardware mid-session
+
+*Deployment distinction:* `compose.yaml` (production) vs `compose-dev.yaml` (mock)
+
+=== Why Driver-Level for Dry Run?
+
+*Runtime toggle:* Enable/disable without container restart
+
+*State persistence:* Stored in `device_manager.dry_run`, survives page refresh
+
+*Safety mechanism:* Easy toggle for "test mode" during material setup
+
+=== Why Session Storage for Operation Mode?
+
+*Per-browser state:* Developer wants verbose, production user wants silent
+
+*Temporary setting:* Workflow testing mode, not deployment config
+
+*Single-user device:* Pi typically single-user, session persistence acceptable
+
+=== 4. Base64 Embedding (Single-Step Support)
+
+*Purpose:* Self-contained job inspection in single-step mode
+
+*Implementation:* Embed base64 image data in job structure
+
+*Mechanism:* `job.stages.upload.data.image_base64` contains full image
+
+*Behavior:*
+* Upload/calibration/QR endpoints return base64
+* Preview service reads from base64 (no disk I/O)
+* Self-contained job files (one JSON = complete burn)
+* ~400KB payload for 1600×1600 image
+
+*Trade-off:* Memory overhead acceptable for usability
+* Preprocessing: Images resized before pipeline (800×800 max)
+* Hardware: 512MB Pi Zero W adequate. Upgrade to Pi 4 if needed.
+
+*Use cases:*
+* Single-step workflow state inspection
+* Export/import complete jobs
+* No temp file cleanup race conditions
+
+== Consequences
+
+=== Benefits
+
+* *Development unblocked:* Mock mode enables work without K6
+* *Material saved:* Dry run tests positioning/protocol without burning
+* *CI/CD enabled:* Mock mode allows automated testing
+* *Learning safe:* Beginners explore without laser hazards
+* *Debugging visibility:* Verbose mode + base64 embedding exposes all data
+* *Flexible combinations:* Modes compose for different testing scenarios
+* *Self-contained jobs:* Base64 embedding enables complete state inspection
+
+=== Tradeoffs
+
+* *Three concepts to learn:* Users must understand mock/dry-run/operation modes
+* *UI complexity:* Mode indicators needed (title bar shows MOCK/LIVE, DRY-RUN, SILENT/VERBOSE)
+* *Configuration split:* Mock = env var, dry run = driver setting, operation = session
+
+*Mitigations:*
+* Clear documentation in Settings page
+* Visual indicators ("Mode: MOCK | DRY-RUN | VERBOSE")
+* Sensible defaults (LIVE + no dry run + SILENT for production)
+
+=== Implementation
+
+.Transport layer (`k6/transport.py`)
+* `MockTransport(auto_respond=True, version=(0,0,1))`
+* Simulates VERSION, ACK (0x09), STATUS frames
+* No response to STOP (0x16) to avoid VERSION pollution
+
+.Device manager (`services/k6_service.py`)
+* `K6DeviceManager.mock_mode` (env `K6_MOCK_DEVICE`)
+* `K6DeviceManager.dry_run` (property, syncs to `driver.dry_run`)
+
+.Driver (`k6/driver.py`)
+* `WainluxK6.dry_run` flag
+* Skips INIT (0x24) commands when enabled
+
+.Flask app (`main.py`)
+* Session functions: `get_operation_mode()`, `set_operation_mode()`
+* `/api/status` returns `{mock_mode, dry_run, operation_mode}`
+* `/api/settings` GET/POST for runtime changes
+
+.UI (`templates/index.html`, `settings.html`)
+* Title bar mode display: "Mode: MOCK | DRY-RUN | VERBOSE"
+* Settings page with explanations
+
+== Related
+
+* ADR-002: Serial communication (extended with MockTransport)
+* ADR-009: Docker containerization (mock mode via environment variable)
+* ADR-012: Pipeline architecture (operation modes control pipeline visibility)

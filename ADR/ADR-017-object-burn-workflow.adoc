@@ -1,0 +1,297 @@
+= ADR-017: Three-Burn Object Workflow
+
+== Status
+
+Accepted (2026-02-04)
+
+== Context
+
+*Problem:* When burning on small objects (credit cards, business cards), users need:
+
+1. **Alignment box** on backing material to position the object
+2. **Test burn** option on backing material (before wasting object)
+3. **Final burn** on object with correct material settings
+
+*Current limitation:* Only one burn job passed from alignment-builder → burn page.
+
+*Real workflow:*
+1. Place backing board (e.g., bamboo) on K6 bed
+2. Burn alignment box outline on backing board
+3. Place object (e.g., credit card) in alignment box
+4. Burn image on object with object material settings
+
+*OR alternate workflow:*
+1. Burn image on backing board for test/practice
+2. Then burn on actual object
+
+== Decision
+
+*Three-burn workflow:* When object mode selected, burn page offers THREE burn options:
+
+1. **Image on backing material** (test/backup burn)
+   - Material: backing material settings (e.g., bamboo board - 1000W, 15D)
+   - Position: calculated from `material_on_burn_area` + `image_on_material`
+   - Content: actual image
+   - Purpose: Test image positioning before burning on final object
+
+2. **Alignment box on backing** (positioning guide)
+   - Material: backing material settings
+   - Position: from `material_on_burn_area` (where object will sit)
+   - Content: rectangle outline matching object dimensions
+   - Purpose: Physical guide - burn box, place object in box
+
+3. **Image on object** (final production burn)
+   - Material: object material settings (e.g., bamboo card - 500W, 10D)
+   - Position: calculated from `material_on_burn_area` + `image_on_material`
+   - Content: actual image
+   - Purpose: Final burn on positioned object
+
+*Base material mode:* Only ONE option (image on backing material, centered).
+
+*Key insight:* All three burns use SAME job data (material positions, image), just different material settings and whether to use image or alignment box.
+
+== Job Structure
+
+*Object mode job (alignment-builder → burn page):*
+
+Follows ADR-016 three-layer positioning model (Test 5 structure):
+
+```json
+{
+  "version": "1.0",
+  "stages": {
+    "upload": {
+      "status": "complete",
+      "data": {
+        "image_base64": "data:image/png;base64,iVBOR...",
+        "original_filename": "logo.png",
+        "width": 800,
+        "height": 600
+      }
+    }
+  },
+  "material": {
+    "type": "object",
+    "backing": {
+      "material_id": "bamboo",
+      "name": "Bamboo Board",
+      "power": 1000,
+      "depth": 15
+    },
+    "target": {
+      "material_id": "bamboo_card",
+      "name": "Bamboo Card",
+      "shape": "credit_card",
+      "width_mm": 85.6,
+      "height_mm": 53.98,
+      "power": 500,
+      "depth": 10
+    }
+  },
+  "layout": {
+    "material_on_burn_area": {
+      "center_x_mm": 42.8,
+      "center_y_mm": 38.0
+    },
+    "image_on_material": {
+      "center_x_mm": 0,
+      "center_y_mm": 0
+    }
+  }
+}
+```
+
+*Burn page calculates THREE K6 positions from this ONE job:*
+
+1. **Image on backing** - Use `material_on_burn_area` + `image_on_material`, backing power/depth
+2. **Alignment box** - Use `material_on_burn_area` only, backing power/depth, generate box from target.shape
+3. **Image on object** - Use `material_on_burn_area` + `image_on_material`, target power/depth
+
+*Base material mode job (simpler):*
+
+```json
+{
+  "version": "1.0",
+  "stages": {
+    "upload": {
+      "status": "complete",
+      "data": { /* image */ }
+    }
+  },
+  "material": {
+    "type": "base",
+    "material_id": "bamboo",
+    "name": "Bamboo",
+    "power": 1000,
+    "depth": 15
+  },
+  "layout": {}
+}
+```
+
+*Burn page shows ONE option:* Image on base material, auto-centered.
+
+== Burn Page UI
+
+*Object mode display:*
+
+```
+BURN JOB SELECTION
+─────────────────────────────────────────────
+☑ Image on Backing Material (test)
+  Burn: logo.png (800×600px) at calculated position
+  Material: Bamboo Board (1000W, 15D)
+  Purpose: Test image placement before final burn
+  
+☐ Alignment Box on Backing
+  Burn: 85.6×53.98mm frame at calculated position
+  Material: Bamboo Board (1000W, 15D)
+  Purpose: Physical guide for object placement
+  
+☑ Image on Object (final)
+  Burn: logo.png (800×600px) at calculated position
+  Material: Bamboo Card (500W, 10D)
+  Purpose: Final burn on positioned object
+
+[START BURN] (burns 2 selected jobs in sequence)
+```
+
+*Position calculation:* All three options use same layout data:
+- `material_on_burn_area`: Where object sits (e.g., 42.8mm, 38mm for left-aligned card)
+- `image_on_material`: Where image sits on object (e.g., 0,0 for centered)
+- Final K6 position = material center + image offset + K6 hardware offset (67px)
+
+*Base mode display (simpler):*
+
+```
+BURN JOB READY
+─────────────────────────────────────────────
+☑ Image on Base Material
+  Burn: logo.png (800×600px) centered
+  Material: Bamboo Board (1000W, 15D)
+
+[START BURN]
+```
+
+== User Workflow
+
+*Object burn workflow:*
+
+1. alignment-builder page:
+   - Select "Small Object" mode
+   - Choose backing material (bamboo board)
+   - Choose object shape (credit card)
+   - Choose object material (bamboo card)
+   - Upload/select image
+   - Position object and image
+   - Click "NEXT: BURN →"
+
+2. burn page shows THREE options:
+   - Check "Alignment Box" → [START BURN]
+   - User places object in burned box
+   - Check "Image on Object" → [START BURN]
+
+3. Alternative workflow (test first):
+   - Check "Image on Backing" → [START BURN]
+   - Review result
+   - If good, check "Image on Object" → [START BURN]
+
+*Base burn workflow (simpler):*
+
+1. alignment-builder page:
+   - Select "Flat Base Material" mode
+   - Choose material (bamboo board)
+   - Upload/select image
+   - Click "NEXT: BURN →"
+
+2. burn page shows ONE option:
+   - "Image on Base Material" (pre-checked)
+   - [START BURN]
+
+== Implementation Notes
+
+*Position calculation (burn page):*
+
+```javascript
+// Given layout from job:
+const material_center_x_mm = job.layout.material_on_burn_area.center_x_mm;  // 42.8
+const material_center_y_mm = job.layout.material_on_burn_area.center_y_mm;  // 38.0
+const image_offset_x_mm = job.layout.image_on_material.center_x_mm;  // 0 (centered)
+const image_offset_y_mm = job.layout.image_on_material.center_y_mm;  // 0
+
+// Convert to pixels (0.05mm/px)
+const material_center_x_px = material_center_x_mm / 0.05;  // 856px
+const material_center_y_px = material_center_y_mm / 0.05;  // 760px
+const image_offset_x_px = image_offset_x_mm / 0.05;  // 0px
+const image_offset_y_px = image_offset_y_mm / 0.05;  // 0px
+
+// Final K6 coordinates
+const k6_center_x = material_center_x_px + image_offset_x_px + 67;  // 923px
+const k6_center_y = material_center_y_px + image_offset_y_px;  // 760px
+```
+
+*For alignment box:*
+```javascript
+// Use material position only (no image offset)
+const k6_center_x = material_center_x_px + 67;  // 923px
+const k6_center_y = material_center_y_px;  // 760px
+
+// Generate alignment box image
+const shapeWidthPx = job.material.target.width_mm / 0.05;  // 1712px
+const shapeHeightPx = job.material.target.height_mm / 0.05;  // 1080px
+// ... canvas drawing code ...
+```
+
+*alignment-builder responsibilities:*
+- Calculate and store `layout.material_on_burn_area` and `layout.image_on_material`
+- Store shape dimensions in `material.target.{width_mm, height_mm}`
+- Store both backing and target material settings
+
+*burn page responsibilities:*
+- Calculate three K6 positions from layout data
+- Generate alignment box image on demand
+- Show checkboxes for available options
+- Execute selected burns in sequence
+
+== Consequences
+
+*Positive:*
+- Covers common workflows (alignment, test, final)
+- No manual coordinate entry needed
+- Safer (test before burning on final material)
+- User picks workflow (don't force alignment if not needed)
+
+*Negative:*
+- More complex UI (3 checkboxes vs 1 button)
+- Larger job structure (3× image data if all selected)
+- More code in alignment-builder (generate 3 jobs)
+
+*Trade-offs accepted:*
+- Job structure size: Base64 duplication OK (not persisted, just handoff)
+- UI complexity: Checkboxes clearer than hidden options
+- Code duplication: Three burn jobs better than conditional logic
+
+== Related ADRs
+
+- ADR-016: Material-Based Positioning (three-layer model)
+- ADR-012: Pipeline Architecture (.k6job structure)
+- ADR-013: Testing Modes (dry run for alignment testing)
+
+== Implementation Status
+
+*Phase 1: Job Structure (2026-02-04)*
+- [x] Define burn_jobs schema
+- [x] Document three-burn workflow
+- [ ] Generate alignment box image
+- [ ] Populate burn_jobs in alignment-builder
+- [ ] Update burn page UI for job selection
+
+*Phase 2: Burn Execution*
+- [ ] Sequential burn logic (burn checked jobs in order)
+- [ ] Progress tracking (job 1/3, 2/3, 3/3)
+- [ ] Inter-burn prompts ("Place object now")
+
+*Phase 3: Polish*
+- [ ] Job templates (save common configurations)
+- [ ] Estimate total time (sum of all checked jobs)
+- [ ] Remember user preferences (default to alignment + final)

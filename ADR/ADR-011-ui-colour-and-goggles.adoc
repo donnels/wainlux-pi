@@ -24,12 +24,21 @@ Provide multiple color themes for the web interface. Always include high-contras
 - Slightly more code to support multiple themes
 - Some color choices (green/cyan) may be less useful for some users
 
+*Exception - Preview Color Coding:*
+- Multi-layer preview uses color-coded reference frames (red/blue/green)
+- Violates B/W principle but accepted as tradeoff
+- Preview is pre-burn phase (goggles typically not needed during positioning)
+- Color differentiation aids debugging/learning three-layer model
+- May revisit with pattern-based grayscale solution if needed
+- See ADR-016 and documentation/ui-design-decisions.adoc for details
+
 == Implementation
 - Five selectable color themes stored in localStorage
 - Default: green (no glasses)
 - Red/yellow: for blue laser glasses
 - White/black: always visible
 - UI elements (buttons, progress bars) use high-contrast colors for critical actions
+- Preview layer borders: color-coded (exception to B/W rule, pre-burn only)
 
 == References
 See documentation/ui-design-decisions.adoc for rationale and details.

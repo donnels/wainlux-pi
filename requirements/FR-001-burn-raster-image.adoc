@@ -1,0 +1,30 @@
+= FR-001: Burn Raster Image
+
+== Status
+
+Implemented
+
+== Description
+
+User uploads raster image (PNG/JPG). System burns to material using K6 laser.
+
+== Acceptance Criteria
+
+* Upload image via web interface
+* Validate dimensions (max 1600x1600px)
+* Convert to 1-bit threshold
+* Send to K6 via serial protocol
+* Return success/failure status
+* Support power (0-1000) and depth (1-255) parameters
+
+== Related ADRs
+
+* ADR-002: Serial communication
+* ADR-003: Flask web interface
+* ADR-009: Docker containerization
+
+== Implementation
+
+* `/api/engrave/prepare` - upload and validate
+* `/api/engrave` - burn execution
+* `k6/driver.py::engrave_transport()` - protocol sequence

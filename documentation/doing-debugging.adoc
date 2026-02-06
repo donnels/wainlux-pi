@@ -26,16 +26,16 @@ endif::flag-book[]
 
 Ran on `pi-hostname` with `/home/user/test_square24.bmp` (24-bit BMP) and `/dev/ttyUSB0`.
 
-.Observed sequence (default / non-discrete):
-* `TX cmd 0x0a` -> `RX 0x09` (ACK OK immediately)
-* `TX cmd 0x17` -> ACK after ~20 tries (slow)
-* `TX cmd 0x1c` -> **no ACK**, times out and stalls
-* After timeout, `TX cmd 0x06` (reset) -> also **no ACK**
+.Default sequence:
+* 0x0a → 0x09 (ACK)
+* 0x17 → ACK (~20 tries, slow)
+* 0x1c → timeout (no ACK)
+* 0x06 → timeout (no ACK)
 
-.Observed sequence (`--discrete`):
-* `TX cmd 0x0a` -> ACK OK
-* `TX cmd 0x17` -> ACK after ~20 tries
-* `TX cmd 0x1b` -> **no ACK**, times out and stalls
+.Discrete mode:
+* 0x0a → ACK
+* 0x17 → ACK (~20 tries)
+* 0x1b → timeout (no ACK)
 
 .Takeaway:
 * The discrete mode commands `0x1b` (enable) and `0x1c` (disable) do **not** ACK on this device.
@@ -153,15 +153,11 @@ Run with 64x32 full-black raster, full power, 8 repeats, 0.5s pause:
 
 [NOTE]
 ====
-I stopped recording stuff at this point as I got frustrated.... 
-Funny thing: More problems popped up but the ghidra helped get answers on the payload stuff and the vector/raster stuff.
-Lot's of further testing ensued none the less.
+Further testing with Ghidra revealed payload structure.
 ====
 
-== Timing testing
-After the few first working tests taking a long time but getting some squares and circles it's time to test the timing.
-
-The script now saves a CSV with timing parameters to generate statistics and timing diagrams.
+== Timing Testing
+First working tests: slow. Script now saves CSV for stats and diagrams.
 
 === Statistics Graphs
 

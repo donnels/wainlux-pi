@@ -1,672 +1,635 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>K6 Calibration</title>
-    <link rel="stylesheet" href="/static/css/shared.css">
+{% extends "base.html" %}
+
+{% block title %}K6 Calibration{% endblock %}
+
+{% block extra_css %}
     <link rel="stylesheet" href="/static/css/components.css">
-    <style>
-        /* Page-specific styles only */
-        .container { max-width: 800px; }
-    </style>
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>K6 CALIBRATION</h1>
-        
-        <div class="nav">
-            <a href="/">← MAIN</a>
-            <a href="/calibration">CALIBRATION</a>
-        </div>
-        
-        <div id="status" class="status {% if not connected %}disconnected{% endif %}">
-            {% if connected %}CONNECTED{% else %}DISCONNECTED{% endif %}
-        </div>
-        
-        <div class="section">
-            <h2>JOG CONTROLS</h2>
-            <div class="info" style="margin-bottom: 15px;">
-                Move laser head by small increments for positioning.<br>
-                Step size: 1mm = 20px @ 0.05mm/px resolution
-            </div>
-            
-            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
-                <label>STEP SIZE (mm):</label>
-                <input type="number" id="jogStep" value="1" min="0.05" max="10" step="0.05" style="width: 80px;">
-                <button id="btnHome">HOME (0,0)</button>
-            </div>
-            
-            <div style="margin-bottom: 15px;">
-                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                    <input type="checkbox" id="disableLimits" style="cursor: pointer;">
-                    <span style="font-weight: bold;">⚠ DISABLE SOFT LIMITS (experimental - may hit physical limits)</span>
-                </label>
-            </div>
-            
-            <div style="margin-bottom: 15px;">
-                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                    <input type="checkbox" id="crosshairToggle" style="cursor: pointer;">
-                    <span>CROSSHAIR/POSITIONING LASER (test 0x06/0x07 commands)</span>
-                </label>
-            </div>
-            
-            <div style="display: grid; grid-template-columns: repeat(3, 60px); gap: 5px; justify-content: center; margin-bottom: 10px;">
-                <div></div>
-                <button id="jogUp" style="padding: 10px;">↑</button>
-                <div></div>
-                <button id="jogLeft" style="padding: 10px;">←</button>
-                <button id="btnHomeCenter" style="padding: 5px; font-size: 0.8em;">HOME</button>
-                <button id="jogRight" style="padding: 10px;">→</button>
-                <div></div>
-                <button id="jogDown" style="padding: 10px;">↓</button>
-                <div></div>
-            </div>
-            
-            <div style="border-top: 1px solid #fff; margin: 15px 0; padding-top: 15px;">
-                <h3 style="margin-bottom: 10px;">MARK POSITION</h3>
-                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
-                    <label>MARK POWER:</label>
-                    <input type="number" id="markPower" value="500" min="0" max="1000" step="10" style="width: 80px;">
-                    <label>DEPTH:</label>
-                    <input type="number" id="markDepth" value="10" min="1" max="255" step="1" style="width: 60px;">
-                    <button id="btnMark" style="font-weight: bold;">🔥 MARK HERE</button>
-                </div>
-                <div class="info" style="font-size: 0.9em;">
-                    Burns a single pixel dot at current position.<br>
-                    Use low depth (10) for testing, higher for visible marks.
-                </div>
-            </div>
-        </div>
-        
-        <div class="section">
-            <h2>DIMENSIONAL ACCURACY TEST</h2>
-            
-            <div class="info" style="border: 3px solid #fff; padding: 10px; margin-bottom: 15px; font-weight: bold;">
-                ⚠ IMPORTANT: K6 firmware uses FIXED 0.05 mm/px resolution.<br>
-                Other resolutions will produce incorrect dimensions.<br>
-                Use 0.05 for accurate physical sizing (1600px = 80mm).<br>
-                Test with calipers to verify.
-            </div>
-            
-            <div class="info">
-                Test resolution accuracy by burning calibration patterns.<br>
-                Measure burned patterns with calipers to verify dimensional accuracy.<br>
-                Start with high resolution (0.05) and work through each.
-            </div>
-            
-            <div class="form-row">
-                <label>RESOLUTION (mm/px):</label>
-                <select id="resolution">
-                    <option value="0.05" selected>0.05 - HARDWARE FIXED (1600px = 80mm) ✓</option>
-                    <option value="0.06">0.06 - ADJUSTED (1333px = 80mm)</option>
-                    <option value="0.075">0.075 - NORMAL (1067px = 80mm)</option>
-                    <option value="0.08">0.08 - COARSE (1000px = 80mm)</option>
-                </select>
-            </div>
-            
-            <div class="form-row">
-                <label>PATTERN:</label>
-                <select id="pattern">
-                    <option value="center" selected>CENTER BOX (10mm for measurement)</option>
-                    <option value="corners">CORNER BOXES (test bounds)</option>
-                    <option value="frame">FULL FRAME (80mm border)</option>
-                    <option value="grid">GRAPH PAPER (10mm grid)</option>
-                    <option value="bottom-test">BOTTOM-OUT TEST (horizontal line + 1cm marks)</option>
-                </select>
-            </div>
-            
-            <div class="form-row">
-                <label>BOX SIZE (mm):</label>
-                <input type="number" id="sizeInput" value="10" min="5" max="50" step="1">
-                <span>(for center/corner patterns)</span>
-            </div>
-            
-            <div class="form-row">
-                <label>POWER (0-1000):</label>
-                <input type="number" id="powerInput" value="500" min="0" max="1000" step="10">
-            </div>
-            
-            <div class="form-row">
-                <label>DEPTH (1-255):</label>
-                <input type="number" id="depthInput" value="10" min="1" max="255" step="1">
-                <span>(hardboard: 10 works well)</span>
-            </div>
-            
-            <button id="btnPreview">PREVIEW BOUNDS</button>
-            <button id="btnBurnBounds">BURN BOUNDS (engrave frame)</button>
-            <button id="btnBurn">BURN TEST PATTERN</button>
-            <button id="btnStop" style="font-weight: bold;">EMERGENCY STOP</button>
-            
-            <div id="result" class="result">
-                <div id="resultInfo"></div>
-            </div>
-        </div>
-        
-        <div class="section">
-            <h2>PROTOCOL COMMAND TESTING</h2>
-            <div class="info" style="margin-bottom: 15px;">
-                Test opcodes 0x25 and 0x28 (no observable effect expected).<br>
-                Included for protocol completeness and testing purposes.
-            </div>
-            
-            <div style="border: 1px solid #fff; padding: 15px; margin-bottom: 15px;">
-                <h3 style="margin-bottom: 10px;">SET SPEED/POWER (0x25)</h3>
-                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
-                    <label>SPEED:</label>
-                    <input type="number" id="testSpeed" value="115" min="0" max="65535" step="1" style="width: 80px;">
-                    <label>POWER:</label>
-                    <input type="number" id="testPower" value="1000" min="0" max="1000" step="10" style="width: 80px;">
-                    <button id="btnTestSpeedPower">TEST 0x25</button>
-                </div>
-                <div class="info" style="font-size: 0.9em;">
-                    Purpose unclear. Defaults: speed=115, power=1000. Expects ACK.
-                </div>
-            </div>
-            
-            <div style="border: 1px solid #fff; padding: 15px;">
-                <h3 style="margin-bottom: 10px;">SET FOCUS/ANGLE (0x28)</h3>
-                <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
-                    <label>FOCUS (0-200):</label>
-                    <input type="number" id="testFocus" value="20" min="0" max="200" step="1" style="width: 80px;">
-                    <label>ANGLE/MODE:</label>
-                    <input type="number" id="testAngle" value="0" min="0" max="255" step="1" style="width: 80px;">
-                    <button id="btnTestFocusAngle">TEST 0x28</button>
-                </div>
-                <div class="info" style="font-size: 0.9em;">
-                    May control positioning laser intensity. Defaults: focus=20, angle=0. Expects ACK.
-                </div>
-            </div>
-        </div>
-        
-        <div class="section">
-            <h2>TEST PROCEDURE</h2>
-            <div class="info">
-                1. Start with HIGH resolution (0.05 mm/px)<br>
-                2. Burn CENTER BOX pattern (10mm)<br>
-                3. Measure with calipers - should be exactly 10mm<br>
-                4. If incorrect, adjust resolution or document offset<br>
-                5. Burn CORNER BOXES to test max bounds<br>
-                6. Verify all 4 corners are reachable<br>
-                7. Burn FULL FRAME to verify 80mm work area<br>
-                8. Repeat for each resolution (0.05, 0.06, 0.075, 0.08)<br>
-                9. Document results for each resolution
-            </div>
-        </div>
-        
-        <div class="section" id="previewSection" style="display: none;">
-            <h2>PREVIEW</h2>
-            <canvas id="previewCanvas" style="border: 1px solid var(--ui-color); max-width: 100%; background: #fff;"></canvas>
-            <div id="previewInfo" style="margin-top: 10px;"></div>
-        </div>
-        
-        <div class="section" id="progressSection" style="display: none;">
-            <h2>PROGRESS</h2>
-            
-            <!-- Setup Progress -->
-            <div style="margin-bottom: 15px;">
-                <div style="margin-bottom: 5px;">SETUP (connect/framing/header):</div>
-                <div style="width: 100%; height: 25px; border: 1px solid var(--ui-color); position: relative;">
-                    <div id="setupFill" style="height: 100%; background: var(--ui-color); width: 0%;"></div>
-                    <div id="setupText" style="position: absolute; top: 3px; left: 50%; transform: translateX(-50%); color: #000; font-weight: bold;">0%</div>
-                </div>
-            </div>
-            
-            <!-- Upload Progress -->
-            <div style="margin-bottom: 15px;">
-                <div style="margin-bottom: 5px;">UPLOAD (data chunks):</div>
-                <div style="width: 100%; height: 25px; border: 1px solid var(--ui-color); position: relative;">
-                    <div id="uploadFill" style="height: 100%; background: var(--ui-color); width: 0%;"></div>
-                    <div id="uploadText" style="position: absolute; top: 3px; left: 50%; transform: translateX(-50%); color: #000; font-weight: bold;">0%</div>
-                </div>
-            </div>
-            
-            <!-- Burn Progress -->
-            <div style="margin-bottom: 15px;">
-                <div style="margin-bottom: 5px;">BURNING (laser active):</div>
-                <div style="width: 100%; height: 25px; border: 1px solid var(--ui-color); position: relative;">
-                    <div id="burnFill" style="height: 100%; background: var(--ui-color); width: 0%;"></div>
-                    <div id="burnText" style="position: absolute; top: 3px; left: 50%; transform: translateX(-50%); color: #000; font-weight: bold;">0%</div>
-                </div>
-            </div>
-            
-            <div id="logBox" style="margin-top: 20px; height: 200px; overflow-y: auto; border: 1px solid var(--ui-color); padding: 10px; font-size: 0.9em;">
-            </div>
-        </div>
-        
-        <div id="message"></div>
+{% endblock %}
+
+{% block page_styles %}
+.container { max-width: 800px; }
+{% endblock %}
+
+{% block content %}
+<h1>K6 CALIBRATION</h1>
+
+<div class="nav">
+    <a href="/">← MAIN</a>
+    <a href="/calibration">CALIBRATION</a>
+</div>
+
+<div id="status" class="status {% if not connected %}disconnected{% endif %}">
+    {% if connected %}Verified K6 connectivity{% else %}K6 connectivity not verified (optional){% endif %}
+</div>
+
+<div class="section">
+    <h2>JOG CONTROLS</h2>
+    <div class="info" style="margin-bottom: 15px;">
+        Move laser head by small increments for positioning.<br>
+        Step size: 1mm = 20px @ 0.05mm/px resolution
     </div>
     
-    <script src="/static/js/api.js"></script>
+    <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
+        <label>STEP SIZE (mm):</label>
+        <input type="number" id="jogStep" value="1" min="0.05" max="10" step="0.05" style="width: 80px;">
+        <button id="btnHome">HOME (0,0)</button>
+    </div>
+    
+    <div style="margin-bottom: 15px;">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+            <input type="checkbox" id="disableLimits" style="cursor: pointer;">
+            <span style="font-weight: bold;">⚠ DISABLE SOFT LIMITS (experimental - may hit physical limits)</span>
+        </label>
+    </div>
+    
+    <div style="margin-bottom: 15px;">
+        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+            <input type="checkbox" id="crosshairToggle" style="cursor: pointer;">
+            <span>CROSSHAIR/POSITIONING LASER (test 0x06/0x07 commands)</span>
+        </label>
+    </div>
+    
+    <div style="display: grid; grid-template-columns: repeat(3, 60px); gap: 5px; justify-content: center; margin-bottom: 10px;">
+        <div></div>
+        <button id="jogUp" style="padding: 10px;">↑</button>
+        <div></div>
+        <button id="jogLeft" style="padding: 10px;">←</button>
+        <button id="btnHomeCenter" style="padding: 5px; font-size: 0.8em;">HOME</button>
+        <button id="jogRight" style="padding: 10px;">→</button>
+        <div></div>
+        <button id="jogDown" style="padding: 10px;">↓</button>
+        <div></div>
+    </div>
+    
+    <div style="border-top: 1px solid #fff; margin: 15px 0; padding-top: 15px;">
+        <h3 style="margin-bottom: 10px;">MARK POSITION</h3>
+        <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+            <label>MARK POWER:</label>
+            <input type="number" id="markPower" value="500" min="0" max="1000" step="10" style="width: 80px;">
+            <label>DEPTH:</label>
+            <input type="number" id="markDepth" value="10" min="1" max="255" step="1" style="width: 60px;">
+            <button id="btnMark" style="font-weight: bold;">🔥 MARK HERE</button>
+        </div>
+        <div class="info" style="font-size: 0.9em;">
+            Burns a single pixel dot at current position.<br>
+            Use low depth (10) for testing, higher for visible marks.
+        </div>
+    </div>
+</div>
+
+<div class="section">
+    <h2>DIMENSIONAL ACCURACY TEST</h2>
+    
+    <div class="info" style="border: 3px solid #fff; padding: 10px; margin-bottom: 15px; font-weight: bold;">
+        ⚠ IMPORTANT: K6 firmware uses FIXED 0.05 mm/px resolution.<br>
+        Other resolutions will produce incorrect dimensions.<br>
+        Use 0.05 for accurate physical sizing (1600px = 80mm).<br>
+        Test with calipers to verify.
+    </div>
+    
+    <div class="info">
+        Test resolution accuracy by burning calibration patterns.<br>
+        Measure burned patterns with calipers to verify dimensional accuracy.<br>
+        Start with high resolution (0.05) and work through each.
+    </div>
+    
+    <div class="form-row">
+        <label>RESOLUTION (mm/px):</label>
+        <select id="resolution">
+            <option value="0.05" selected>0.05 - HARDWARE FIXED (1600px = 80mm) ✓</option>
+            <option value="0.06">0.06 - ADJUSTED (1333px = 80mm)</option>
+            <option value="0.075">0.075 - NORMAL (1067px = 80mm)</option>
+            <option value="0.08">0.08 - COARSE (1000px = 80mm)</option>
+        </select>
+    </div>
+    
+    <div class="form-row">
+        <label>PATTERN:</label>
+        <select id="pattern">
+            <option value="center" selected>CENTER BOX (10mm for measurement)</option>
+            <option value="corners">CORNER BOXES (test bounds)</option>
+            <option value="frame">FULL FRAME (80mm border)</option>
+            <option value="grid">GRAPH PAPER (10mm grid)</option>
+            <option value="bottom-test">BOTTOM-OUT TEST (diagonal line in bottom 1/8th Y-axis)</option>
+        </select>
+    </div>
+    
+    <div class="form-row">
+        <label>BOX SIZE (mm):</label>
+        <input type="number" id="sizeInput" value="10" min="5" max="50" step="1">
+        <span>(for center/corner patterns)</span>
+    </div>
+    
+    <div class="form-row">
+        <label>POWER (0-1000):</label>
+        <input type="number" id="powerInput" value="500" min="0" max="1000" step="10">
+    </div>
+    
+    <div class="form-row">
+        <label>DEPTH (1-255):</label>
+        <input type="number" id="depthInput" value="10" min="1" max="255" step="1">
+        <span>(hardboard: 10 works well)</span>
+    </div>
+    
+    <button id="btnPreview">PREVIEW BOUNDS</button>
+    <button id="btnBurnBounds">BURN BOUNDS (engrave frame)</button>
+    <button id="btnBurn">BURN TEST PATTERN</button>
+    <button id="btnStop" style="font-weight: bold;">EMERGENCY STOP</button>
+    
+    <div id="result" class="result">
+        <div id="resultInfo"></div>
+    </div>
+</div>
+
+<div class="section">
+    <h2>PROTOCOL COMMAND TESTING</h2>
+    <div class="info" style="margin-bottom: 15px;">
+        Test opcodes 0x25 and 0x28 (no observable effect expected).<br>
+        Included for protocol completeness and testing purposes.
+    </div>
+    
+    <div style="border: 1px solid #fff; padding: 15px; margin-bottom: 15px;">
+        <h3 style="margin-bottom: 10px;">SET SPEED/POWER (0x25)</h3>
+        <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+            <label>SPEED:</label>
+            <input type="number" id="testSpeed" value="115" min="0" max="65535" step="1" style="width: 80px;">
+            <label>POWER:</label>
+            <input type="number" id="testPower" value="1000" min="0" max="1000" step="10" style="width: 80px;">
+            <button id="btnTestSpeedPower">TEST 0x25</button>
+        </div>
+        <div class="info" style="font-size: 0.9em;">
+            Purpose unclear. Defaults: speed=115, power=1000. Expects ACK.
+        </div>
+    </div>
+    
+    <div style="border: 1px solid #fff; padding: 15px;">
+        <h3 style="margin-bottom: 10px;">SET FOCUS/ANGLE (0x28)</h3>
+        <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 10px;">
+            <label>FOCUS (0-200):</label>
+            <input type="number" id="testFocus" value="20" min="0" max="200" step="1" style="width: 80px;">
+            <label>ANGLE/MODE:</label>
+            <input type="number" id="testAngle" value="0" min="0" max="255" step="1" style="width: 80px;">
+            <button id="btnTestFocusAngle">TEST 0x28</button>
+        </div>
+        <div class="info" style="font-size: 0.9em;">
+            May control positioning laser intensity. Defaults: focus=20, angle=0. Expects ACK.
+        </div>
+    </div>
+</div>
+
+<div class="section">
+    <h2>TEST PROCEDURE</h2>
+    <div class="info">
+        1. Start with HIGH resolution (0.05 mm/px)<br>
+        2. Burn CENTER BOX pattern (10mm)<br>
+        3. Measure with calipers - should be exactly 10mm<br>
+        4. If incorrect, adjust resolution or document offset<br>
+        5. Burn CORNER BOXES to test max bounds<br>
+        6. Verify all 4 corners are reachable<br>
+        7. Burn FULL FRAME to verify 80mm work area<br>
+        8. Repeat for each resolution (0.05, 0.06, 0.075, 0.08)<br>
+        9. Document results for each resolution
+    </div>
+</div>
+
+<div class="section" id="previewSection" style="display: none;">
+    <h2>PREVIEW</h2>
+    <canvas id="previewCanvas" style="border: 1px solid var(--ui-color); max-width: 100%; background: #fff;"></canvas>
+    <div id="previewInfo" style="margin-top: 10px;"></div>
+</div>
+
+<div class="section" id="progressSection" style="display: none;">
+    <h2>PROGRESS</h2>
+    
+    <!-- Setup Progress -->
+    <div style="margin-bottom: 15px;">
+        <div style="margin-bottom: 5px;">SETUP (connect/framing/header):</div>
+        <div style="width: 100%; height: 25px; border: 1px solid var(--ui-color); position: relative;">
+            <div id="setupFill" style="height: 100%; background: var(--ui-color); width: 0%;"></div>
+            <div id="setupText" style="position: absolute; top: 3px; left: 50%; transform: translateX(-50%); color: #000; font-weight: bold;">0%</div>
+        </div>
+    </div>
+    
+    <!-- Upload Progress -->
+    <div style="margin-bottom: 15px;">
+        <div style="margin-bottom: 5px;">UPLOAD (data chunks):</div>
+        <div style="width: 100%; height: 25px; border: 1px solid var(--ui-color); position: relative;">
+            <div id="uploadFill" style="height: 100%; background: var(--ui-color); width: 0%;"></div>
+            <div id="uploadText" style="position: absolute; top: 3px; left: 50%; transform: translateX(-50%); color: #000; font-weight: bold;">0%</div>
+        </div>
+    </div>
+    
+    <!-- Burn Progress -->
+    <div style="margin-bottom: 15px;">
+        <div style="margin-bottom: 5px;">BURNING (laser active):</div>
+        <div style="width: 100%; height: 25px; border: 1px solid var(--ui-color); position: relative;">
+            <div id="burnFill" style="height: 100%; background: var(--ui-color); width: 0%;"></div>
+            <div id="burnText" style="position: absolute; top: 3px; left: 50%; transform: translateX(-50%); color: #000; font-weight: bold;">0%</div>
+        </div>
+    </div>
+    
+    <div id="logBox" style="margin-top: 20px; height: 200px; overflow-y: auto; border: 1px solid var(--ui-color); padding: 10px; font-size: 0.9em;">
+    </div>
+</div>
+
+<div id="message"></div>
+{% endblock %}
+
+{% block extra_js %}
     <script src="/static/js/progress.js"></script>
     <script src="/static/js/log.js"></script>
-    <script>
-        const btnBurn = document.getElementById('btnBurn');
-        const btnPreview = document.getElementById('btnPreview');
-        const btnBurnBounds = document.getElementById('btnBurnBounds');
-        const btnStop = document.getElementById('btnStop');
-        const resolutionSelect = document.getElementById('resolution');
-        const patternSelect = document.getElementById('pattern');
-        const sizeInput = document.getElementById('sizeInput');
-        const powerInput = document.getElementById('powerInput');
-        const depthInput = document.getElementById('depthInput');
-        const message = document.getElementById('message');
-        const result = document.getElementById('result');
-        const resultInfo = document.getElementById('resultInfo');
-        const status = document.getElementById('status');
-        
-        let currentEventSource = null;
-        let previewActive = false;
-        
-        // Check connection status on page load
-        fetch('/api/status')
-            .then(res => res.json())
-            .then(data => {
-                if (data.connected && data.version) {
-                    status.textContent = `CONNECTED TO K6 ${data.version}`;
-                    status.className = 'status';
-                } else if (data.connected) {
-                    status.textContent = 'CONNECTED';
-                    status.className = 'status';
-                } else {
-                    status.textContent = 'DISCONNECTED';
-                    status.className = 'status disconnected';
-                }
-            })
-            .catch(() => {
-                status.textContent = 'DISCONNECTED';
-                status.className = 'status disconnected';
-            });
-        
-        function showMessage(text, isError = false) {
-            message.textContent = text;
-            message.className = isError ? 'show error' : 'show success';
-            setTimeout(() => message.className = '', 5000);
-        }
-        
-        function showResult(data) {
-            resultInfo.innerHTML = `
-                BURN COMPLETE<br>
-                Pattern: ${data.pattern}<br>
-                Resolution: ${data.resolution} mm/px<br>
-                Size: ${data.size_mm}mm (${data.width_px}x${data.height_px}px)<br>
-                Power: ${data.power}, Depth: ${data.depth}<br>
-                Time: ${data.total_time.toFixed(1)}s<br>
-                Chunks: ${data.chunks}<br>
-                Log: ${data.csv_log}
-            `;
-            result.className = 'result show';
-        }
-        
-        btnStop.addEventListener('click', async () => {
-            // EMERGENCY STOP - no confirmation, immediate action
-            const wasDisabled = btnStop.disabled;
-            btnStop.disabled = true;
-            
-            try {
-                // Send STOP command
-                await apiCall('/api/test/stop', 'POST');
-                addLog('✓ STOP command sent');
-                showMessage('STOP command sent', false);
-            } catch (err) {
-                addLog('✗ Stop failed: ' + err.message);
-                showMessage('Stop failed: ' + err.message, true);
-            } finally {
-                // Close SSE stream if active
-                if (currentEventSource) {
-                    currentEventSource.close();
-                    currentEventSource = null;
-                }
-                btnBurn.disabled = false;
-                btnStop.disabled = wasDisabled;
-            }
-        });
-        
-        btnPreview.addEventListener('click', async () => {
-            btnPreview.disabled = true;
-            try {
-                if (!previewActive) {
-                    // Start preview
-                    const resolution = parseFloat(resolutionSelect.value);
-                    const pattern = patternSelect.value;
-                    const size_mm = parseFloat(sizeInput.value);
-                    
-                    // Calculate dimensions based on pattern
-                    let width_px, height_px;
-                    const mm_to_px = (mm) => Math.round(mm / resolution);
-                    
-                    if (pattern === 'center') {
-                        width_px = height_px = mm_to_px(size_mm);
-                    } else if (pattern === 'corners' || pattern === 'frame' || pattern === 'grid') {
-                        width_px = height_px = mm_to_px(80.0);
-                    } else {
-                        width_px = height_px = mm_to_px(10.0);
-                    }
-                    
-                    showMessage('Starting preview bounds (0x20)...');
-                    await apiCall('/api/calibration/preview', 'POST', {
-                        width: width_px,
-                        height: height_px
-                    });
-                    previewActive = true;
-                    btnPreview.textContent = 'STOP PREVIEW';
-                    btnPreview.style.backgroundColor = '#fff';
-                    btnPreview.style.color = '#000';
-                    btnPreview.style.fontWeight = 'bold';
-                    showMessage('Preview active - laser tracing rectangle');
-                } else {
-                    // Stop preview
-                    showMessage('Stopping preview (0x21)...');
-                    await apiCall('/api/test/home', 'POST');
-                    previewActive = false;
-                    btnPreview.textContent = 'PREVIEW BOUNDS';
-                    btnPreview.style.backgroundColor = '';
-                    btnPreview.style.color = '';
-                    btnPreview.style.fontWeight = '';
-                    showMessage('Preview stopped');
-                }
-            } catch (err) {
-                showMessage('Preview failed: ' + err.message, true);
-                previewActive = false;
-                btnPreview.textContent = 'PREVIEW BOUNDS';
-                btnPreview.style.backgroundColor = '';
-                btnPreview.style.color = '';
-                btnPreview.style.fontWeight = '';
-            } finally {
-                btnPreview.disabled = false;
-            }
-        });
-        
-        btnBurnBounds.addEventListener('click', async () => {
-            btnBurnBounds.disabled = true;
-            try {
-                const resolution = parseFloat(resolutionSelect.value);
-                const pattern = patternSelect.value;
-                const size_mm = parseFloat(sizeInput.value);
-                const power = parseInt(powerInput.value);
-                const depth = parseInt(depthInput.value);
-                
-                // Calculate dimensions based on pattern
-                let width_px, height_px;
-                const mm_to_px = (mm) => Math.round(mm / resolution);
-                
-                if (pattern === 'center') {
-                    width_px = height_px = mm_to_px(size_mm);
-                } else if (pattern === 'corners' || pattern === 'frame' || pattern === 'grid') {
-                    width_px = height_px = mm_to_px(80.0);
-                } else {
-                    width_px = height_px = mm_to_px(10.0);
-                }
-                
-                showMessage('Burning bounds frame (creates positioning guide)...');
-                const result = await apiCall('/api/calibration/burn-bounds', 'POST', {
-                    width: width_px,
-                    height: height_px,
-                    power: power,
-                    depth: depth
-                });
-                showMessage(`Bounds frame burned: ${result.width}×${result.height}px in ${result.total_time.toFixed(1)}s`);
-            } catch (err) {
-                showMessage('Burn bounds failed: ' + err.message, true);
-            } finally {
-                btnBurnBounds.disabled = false;
-            }
-        });
-        
-        btnBurn.addEventListener('click', async () => {
-            const params = {
-                resolution: parseFloat(resolutionSelect.value),
-                pattern: patternSelect.value,
-                size_mm: parseFloat(sizeInput.value),
-                power: parseInt(powerInput.value),
-                depth: parseInt(depthInput.value)
-            };
-            
-            btnBurn.disabled = true;
-            btnStop.disabled = false;
-            result.className = 'result';
-            
-            // Initialize components
-            const progress = new ProgressTracker();
-            const log = new LogManager();
-            
-            progress.show();
-            progress.reset();
-            log.clear();
-            
-            log.add('Connecting to progress stream...');
-            
-            // Connect to SSE for real-time progress
-            currentEventSource = new EventSource('/api/progress/stream');
-            
-            currentEventSource.onmessage = function(event) {
-                const data = JSON.parse(event.data);
-                
-                // Update progress bars
-                progress.handleProgressEvent(data);
-                
-                // Add to log
-                log.add(`[${data.phase}] ${data.message}`);
-                
-                // Close stream on completion or error
-                if (data.phase === 'complete' || data.phase === 'error') {
-                    currentEventSource.close();
-                    currentEventSource = null;
-                }
-            };
-            
-            currentEventSource.onerror = function() {
-                log.add('Stream connection lost');
-                currentEventSource.close();
-                currentEventSource = null;
-            };
-            
-            log.add('Starting burn...');
-            log.add(`Pattern: ${params.pattern}, Resolution: ${params.resolution} mm/px`);
-            log.add(`Power: ${params.power}, Depth: ${params.depth}`);
-            showMessage('Burning pattern...');
-            
-            try {
-                const data = await apiCall('/api/calibration/burn', 'POST', params);
-                
-                showMessage('Pattern burned successfully');
-                showResult(data);
-            } catch (err) {
-                log.add('✗ Error: ' + err.message);
-                showMessage(err.message, true);
-            } finally {
-                if (currentEventSource) {
-                    currentEventSource.close();
-                    currentEventSource = null;
-                }
-                btnBurn.disabled = false;
-            }
-        });
-        
-        // Update size input visibility based on pattern
-        pattern.addEventListener('change', () => {
-            // Size input not used for 'frame' or 'bottom-test' patterns
-            const showSize = pattern.value !== 'frame' && pattern.value !== 'bottom-test';
-            sizeInput.disabled = !showSize;
-        });
-        
-        // Jog controls - track position client-side (K6 doesn't report position)
-        const jogStep = document.getElementById('jogStep');
-        const jogUp = document.getElementById('jogUp');
-        const jogDown = document.getElementById('jogDown');
-        const jogLeft = document.getElementById('jogLeft');
-        const jogRight = document.getElementById('jogRight');
-        const btnHome = document.getElementById('btnHome');
-        const disableLimits = document.getElementById('disableLimits');
-        
-        // Current position tracking (pixels)
-        // Start at center (800, 800) = 40mm from edges @ 0.05mm/px
-        let currentX = 800;
-        let currentY = 800;
-        
-        async function jog(direction) {
-            try {
-                const step_mm = parseFloat(jogStep.value);
-                const step_px = Math.round(step_mm * 20);  // 0.05mm/px = 20px/mm
-                const disable_limits = disableLimits.checked;
-                
-                // Calculate new position
-                let newX = currentX;
-                let newY = currentY;
-                
-                if (direction === 'left') newX -= step_px;
-                else if (direction === 'right') newX += step_px;
-                else if (direction === 'up') newY -= step_px;
-                else if (direction === 'down') newY += step_px;
-                
-                // Client-side clamp only if limits enabled
-                if (!disable_limits) {
-                    newX = Math.max(0, Math.min(1600, newX));
-                    newY = Math.max(0, Math.min(1600, newY));
-                } else {
-                    // Still apply reasonable max to prevent overflow
-                    newX = Math.max(-200, Math.min(2000, newX));
-                    newY = Math.max(-200, Math.min(2000, newY));
-                }
-                
-                // Send absolute position to API
-                const result = await apiCall('/api/jog', 'POST', { x: newX, y: newY, disable_limits });
-                
-                // Update tracked position
-                currentX = result.position.x;
-                currentY = result.position.y;
-                
-                const mm_x = (currentX * 0.05).toFixed(2);
-                const mm_y = (currentY * 0.05).toFixed(2);
-                const limitsMsg = result.limits_disabled ? ' [LIMITS OFF]' : '';
-                showMessage(`Moved ${direction} → Position: (${currentX}px, ${currentY}px) = (${mm_x}mm, ${mm_y}mm)${limitsMsg}`);
-            } catch (err) {
-                showMessage('Jog failed: ' + err.message, true);
-            }
-        }
-        
-        jogUp.addEventListener('click', () => jog('up'));
-        jogDown.addEventListener('click', () => jog('down'));
-        jogLeft.addEventListener('click', () => jog('left'));
-        jogRight.addEventListener('click', () => jog('right'));
-        
-        // Home buttons (both top and center)
-        const btnHomeCenter = document.getElementById('btnHomeCenter');
-        
-        async function goHome() {
-            try {
-                await apiCall('/api/test/home', 'POST');
-                // Reset tracked position to origin
-                currentX = 0;
-                currentY = 0;
-                showMessage('Homed to origin (0,0)');
-            } catch (err) {
-                showMessage('Home failed: ' + err.message, true);
-            }
-        }
-        
-        btnHome.addEventListener('click', goHome);
-        btnHomeCenter.addEventListener('click', goHome);
-        
-        // Mark position control
-        const btnMark = document.getElementById('btnMark');
-        const markPower = document.getElementById('markPower');
-        const markDepth = document.getElementById('markDepth');
-        
-        btnMark.addEventListener('click', async () => {
-            if (!confirm(`BURN single pixel mark at (${currentX}, ${currentY})?\n\nThis will activate the laser!`)) {
-                return;
-            }
-            
-            btnMark.disabled = true;
-            try {
-                const power = parseInt(markPower.value);
-                const depth = parseInt(markDepth.value);
-                
-                const result = await apiCall('/api/mark', 'POST', {
-                    x: currentX,
-                    y: currentY,
-                    power,
-                    depth
-                });
-                
-                const mm_x = (currentX * 0.05).toFixed(2);
-                const mm_y = (currentY * 0.05).toFixed(2);
-                showMessage(`✓ Marked at (${currentX}px, ${currentY}px) = (${mm_x}mm, ${mm_y}mm)`);
-            } catch (err) {
-                showMessage('Mark failed: ' + err.message, true);
-            } finally {
-                btnMark.disabled = false;
-            }
-        });
-        
-        // Crosshair toggle
-        const crosshairToggle = document.getElementById('crosshairToggle');
-        
-        crosshairToggle.addEventListener('change', async () => {
-            const enable = crosshairToggle.checked;
-            crosshairToggle.disabled = true;
-            
-            try {
-                const result = await apiCall('/api/crosshair', 'POST', { enable });
-                showMessage(result.message + ' (observe K6 for changes)');
-            } catch (err) {
-                showMessage('Crosshair toggle failed: ' + err.message, true);
-                // Revert checkbox on error
-                crosshairToggle.checked = !enable;
-            } finally {
-                crosshairToggle.disabled = false;
-            }
-        });
-        
-        // Protocol command testing - 0x25 and 0x28
-        const btnTestSpeedPower = document.getElementById('btnTestSpeedPower');
-        const btnTestFocusAngle = document.getElementById('btnTestFocusAngle');
-        const testSpeed = document.getElementById('testSpeed');
-        const testPower = document.getElementById('testPower');
-        const testFocus = document.getElementById('testFocus');
-        const testAngle = document.getElementById('testAngle');
-        
-        btnTestSpeedPower.addEventListener('click', async () => {
-            btnTestSpeedPower.disabled = true;
-            try {
-                const speed = parseInt(testSpeed.value);
-                const power = parseInt(testPower.value);
-                
-                const result = await apiCall('/api/calibration/set-speed-power', 'POST', {
-                    speed,
-                    power
-                });
-                
-                showMessage(`✓ ${result.message} (speed=${result.speed}, power=${result.power})`);
-            } catch (err) {
-                showMessage('SET_SPEED_POWER (0x25) failed: ' + err.message, true);
-            } finally {
-                btnTestSpeedPower.disabled = false;
-            }
-        });
-        
-        btnTestFocusAngle.addEventListener('click', async () => {
-            btnTestFocusAngle.disabled = true;
-            try {
-                const focus = parseInt(testFocus.value);
-                const angle = parseInt(testAngle.value);
-                
-                const result = await apiCall('/api/calibration/set-focus-angle', 'POST', {
-                    focus,
-                    angle
-                });
-                
-                showMessage(`✓ ${result.message} (focus=${result.focus}, angle=${result.angle})`);
-            } catch (err) {
-                showMessage('SET_FOCUS_ANGLE (0x28) failed: ' + err.message, true);
-            } finally {
-                btnTestFocusAngle.disabled = false;
-            }
-        });
-    </script>
+{% endblock %}
+
+{% block page_script %}
+const btnBurn = document.getElementById('btnBurn');
+const btnPreview = document.getElementById('btnPreview');
+const btnBurnBounds = document.getElementById('btnBurnBounds');
+const btnStop = document.getElementById('btnStop');
+const resolutionSelect = document.getElementById('resolution');
+const patternSelect = document.getElementById('pattern');
+const sizeInput = document.getElementById('sizeInput');
+const powerInput = document.getElementById('powerInput');
+const depthInput = document.getElementById('depthInput');
+const message = document.getElementById('message');
+const result = document.getElementById('result');
+const resultInfo = document.getElementById('resultInfo');
+const status = document.getElementById('status');
+
+let currentEventSource = null;
+let previewActive = false;
+
+// Check connection status (uses shared updateStatusDisplay from base.html)
+updateStatusDisplay(status);
+
+function showResult(data) {
+    resultInfo.innerHTML = `
+        BURN COMPLETE<br>
+        Pattern: ${data.pattern}<br>
+        Resolution: ${data.resolution} mm/px<br>
+        Size: ${data.size_mm}mm (${data.width_px}x${data.height_px}px)<br>
+        Power: ${data.power}, Depth: ${data.depth}<br>
+        Time: ${data.total_time.toFixed(1)}s<br>
+        Chunks: ${data.chunks}<br>
+        Log: ${data.csv_log}
+    `;
+    result.className = 'result show';
+}
+
+btnStop.addEventListener('click', async () => {
+    // EMERGENCY STOP - no confirmation, immediate action
+    const wasDisabled = btnStop.disabled;
+    btnStop.disabled = true;
     
-    <script>
-</body>
-</html>
+    try {
+        // Send STOP command
+        await apiCall('/api/test/stop', 'POST');
+        showMessage('STOP command sent', false);
+    } catch (err) {
+        showMessage('Stop failed: ' + err.message, true);
+    } finally {
+        // Close SSE stream if active
+        if (currentEventSource) {
+            currentEventSource.close();
+            currentEventSource = null;
+        }
+        btnBurn.disabled = false;
+        btnStop.disabled = wasDisabled;
+    }
+});
+
+btnPreview.addEventListener('click', async () => {
+    btnPreview.disabled = true;
+    try {
+        if (!previewActive) {
+            // Start preview
+            const resolution = parseFloat(resolutionSelect.value);
+            const pattern = patternSelect.value;
+            const size_mm = parseFloat(sizeInput.value);
+            
+            // Calculate dimensions based on pattern
+            let width_px, height_px;
+            const mm_to_px = (mm) => Math.round(mm / resolution);
+            
+            if (pattern === 'center') {
+                width_px = height_px = mm_to_px(size_mm);
+            } else if (pattern === 'corners' || pattern === 'frame' || pattern === 'grid') {
+                width_px = height_px = mm_to_px(80.0);
+            } else {
+                width_px = height_px = mm_to_px(10.0);
+            }
+            
+            showMessage('Starting preview bounds (0x20)...');
+            await apiCall('/api/calibration/preview', 'POST', {
+                width: width_px,
+                height: height_px
+            });
+            previewActive = true;
+            btnPreview.textContent = 'STOP PREVIEW';
+            btnPreview.style.backgroundColor = '#fff';
+            btnPreview.style.color = '#000';
+            btnPreview.style.fontWeight = 'bold';
+            showMessage('Preview active - laser tracing rectangle');
+        } else {
+            // Stop preview
+            showMessage('Stopping preview (0x21)...');
+            await apiCall('/api/test/home', 'POST');
+            previewActive = false;
+            btnPreview.textContent = 'PREVIEW BOUNDS';
+            btnPreview.style.backgroundColor = '';
+            btnPreview.style.color = '';
+            btnPreview.style.fontWeight = '';
+            showMessage('Preview stopped');
+        }
+    } catch (err) {
+        showMessage('Preview failed: ' + err.message, true);
+        previewActive = false;
+        btnPreview.textContent = 'PREVIEW BOUNDS';
+        btnPreview.style.backgroundColor = '';
+        btnPreview.style.color = '';
+        btnPreview.style.fontWeight = '';
+    } finally {
+        btnPreview.disabled = false;
+    }
+});
+
+btnBurnBounds.addEventListener('click', async () => {
+    btnBurnBounds.disabled = true;
+    try {
+        const resolution = parseFloat(resolutionSelect.value);
+        const pattern = patternSelect.value;
+        const size_mm = parseFloat(sizeInput.value);
+        const power = parseInt(powerInput.value);
+        const depth = parseInt(depthInput.value);
+        
+        // Calculate dimensions based on pattern
+        let width_px, height_px;
+        const mm_to_px = (mm) => Math.round(mm / resolution);
+        
+        if (pattern === 'center') {
+            width_px = height_px = mm_to_px(size_mm);
+        } else if (pattern === 'corners' || pattern === 'frame' || pattern === 'grid') {
+            width_px = height_px = mm_to_px(80.0);
+        } else {
+            width_px = height_px = mm_to_px(10.0);
+        }
+        
+        showMessage('Burning bounds frame (creates positioning guide)...');
+        const result = await apiCall('/api/calibration/burn-bounds', 'POST', {
+            width: width_px,
+            height: height_px,
+            power: power,
+            depth: depth
+        });
+        showMessage(`Bounds frame burned: ${result.width}×${result.height}px in ${result.total_time.toFixed(1)}s`);
+    } catch (err) {
+        showMessage('Burn bounds failed: ' + err.message, true);
+    } finally {
+        btnBurnBounds.disabled = false;
+    }
+});
+
+btnBurn.addEventListener('click', async () => {
+    const params = {
+        resolution: parseFloat(resolutionSelect.value),
+        pattern: patternSelect.value,
+        size_mm: parseFloat(sizeInput.value),
+        power: parseInt(powerInput.value),
+        depth: parseInt(depthInput.value)
+    };
+    
+    btnBurn.disabled = true;
+    btnStop.disabled = false;
+    result.className = 'result';
+    
+    // Initialize components
+    const progress = new ProgressTracker();
+    const log = new LogManager();
+    
+    progress.show();
+    progress.reset();
+    log.clear();
+    
+    // Connect to SSE for real-time progress
+    currentEventSource = new EventSource('/api/progress/stream');
+    
+    currentEventSource.onmessage = function(event) {
+        const data = JSON.parse(event.data);
+        
+        // Update progress bars
+        progress.handleProgressEvent(data);
+        
+        // Add to log
+        log.add(`[${data.phase}] ${data.message}`);
+        
+        // Close stream on completion or error
+        if (data.phase === 'complete' || data.phase === 'error') {
+            currentEventSource.close();
+            currentEventSource = null;
+        }
+    };
+    
+    currentEventSource.onerror = function() {
+        currentEventSource.close();
+        currentEventSource = null;
+    };
+    
+    showMessage('Burning pattern...');
+    
+    try {
+        const data = await apiCall('/api/calibration/burn', 'POST', params);
+        
+        showMessage('Pattern burned successfully');
+        showResult(data);
+    } catch (err) {
+        showMessage(err.message, true);
+    } finally {
+        if (currentEventSource) {
+            currentEventSource.close();
+            currentEventSource = null;
+        }
+        btnBurn.disabled = false;
+    }
+});
+
+// Update size input visibility based on pattern
+pattern.addEventListener('change', () => {
+    // Size input not used for 'frame' or 'bottom-test' patterns
+    const showSize = pattern.value !== 'frame' && pattern.value !== 'bottom-test';
+    sizeInput.disabled = !showSize;
+});
+
+// Jog controls - track position client-side (K6 doesn't report position)
+const jogStep = document.getElementById('jogStep');
+const jogUp = document.getElementById('jogUp');
+const jogDown = document.getElementById('jogDown');
+const jogLeft = document.getElementById('jogLeft');
+const jogRight = document.getElementById('jogRight');
+const btnHome = document.getElementById('btnHome');
+const disableLimits = document.getElementById('disableLimits');
+
+// Current position tracking (pixels)
+// Start at center (800, 800) = 40mm from edges @ 0.05mm/px
+let currentX = 800;
+let currentY = 800;
+
+async function jog(direction) {
+    try {
+        const step_mm = parseFloat(jogStep.value);
+        const step_px = Math.round(step_mm * 20);  // 0.05mm/px = 20px/mm
+        const disable_limits = disableLimits.checked;
+        
+        // Calculate new position
+        let newX = currentX;
+        let newY = currentY;
+        
+        if (direction === 'left') newX -= step_px;
+        else if (direction === 'right') newX += step_px;
+        else if (direction === 'up') newY -= step_px;
+        else if (direction === 'down') newY += step_px;
+        
+        // Client-side clamp only if limits enabled
+        if (!disable_limits) {
+            newX = Math.max(0, Math.min(1600, newX));
+            newY = Math.max(0, Math.min(1600, newY));
+        } else {
+            // Still apply reasonable max to prevent overflow
+            newX = Math.max(-200, Math.min(2000, newX));
+            newY = Math.max(-200, Math.min(2000, newY));
+        }
+        
+        // Send absolute position to API
+        const result = await apiCall('/api/jog', 'POST', { x: newX, y: newY, disable_limits });
+        
+        // Update tracked position
+        currentX = result.position.x;
+        currentY = result.position.y;
+        
+        const mm_x = (currentX * 0.05).toFixed(2);
+        const mm_y = (currentY * 0.05).toFixed(2);
+        const limitsMsg = result.limits_disabled ? ' [LIMITS OFF]' : '';
+        showMessage(`Moved ${direction} → Position: (${currentX}px, ${currentY}px) = (${mm_x}mm, ${mm_y}mm)${limitsMsg}`);
+    } catch (err) {
+        showMessage('Jog failed: ' + err.message, true);
+    }
+}
+
+jogUp.addEventListener('click', () => jog('up'));
+jogDown.addEventListener('click', () => jog('down'));
+jogLeft.addEventListener('click', () => jog('left'));
+jogRight.addEventListener('click', () => jog('right'));
+
+// Home buttons (both top and center)
+const btnHomeCenter = document.getElementById('btnHomeCenter');
+
+async function goHome() {
+    try {
+        await apiCall('/api/test/home', 'POST');
+        // Reset tracked position to origin
+        currentX = 0;
+        currentY = 0;
+        showMessage('Homed to origin (0,0)');
+    } catch (err) {
+        showMessage('Home failed: ' + err.message, true);
+    }
+}
+
+btnHome.addEventListener('click', goHome);
+btnHomeCenter.addEventListener('click', goHome);
+
+// Mark position control
+const btnMark = document.getElementById('btnMark');
+const markPower = document.getElementById('markPower');
+const markDepth = document.getElementById('markDepth');
+
+btnMark.addEventListener('click', async () => {
+    if (!confirm(`BURN single pixel mark at (${currentX}, ${currentY})?\n\nThis will activate the laser!`)) {
+        return;
+    }
+    
+    btnMark.disabled = true;
+    try {
+        const power = parseInt(markPower.value);
+        const depth = parseInt(markDepth.value);
+        
+        const result = await apiCall('/api/mark', 'POST', {
+            x: currentX,
+            y: currentY,
+            power,
+            depth
+        });
+        
+        const mm_x = (currentX * 0.05).toFixed(2);
+        const mm_y = (currentY * 0.05).toFixed(2);
+        showMessage(`✓ Marked at (${currentX}px, ${currentY}px) = (${mm_x}mm, ${mm_y}mm)`);
+    } catch (err) {
+        showMessage('Mark failed: ' + err.message, true);
+    } finally {
+        btnMark.disabled = false;
+    }
+});
+
+// Crosshair toggle
+const crosshairToggle = document.getElementById('crosshairToggle');
+
+crosshairToggle.addEventListener('change', async () => {
+    const enable = crosshairToggle.checked;
+    crosshairToggle.disabled = true;
+    
+    try {
+        const result = await apiCall('/api/crosshair', 'POST', { enable });
+        showMessage(result.message + ' (observe K6 for changes)');
+    } catch (err) {
+        showMessage('Crosshair toggle failed: ' + err.message, true);
+        // Revert checkbox on error
+        crosshairToggle.checked = !enable;
+    } finally {
+        crosshairToggle.disabled = false;
+    }
+});
+
+// Protocol command testing - 0x25 and 0x28
+const btnTestSpeedPower = document.getElementById('btnTestSpeedPower');
+const btnTestFocusAngle = document.getElementById('btnTestFocusAngle');
+const testSpeed = document.getElementById('testSpeed');
+const testPower = document.getElementById('testPower');
+const testFocus = document.getElementById('testFocus');
+const testAngle = document.getElementById('testAngle');
+
+btnTestSpeedPower.addEventListener('click', async () => {
+    btnTestSpeedPower.disabled = true;
+    try {
+        const speed = parseInt(testSpeed.value);
+        const power = parseInt(testPower.value);
+        
+        const result = await apiCall('/api/calibration/set-speed-power', 'POST', {
+            speed,
+            power
+        });
+        
+        showMessage(`✓ ${result.message} (speed=${result.speed}, power=${result.power})`);
+    } catch (err) {
+        showMessage('SET_SPEED_POWER (0x25) failed: ' + err.message, true);
+    } finally {
+        btnTestSpeedPower.disabled = false;
+    }
+});
+
+btnTestFocusAngle.addEventListener('click', async () => {
+    btnTestFocusAngle.disabled = true;
+    try {
+        const focus = parseInt(testFocus.value);
+        const angle = parseInt(testAngle.value);
+        
+        const result = await apiCall('/api/calibration/set-focus-angle', 'POST', {
+            focus,
+            angle
+        });
+        
+        showMessage(`✓ ${result.message} (focus=${result.focus}, angle=${result.angle})`);
+    } catch (err) {
+        showMessage('SET_FOCUS_ANGLE (0x28) failed: ' + err.message, true);
+    } finally {
+        btnTestFocusAngle.disabled = false;
+    }
+});
+{% endblock %}

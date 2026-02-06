@@ -2,14 +2,18 @@ services:
   wainlux-k6:
     build: ./docker
     container_name: wainlux-k6
+    # USB device access for K6 (CP210x serial)
     privileged: true
     devices:
       - /dev/ttyUSB0:/dev/ttyUSB0
     volumes:
       - ./data:/app/data
+      - ./docker/images:/app/images
     ports:
       - "8080:8080"
     restart: unless-stopped
     environment:
       - FLASK_ENV=production
       - PYTHONUNBUFFERED=1
+      # Set to 'true' to run without K6 device attached
+      - K6_MOCK_DEVICE=false

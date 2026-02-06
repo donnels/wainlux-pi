@@ -1,0 +1,47 @@
+= NFR-005: CSV Operation Logging
+
+== Status
+
+Implemented
+
+== Description
+
+Log all protocol operations to CSV with timing, throughput, retries, and device state. Debugging and analysis.
+
+== Acceptance Criteria
+
+* Timestamp for every operation
+* Phase tracking (connect, setup, burn, finalize, wait)
+* Operation name (VERSION, CONNECT, DATA, INIT, etc.)
+* Duration in milliseconds
+* Bytes transferred (cumulative + per-operation)
+* Throughput calculation (kbps)
+* Burn progress percentage (0-100%)
+* Retry count for failed operations
+* Device state (IDLE, BUSY, BURNING, HEARTBEAT)
+* Response type (ACK, HEARTBEAT, STATUS, TIMEOUT)
+
+== Rationale
+
+* Timing analysis: find bottlenecks
+* Retry tracking: identify flaky operations
+* Protocol debugging: see exact command sequence
+* Throughput measurement: optimize chunking
+* Progress validation: device status tracking
+* Generate timing diagrams (PlantUML)
+
+== Related ADRs
+
+* ADR-002: Serial communication (protocol details logged)
+* ADR-006: Clean room (observed protocol behavior)
+* ADR-010: Bytefield diagrams (protocol documentation)
+* ADR-012: Pipeline architecture (verbose mode uses CSV)
+
+== Implementation
+
+* `CSVLogger` class - timing and operation log
+* `ProgressCSVLogger` - extends CSVLogger with SSE events
+* Saved to `data/burn-TIMESTAMP.csv`
+* Verbose mode saves all intermediate logs
+* Used for generating statistics graphs
+* Used for PlantUML timing diagrams

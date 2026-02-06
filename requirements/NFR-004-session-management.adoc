@@ -1,0 +1,46 @@
+= NFR-004: Per-Browser Session State
+
+== Status
+
+Implemented
+
+== Description
+
+Session state stored per-browser. Independent workflows. No server-side persistence.
+
+== Constraints
+
+* Single Pi Zero W serves multiple browsers
+* No database (ADR-004)
+* Session cleared on server restart
+* Session scoped to browser tab/window
+
+== Acceptance Criteria
+
+* Flask session with secret key
+* Operational mode stored in session
+* Dry run toggle stored in session
+* Different browsers = independent settings
+* Settings survive page navigation
+* Settings lost on server restart (acceptable)
+
+== Rationale
+
+* Dev browser: verbose mode, dry run enabled
+* Production browser: silent mode, live burns
+* Testing: single-step mode
+* No conflict between concurrent users
+
+== Related ADRs
+
+* ADR-003: Flask (session support)
+* ADR-004: No database (session-only state)
+* ADR-012: Pipeline architecture (mode system)
+
+== Implementation
+
+* `app.secret_key` for session encryption
+* `get_operation_mode()` / `set_operation_mode()`
+* `get_dry_run()` / `set_dry_run()`
+* Session data: operation_mode, dry_run
+* localStorage for UI preferences (color theme)

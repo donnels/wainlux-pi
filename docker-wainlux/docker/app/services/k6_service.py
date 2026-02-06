@@ -3,8 +3,10 @@
 from typing import Optional
 import logging
 
+import os
+
 from k6.driver import WainluxK6
-from k6.transport import SerialTransport
+from k6.transport import SerialTransport, MockTransport
 from k6 import protocol
 
 logger = logging.getLogger(__name__)
@@ -15,9 +17,29 @@ class K6DeviceManager:
 
     def __init__(self):
         self.driver = WainluxK6()
-        self.transport: Optional[SerialTransport] = None
         self.connected = False
         self.version: Optional[str] = None
+        self._dry_run = False  # Driver-level dry run toggle
+        self.mock_mode = os.getenv("K6_MOCK_DEVICE", "false").lower() == "true"
+        
+        # Initialize transport based on mock mode
+        if self.mock_mode:
+            self.transport = MockTransport(auto_respond=True, version=(0, 0, 1))
+            logger.info("K6DeviceManager initialized with MockTransport")
+        else:
+            self.transport: Optional[SerialTransport] = None
+            logger.info("K6DeviceManager initialized (transport will be created on connect)")
+    
+    @property
+    def dry_run(self) -> bool:
+        """Get dry run state"""
+        return self._dry_run
+    
+    @dry_run.setter
+    def dry_run(self, value: bool):
+        """Set dry run state and sync to driver"""
+        self._dry_run = bool(value)
+        self.driver.dry_run = self._dry_run
 
     def connect(self, port: str = "/dev/ttyUSB0", baudrate: int = 115200, timeout: float = 2.0) -> tuple[bool, Optional[str]]:
         """Connect to K6 device.
@@ -31,12 +53,16 @@ class K6DeviceManager:
             Tuple of (success, version_string)
         """
         try:
-            self.transport = SerialTransport(port=port, baudrate=baudrate, timeout=timeout)
+            if self.mock_mode:
+                self.transport = MockTransport(auto_respond=True, version=(0, 0, 1))
+            else:
+                self.transport = SerialTransport(port=port, baudrate=baudrate, timeout=timeout)
+
             success, version = self.driver.connect_transport(self.transport)
             if success:
                 self.connected = True
                 self.version = f"v{version[0]}.{version[1]}.{version[2]}"
-                logger.info(f"Connected to K6 {self.version}")
+                logger.info(f"Connected to K6 {self.version}{' (mock)' if self.mock_mode else ''}")
                 return True, self.version
             else:
                 self.connected = False
@@ -111,9 +137,6 @@ class K6Service:
         Returns:
             True if successful
         """
-        if not self.device.is_connected():
-            return False
-
         try:
             # Stop preview mode first
             protocol.send_cmd_checked(
@@ -137,33 +160,40 @@ class K6Service:
             logger.error(f"Home failed: {e}")
             return False
 
-    def jog(self, center_x: int, center_y: int) -> bool:
+    def jog(self, center_x: int, center_y: int, disable_limits: bool = False) -> tuple[bool, dict]:
         """Move laser head to position.
 
         Args:
             center_x: X position in pixels
             center_y: Y position in pixels
+            disable_limits: Allow movement beyond soft limits
 
         Returns:
-            True if successful
+            Tuple of (success, result_dict)
         """
-        if not self.device.is_connected():
-            return False
-
         try:
             # Use BOUNDS with 1x1px to position laser
-            return self.device.driver.draw_bounds_transport(
+            success = self.device.driver.draw_bounds_transport(
                 self.device.transport,
                 width=1,
                 height=1,
                 center_x=center_x,
                 center_y=center_y
             )
+            if success:
+                return True, {
+                    "success": True,
+                    "message": f"Moved to ({center_x}, {center_y})",
+                    "x": center_x,
+                    "y": center_y
+                }
+            else:
+                return False, {"success": False, "error": "BOUNDS command failed"}
         except Exception as e:
             logger.error(f"Jog failed: {e}")
-            return False
+            return False, {"success": False, "error": str(e)}
 
-    def mark(self, center_x: int, center_y: int, power: int = 500, depth: int = 10) -> bool:
+    def mark(self, center_x: int, center_y: int, power: int = 500, depth: int = 10) -> tuple[bool, dict]:
         """Burn a single pixel mark at position.
 
         Args:
@@ -173,35 +203,40 @@ class K6Service:
             depth: Burn depth (1-255)
 
         Returns:
-            True if successful
+            Tuple of (success, result_dict)
         """
-        if not self.device.is_connected():
-            return False
-
         try:
-            return self.device.driver.mark_position_transport(
+            success = self.device.driver.mark_position_transport(
                 self.device.transport,
                 center_x=center_x,
                 center_y=center_y,
                 power=power,
                 depth=depth
             )
+            if success:
+                return True, {
+                    "success": True,
+                    "message": f"Marked at ({center_x}, {center_y})",
+                    "x": center_x,
+                    "y": center_y,
+                    "power": power,
+                    "depth": depth
+                }
+            else:
+                return False, {"success": False, "error": "Mark command failed"}
         except Exception as e:
             logger.error(f"Mark failed: {e}")
-            return False
+            return False, {"success": False, "error": str(e)}
 
-    def crosshair(self, enable: bool) -> bool:
+    def crosshair(self, enable: bool) -> tuple[bool, dict]:
         """Toggle crosshair/positioning laser.
 
         Args:
             enable: True to turn on, False to turn off
 
         Returns:
-            True if successful
+            Tuple of (success, result_dict)
         """
-        if not self.device.is_connected():
-            return False
-
         try:
             opcode = 0x06 if enable else 0x07
             cmd_name = "CROSSHAIR ON" if enable else "CROSSHAIR OFF"
@@ -213,19 +248,23 @@ class K6Service:
                 timeout=2.0,
                 expect_ack=True,
             )
-            return True
+            return True, {
+                "success": True,
+                "message": cmd_name,
+                "enabled": enable
+            }
         except Exception as e:
-            logger.error(f"Crosshair toggle failed: {e}")
-            return False
+            logger.error(f"Crosshair failed: {e}")
+            return False, {"success": False, "error": str(e)}
 
-    def stop(self) -> bool:
+    def stop(self) -> tuple[bool, str]:
         """Emergency stop and reset device.
 
         Returns:
-            True if successful
+            Tuple of (success, message)
         """
         if not self.device.transport:
-            return False
+            return False, "No transport available"
 
         try:
             # Send STOP command
@@ -240,10 +279,10 @@ class K6Service:
                 expect_ack=True,
             )
             logger.info("STOP + CONNECT sent, device reset")
-            return True
+            return True, "Device stopped and reset"
         except Exception as e:
             logger.warning(f"Stop/reset partial: {e}")
-            return True  # Return True anyway since cancel signal sent
+            return True, f"Stop signal sent (reset failed: {e})"
 
     def engrave(self, image_path: str, power: int = 1000, depth: int = 100, 
                 center_x: Optional[int] = None, center_y: Optional[int] = None, 
@@ -261,9 +300,6 @@ class K6Service:
         Returns:
             Dict with keys: ok (bool), message (str), total_time (float), chunks (int)
         """
-        if not self.device.is_connected():
-            return {"ok": False, "message": "Not connected", "total_time": 0, "chunks": 0}
-
         try:
             result = self.device.driver.engrave_transport(
                 self.device.transport,

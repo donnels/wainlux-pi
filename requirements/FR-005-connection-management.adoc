@@ -1,0 +1,38 @@
+= FR-005: Device Connection Management
+
+== Status
+
+Implemented
+
+== Description
+
+Connect and disconnect from K6 laser via USB serial. Query device version. 
+
+== Acceptance Criteria
+
+* Connect to /dev/ttyUSB0 at 115200 baud
+* Send connection sequence: STOP → VERSION → CONNECT×2 → HOME
+* Query firmware version (returns 3-byte version)
+* Disconnect cleanly (close serial port)
+* Connection optional for most operations (device accepts commands when "disconnected")
+
+== Rationale
+
+* Establish sane device state at session start
+* Verify device presence and firmware version
+* HOME laser to known position
+* Clear any previous job state
+
+== Related ADRs
+
+* ADR-002: Serial communication
+* ADR-009: Docker containerization (USB device access)
+
+== Implementation
+
+* `/api/connect` - establish connection
+* `K6DeviceManager.connect()` - connection sequence
+* `driver.connect_transport()` - protocol sequence
+* State tracked in `device_manager.connected`
+* Version displayed in UI
+* Connection not enforced by firmware (commands work without CONNECT)

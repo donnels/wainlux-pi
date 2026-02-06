@@ -63,6 +63,28 @@ Two separate operations. Different purposes.
 
 *Rationale:* Toggle = single button for start/stop. State visible at glance. Follows same safety-first color principle as all UI elements: white/black always works.
 
+=== Exception: Preview Color Coding
+
+*Decision:* Multi-layer preview uses color-coded reference frames:
+- Red dashed: Burn area boundary
+- Blue dashed: Material outline
+- Green dashed: Image boundary
+- Red overlay: Cropped regions
+
+*Violation:* This breaks the B/W UI principle for goggle visibility.
+
+*Accepted rationale:*
+1. Preview shown BEFORE burn (no goggles needed during positioning)
+2. If laser is burning, position adjustment no longer relevant
+3. Color differentiation aids learning/debugging three-layer model
+4. Trade-off: practical value > aesthetic consistency
+5. May revisit with pattern-based solution (dots/dashes/lines) if strict grayscale required
+
+*Risk:* If users need goggles during preview phase, colors may not be visible. Acceptable because:
+- Preview is non-destructive (no laser firing)
+- Users typically position without goggles, then put them on before burn
+- Annotations (text labels) remain visible in B/W
+
 == Progress Tracking
 
 === Three Separate Bars

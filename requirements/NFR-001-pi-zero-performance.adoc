@@ -1,0 +1,42 @@
+= NFR-001: Pi Zero W Performance
+
+== Status
+
+Accepted
+
+== Description
+
+System must run on Pi Zero W (ARMv6, 512MB RAM, single-core 1GHz).
+
+== Constraints
+
+* ARMv6 architecture (limits base images)
+* 512MB RAM (limits dependencies)
+* Single-core (no parallelism)
+* Slow build (~15-20 min for Docker image)
+
+== Acceptance Criteria
+
+* Docker image builds on Pi Zero W
+* Flask app runs with <200MB RAM
+* Image processing completes in <10 seconds for 1600x1600px
+* No heavy dependencies (no TensorFlow, PyTorch, etc.)
+* Responsive UI on local network
+
+== Mitigations
+
+* NumPy for vectorized operations (90s → 1s for 1600x1600)
+* Balena base image (ARMv6 support)
+* Minimal Python dependencies
+* Pre-built Docker layers
+
+== Related ADRs
+
+* ADR-001: Base image selection
+* ADR-009: Docker containerization
+
+== Measurements
+
+* Image threshold (1600x1600): ~1 second (NumPy)
+* Bit packing (1600x1600): ~0.5 seconds
+* Serial upload (1600 lines): ~5 minutes

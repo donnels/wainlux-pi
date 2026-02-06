@@ -1,0 +1,38 @@
+= FR-007: Emergency Stop
+
+== Status
+
+Implemented
+
+== Description
+
+Immediately cancel active burn and reset device. No confirmation. Instant action.
+
+== Acceptance Criteria
+
+* Cancel Python burn loop via threading event
+* Send CONNECT command to reset device state
+* Works during upload phase
+* Works during burn phase
+* Returns device to safe idle state
+* No material damage from incomplete burn
+
+== Rationale
+
+* Safety: stop burn immediately if fire/smoke detected
+* User error: wrong material, wrong positioning
+* Testing: cancel test burns quickly
+
+== Related ADRs
+
+* ADR-011: UI color and goggles (STOP button always visible)
+* ADR-012: Pipeline architecture (cancel flag)
+
+== Implementation
+
+* `/api/test/stop` - stop endpoint
+* `burn_cancel_event` threading event
+* Driver checks event in burn loop
+* CONNECT command resets device
+* Python KeyboardInterrupt to break burn sequence
+* STOP button prominent in UI (red, always visible)

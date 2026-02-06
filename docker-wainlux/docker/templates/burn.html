@@ -1,0 +1,762 @@
+{% extends "base.html" %}
+{% from "macros.html" import navigation, message_display %}
+
+{% block title %}Burn Image{% endblock %}
+
+{% block page_styles %}
+.section { margin: 30px 0; }
+.section h2 { margin-bottom: 15px; }
+.burn-preview { text-align: center; margin: 20px 0; }
+.burn-preview img { max-width: 400px; max-height: 400px; border: 1px solid #fff; }
+.progress-section { margin: 20px 0; }
+.progress-bar { 
+    width: 100%; 
+    height: 30px; 
+    background: #1a1a1a; 
+    border: 1px solid #fff; 
+    position: relative; 
+    margin: 10px 0;
+}
+.progress-fill { 
+    height: 100%; 
+    background: #4a4a4a; 
+    transition: width 0.3s ease; 
+    position: relative;
+}
+.progress-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #fff;
+    font-weight: bold;
+    z-index: 1;
+}
+.log-window {
+    background: #000;
+    border: 1px solid #fff;
+    padding: 10px;
+    height: 300px;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 12px;
+    margin: 10px 0;
+}
+.log-entry {
+    margin: 2px 0;
+    color: #0f0;
+}
+.log-entry.error { color: #f00; }
+.log-entry.warning { color: #ff0; }
+.log-entry.info { color: #0ff; }
+.job-info { 
+    background: #1a1a1a; 
+    padding: 15px; 
+    border: 1px solid #fff; 
+    margin: 10px 0;
+}
+.job-info h3 { margin-top: 0; }
+.job-params { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+{% endblock %}
+
+{% block content %}
+{{ navigation("BURN IMAGE") }}
+
+<div class="section" id="jobSection">
+    <h2>BURN JOB</h2>
+    
+    <div class="job-info" id="jobInfo">
+        <h3>Select What To Burn</h3>
+        <div id="burnOptions" style="margin: 15px 0;">
+            <!-- Checkboxes populated by JS based on available data -->
+        </div>
+        <div id="jobDetails" style="margin-top: 20px;"></div>
+    </div>
+    
+    <div class="burn-preview">
+        <h3>IMAGE PREVIEW</h3>
+        <img id="jobImage" alt="Job preview">
+        <div id="jobDimensions"></div>
+    </div>
+    
+    <div style="margin: 20px 0;">
+        <button id="btnBurn" style="font-size: 1.2em; padding: 15px 30px;">🔥 START BURN</button>
+        <button id="btnVerify" style="margin-left: 10px;">VERIFY K6</button>
+        <button id="btnStop" style="display: none; margin-left: 10px;">⏹ STOP</button>
+        <button id="btnSaveJob" style="display: none; margin-left: 10px; background: #444;">💾 SAVE JOB & LOGS</button>
+    </div>
+</div>
+
+<div class="section" id="progressSection" style="display: none;">
+    <h2>BURN PROGRESS</h2>
+    
+    <div class="progress-section">
+        <label>SETUP & CONNECT:</label>
+        <div class="progress-bar">
+            <div id="progressSetup" class="progress-fill" style="width: 0%"></div>
+            <div class="progress-text" id="progressSetupText">0%</div>
+        </div>
+    </div>
+    
+    <div class="progress-section">
+        <label>IMAGE UPLOAD:</label>
+        <div class="progress-bar">
+            <div id="progressUpload" class="progress-fill" style="width: 0%"></div>
+            <div class="progress-text" id="progressUploadText">0%</div>
+        </div>
+    </div>
+    
+    <div class="progress-section">
+        <label>LASER BURNING:</label>
+        <div class="progress-bar">
+            <div id="progressBurn" class="progress-fill" style="width: 0%"></div>
+            <div class="progress-text" id="progressBurnText">0%</div>
+        </div>
+    </div>
+    
+    <div class="log-window" id="logWindow"></div>
+</div>
+
+{{ message_display() }}
+{% endblock %}
+
+{% block page_script %}
+    // K6 hardware limits
+    const K6_MAX_WIDTH = 1600;   // px (80mm)
+    const K6_MAX_HEIGHT = 1520;  // px (76mm actual Y-axis)
+    const RESOLUTION = 0.05;     // mm per pixel
+    
+    let currentJob = null;
+    let eventSource = null;
+    
+    const modeDisplay = document.getElementById('modeDisplay');
+    const firmwareDisplay = document.getElementById('firmwareDisplay');
+    const verifyDisplay = document.getElementById('verifyDisplay');
+    const btnVerify = document.getElementById('btnVerify');
+    const btnBurn = document.getElementById('btnBurn');
+    const btnStop = document.getElementById('btnStop');
+    const jobSection = document.getElementById('jobSection');
+    const progressSection = document.getElementById('progressSection');
+    const jobImage = document.getElementById('jobImage');
+    const jobDimensions = document.getElementById('jobDimensions');
+    const jobDetails = document.getElementById('jobDetails');
+    const logWindow = document.getElementById('logWindow');
+    
+    // Progress elements
+    const progressSetup = document.getElementById('progressSetup');
+    const progressSetupText = document.getElementById('progressSetupText');
+    const progressUpload = document.getElementById('progressUpload');
+    const progressUploadText = document.getElementById('progressUploadText');
+    const progressBurn = document.getElementById('progressBurn');
+    const progressBurnText = document.getElementById('progressBurnText');
+    
+    // Status bar functions now in shared api.js
+    
+    function addLog(message, type = 'info') {
+        const timestamp = new Date().toLocaleTimeString();
+        const entry = document.createElement('div');
+        entry.className = `log-entry ${type}`;
+        entry.textContent = `[${timestamp}] ${message}`;
+        logWindow.appendChild(entry);
+        logWindow.scrollTop = logWindow.scrollHeight;
+    }
+    
+    function updateProgress(phase, progress, message) {
+        addLog(`${phase.toUpperCase()}: ${message}`, 'info');
+        
+        if (phase === 'setup' || phase === 'prepare' || phase === 'connect') {
+            progressSetup.style.width = `${progress}%`;
+            progressSetupText.textContent = `${progress}%`;
+        } else if (phase === 'upload') {
+            progressUpload.style.width = `${progress}%`;
+            progressUploadText.textContent = `${progress}%`;
+        } else if (phase === 'burning' || phase === 'wait' || phase === 'finalize') {
+            progressBurn.style.width = `${progress}%`;
+            progressBurnText.textContent = `${progress}%`;
+        } else if (phase === 'complete') {
+            progressSetup.style.width = '100%';
+            progressSetupText.textContent = '100%';
+            progressUpload.style.width = '100%';
+            progressUploadText.textContent = '100%';
+            progressBurn.style.width = '100%';
+            progressBurnText.textContent = '100%';
+            addLog('✓ Burn complete!', 'info');
+            btnBurn.disabled = false;
+            btnStop.style.display = 'none';
+        } else if (phase === 'error') {
+            addLog(`ERROR: ${message}`, 'error');
+            btnBurn.disabled = false;
+            btnStop.style.display = 'none';
+        } else if (phase === 'stopped') {
+            addLog('⏹ Burn stopped by user', 'warning');
+            btnBurn.disabled = false;
+            btnStop.style.display = 'none';
+        }
+    }
+    
+    function loadJob() {
+        const saved = sessionStorage.getItem('materialConfig');
+        if (!saved) {
+            // No saved job - create default job with default image and material
+            addLog('No saved job found - loading defaults', 'info');
+            loadDefaultJob();
+            return;
+        }
+        
+        currentJob = JSON.parse(saved);
+        
+        // Validate job has required data
+        if (!currentJob.stages || !currentJob.stages.upload || !currentJob.stages.upload.data) {
+            addLog('Invalid saved job - loading defaults', 'warning');
+            loadDefaultJob();
+            return;
+        }
+        
+        displayJob();
+    }
+    
+    async function loadDefaultJob() {
+        try {
+            // Fetch default image
+            const response = await fetch('/api/images/serve/default-image.png');
+            const blob = await response.blob();
+            
+            const reader = new FileReader();
+            reader.onloadend = async function() {
+                const base64data = reader.result;
+                const img = new Image();
+                img.onload = async function() {
+                    // Fetch materials and look for 'default' material
+                    const materialsData = await apiCall('/api/materials/list', 'GET');
+                    let defaultMaterial = materialsData.materials.find(m => m.id === 'default');
+                    
+                    if (!defaultMaterial) {
+                        // Fallback: first base material
+                        defaultMaterial = materialsData.materials.find(m => m.type === 'base_material');
+                        addLog('Default material not found, using first base material', 'warning');
+                    }
+                    
+                    if (!defaultMaterial) {
+                        showMessage('No materials found. Cannot create default job.', true);
+                        addLog('No materials available', 'error');
+                        return;
+                    }
+                    
+                    // Create default job
+                    currentJob = {
+                        version: '1.0',
+                        stages: {
+                            upload: {
+                                status: 'complete',
+                                data: {
+                                    image_base64: base64data,
+                                    original_filename: 'default-image.png',
+                                    source: 'default',
+                                    width: img.width,
+                                    height: img.height
+                                }
+                            }
+                        },
+                        material: {
+                            type: 'base',
+                            material_id: defaultMaterial.id,
+                            name: defaultMaterial.name,
+                            power: defaultMaterial.power,
+                            depth: defaultMaterial.depth,
+                            repeat: defaultMaterial.repeat || 1
+                        },
+                        layout: {
+                            position: { x: 800, y: 800 }  // Default center position
+                        }
+                    };
+                    
+                    addLog(`Default job created: ${defaultMaterial.name}, center position (800, 800)`, 'info');
+                    displayJob();
+                };
+                img.src = base64data;
+            };
+            reader.readAsDataURL(blob);
+        } catch (err) {
+            showMessage('Failed to load default job: ' + err.message, true);
+            addLog('Failed to load defaults: ' + err.message, 'error');
+        }
+    }
+    
+    function displayJob() {
+        const uploadData = currentJob.stages.upload.data;
+        const material = currentJob.material || {};
+        const layout = currentJob.layout || {};
+        
+        // Show image preview
+        jobImage.src = uploadData.image_base64 || uploadData.image;
+        jobDimensions.textContent = `${uploadData.width} × ${uploadData.height}px`;
+        
+        // Build burn options based on available data
+        let options = '';
+        
+        if (material.type === 'object') {
+            // OBJECT MODE: Three burn options (radio buttons - mutually exclusive)
+            
+            // Option 1: Image on backing material (test)
+            if (material.backing) {
+                options += `
+                    <label style="display: block; margin: 10px 0; padding: 10px; border: 1px solid #666; cursor: pointer;">
+                        <input type="radio" name="burnOption" value="image-backing" checked>
+                        <strong>Image on Backing Material (test)</strong><br>
+                        <span style="color: #aaa; font-size: 0.9em;">
+                            Burn ${uploadData.original_filename || 'image'} at calculated position<br>
+                            Material: ${material.backing.name} @ ${material.backing.power}W/${material.backing.depth}D<br>
+                            Purpose: Test image placement before final burn
+                        </span>
+                    </label>
+                `;
+            }
+            
+            // Option 2: Alignment box on backing
+            if (material.target && material.backing) {
+                options += `
+                    <label style="display: block; margin: 10px 0; padding: 10px; border: 1px solid #666; cursor: pointer;">
+                        <input type="radio" name="burnOption" value="alignment">
+                        <strong>Alignment Box on Backing</strong><br>
+                        <span style="color: #aaa; font-size: 0.9em;">
+                            Burn ${material.target.width_mm}×${material.target.height_mm}mm frame<br>
+                            Material: ${material.backing.name} @ ${material.backing.power}W/${material.backing.depth}D<br>
+                            Purpose: Physical guide for object placement<br>
+                            Border width: <input type="number" id="alignmentBorderWidth" min="1" max="10" value="3" style="width: 50px; margin-top: 5px;"> px
+                        </span>
+                    </label>
+                `;
+            }
+            
+            // Option 3: Combined alignment box + image on backing (FAST)
+            if (material.target && material.backing) {
+                options += `
+                    <label style="display: block; margin: 10px 0; padding: 10px; border: 1px solid #666; cursor: pointer;">
+                        <input type="radio" name="burnOption" value="combined">
+                        <strong>Alignment Box + Image on Backing (FAST)</strong><br>
+                        <span style="color: #aaa; font-size: 0.9em;">
+                            Burn ${material.target.width_mm}×${material.target.height_mm}mm frame + ${uploadData.original_filename || 'image'}<br>
+                            Material: ${material.backing.name} @ ${material.backing.power}W/${material.backing.depth}D<br>
+                            Purpose: Combined test - single burn saves time<br>
+                            Border width: <input type="number" id="combinedBorderWidth" min="1" max="10" value="3" style="width: 50px; margin-top: 5px;"> px
+                        </span>
+                    </label>
+                `;
+            }
+            
+            // Option 4: Image on object (final)
+            if (material.target) {
+                options += `
+                    <label style="display: block; margin: 10px 0; padding: 10px; border: 1px solid #666; cursor: pointer;">
+                        <input type="radio" name="burnOption" value="image-object">
+                        <strong>Image on Object (final)</strong><br>
+                        <span style="color: #aaa; font-size: 0.9em;">
+                            Burn ${uploadData.original_filename || 'image'} at calculated position<br>
+                            Material: ${material.target.material} @ ${material.target.power}W/${material.target.depth}D<br>
+                            Purpose: Final burn on positioned object
+                        </span>
+                    </label>
+                `;
+            }
+        } else {
+            // SIMPLE MODE: Single image burn
+            options = `
+                <label style="display: block; margin: 10px 0; padding: 10px; border: 1px solid #666;">
+                    <input type="radio" name="burnOption" value="image-simple" checked disabled>
+                    <strong>Burn image on base material</strong><br>
+                    <span style="color: #aaa; font-size: 0.9em;">
+                        ${uploadData.original_filename || 'Image'} - ${material.backing?.name || 'Default settings'}<br>
+                        (${material.backing?.power || 1000}W, ${material.backing?.depth || 100}D)
+                    </span>
+                </label>
+            `;
+        }
+        
+        document.getElementById('burnOptions').innerHTML = options;
+        
+        // Summary details
+        let details = `
+            <div style="border-top: 1px solid #666; padding-top: 15px; margin-top: 15px;">
+                <strong>Image:</strong> ${uploadData.original_filename || 'Unknown'} (${uploadData.width}×${uploadData.height}px)
+        `;
+        
+        if (material.target) {
+            details += `<br><strong>Object:</strong> ${material.target.shape || 'Custom'} (${material.target.width_mm}×${material.target.height_mm}mm)`;
+        }
+        
+        if (layout.material_on_burn_area) {
+            details += `<br><strong>Material Position:</strong> (${layout.material_on_burn_area.center_x_mm}, ${layout.material_on_burn_area.center_y_mm})mm`;
+        }
+        
+        if (layout.image_on_material) {
+            details += `<br><strong>Image on Material:</strong> (${layout.image_on_material.center_x_mm}, ${layout.image_on_material.center_y_mm})mm offset`;
+        }
+        
+        details += `</div>`;
+        jobDetails.innerHTML = details;
+        
+        jobSection.style.display = 'block';
+    }
+    
+    async function refreshStatus() {
+        try {
+            const data = await apiCall('/api/status', 'GET');
+            updateStatusBar(data);
+        } catch (err) {
+            console.error('Status fetch failed:', err);
+        }
+    }
+    
+    btnVerify.addEventListener('click', async () => {
+        try {
+            addLog('Verifying K6 connection...', 'info');
+            const data = await apiCall('/api/connect');
+            await refreshStatus();  // Refresh to show updated firmware version
+            addLog(`✓ K6 ${data.version || ''} verified`, 'info');
+            showMessage(`K6 ${data.version || ''} verified`);
+        } catch (err) {
+            showMessage('Verification failed: ' + err.message, true);
+            addLog('✗ Verification failed: ' + err.message, 'error');
+        }
+    });
+    
+    btnBurn.addEventListener('click', async () => {
+        if (!currentJob) {
+            showMessage('No job loaded', true);
+            return;
+        }
+        
+        // Get selected burn options
+        const selected = Array.from(document.querySelectorAll('input[name="burnOption"]:checked'))
+            .map(cb => cb.value);
+        
+        if (selected.length === 0) {
+            showMessage('Please select at least one burn option', true);
+            return;
+        }
+        
+        if (!confirm(`Start burning ${selected.length} job(s)? This will activate the laser!`)) {
+            return;
+        }
+        
+        btnBurn.disabled = true;
+        btnStop.style.display = 'inline-block';
+        progressSection.style.display = 'block';
+        
+        // Reset progress
+        progressSetup.style.width = '0%';
+        progressSetupText.textContent = '0%';
+        progressUpload.style.width = '0%';
+        progressUploadText.textContent = '0%';
+        progressBurn.style.width = '0%';
+        progressBurnText.textContent = '0%';
+        logWindow.innerHTML = '';
+        
+        addLog(`Starting ${selected.length} burn job(s)...`, 'info');
+        
+        // Setup SSE for progress updates
+        eventSource = new EventSource('/api/progress/stream');
+        eventSource.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            updateProgress(data.phase, data.progress, data.message);
+        };
+        
+        eventSource.onerror = () => {
+            eventSource.close();
+            eventSource = null;
+        };
+        
+        try {
+            const uploadData = currentJob.stages.upload.data;
+            const material = currentJob.material || {};
+            const layout = currentJob.layout || {};
+            
+            // Process each selected burn
+            for (let i = 0; i < selected.length; i++) {
+                const burnType = selected[i];
+                addLog(`\n=== Burn ${i+1}/${selected.length}: ${burnType} ===`, 'info');
+                
+                let tempPath = null;
+                let power, depth, center_x, center_y;
+                
+                // Calculate K6 position from layout data (ADR-016/017 three-layer model)
+                const layout = currentJob.layout || {};
+                let material_center_x_px = 800;  // Default center
+                let material_center_y_px = 800;
+                let image_offset_x_px = 0;
+                let image_offset_y_px = 0;
+                
+                if (layout.material_on_burn_area) {
+                    // Convert mm to px (0.05mm/px resolution)
+                    material_center_x_px = layout.material_on_burn_area.center_x_mm / 0.05;
+                    material_center_y_px = layout.material_on_burn_area.center_y_mm / 0.05;
+                }
+                
+                if (layout.image_on_material) {
+                    image_offset_x_px = layout.image_on_material.center_x_mm / 0.05;
+                    image_offset_y_px = layout.image_on_material.center_y_mm / 0.05;
+                }
+                
+                if (burnType === 'alignment') {
+                    // Generate alignment box image (cropped to burn area)
+                    addLog('Generating alignment box...', 'info');
+                    const shapeWidthPx = Math.round(material.target.width_mm / RESOLUTION);
+                    const shapeHeightPx = Math.round(material.target.height_mm / RESOLUTION);
+                    const borderWidth = parseInt(document.getElementById('alignmentBorderWidth')?.value || 3);
+                    
+                    // Create canvas at burn area size
+                    const burnWidthPx = Math.min(shapeWidthPx, K6_MAX_WIDTH);
+                    const burnHeightPx = Math.min(shapeHeightPx, K6_MAX_HEIGHT);
+                    
+                    const canvas = document.createElement('canvas');
+                    canvas.width = burnWidthPx;
+                    canvas.height = burnHeightPx;
+                    const ctx = canvas.getContext('2d', { alpha: false });  // No alpha channel
+                    
+                    // Disable antialiasing for crisp 1-bit conversion
+                    ctx.imageSmoothingEnabled = false;
+                    
+                    // White background (RGB 255,255,255)
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.fillRect(0, 0, burnWidthPx, burnHeightPx);
+                    
+                    // Calculate object position (centered in burn area)
+                    const objX = (burnWidthPx - shapeWidthPx) / 2;
+                    const objY = (burnHeightPx - shapeHeightPx) / 2;
+                    
+                    // Draw full-size rectangle at position - canvas clips overflow automatically
+                    ctx.strokeStyle = '#000000';  // Pure black (RGB 0,0,0)
+                    ctx.lineWidth = borderWidth;
+                    const margin = borderWidth / 2;
+                    ctx.strokeRect(objX + margin, objY + margin, shapeWidthPx - borderWidth, shapeHeightPx - borderWidth);
+                    
+                    addLog(`Alignment box: ${burnWidthPx}x${burnHeightPx}px (object: ${shapeWidthPx}x${shapeHeightPx}px)`, 'info');
+                    
+                    const alignmentImageData = canvas.toDataURL('image/png');
+                    const blob = await fetch(alignmentImageData).then(r => r.blob());
+                    const formData = new FormData();
+                    formData.append('image', blob, 'alignment-box.png');
+                    
+                    const prepareResult = await apiCall('/api/engrave/prepare', 'POST', formData);
+                    tempPath = prepareResult.temp_path;
+                    
+                    // Alignment box uses material position only (no image offset)
+                    center_x = material_center_x_px + 67;  // K6 hardware offset
+                    center_y = material_center_y_px;
+                    power = material.backing.power;
+                    depth = material.backing.depth;
+                    
+                } else if (burnType === 'combined') {
+                    // Generate combined alignment box + image (cropped to burn area)
+                    addLog('Compositing alignment box + image...', 'info');
+                    const shapeWidthPx = Math.round(material.target.width_mm / RESOLUTION);
+                    const shapeHeightPx = Math.round(material.target.height_mm / RESOLUTION);
+                    const borderWidth = parseInt(document.getElementById('combinedBorderWidth')?.value || 3);
+                    
+                    // Create canvas at burn area size
+                    const burnWidthPx = Math.min(shapeWidthPx, K6_MAX_WIDTH);
+                    const burnHeightPx = Math.min(shapeHeightPx, K6_MAX_HEIGHT);
+                    
+                    const canvas = document.createElement('canvas');
+                    canvas.width = burnWidthPx;
+                    canvas.height = burnHeightPx;
+                    const ctx = canvas.getContext('2d', { alpha: false });  // No alpha channel
+                    
+                    // Disable antialiasing for crisp 1-bit conversion
+                    ctx.imageSmoothingEnabled = false;
+                    
+                    // White background (RGB 255,255,255)
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.fillRect(0, 0, burnWidthPx, burnHeightPx);
+                    
+                    // Calculate object position (centered in burn area)
+                    const objX = (burnWidthPx - shapeWidthPx) / 2;
+                    const objY = (burnHeightPx - shapeHeightPx) / 2;
+                    
+                    // Step 1: Draw full-size alignment box - canvas clips overflow
+                    ctx.strokeStyle = '#000000';  // Pure black (RGB 0,0,0)
+                    ctx.lineWidth = borderWidth;
+                    const margin = borderWidth / 2;
+                    ctx.strokeRect(objX + margin, objY + margin, shapeWidthPx - borderWidth, shapeHeightPx - borderWidth);
+                    
+                    // Step 2: Overlay image at material-relative position
+                    const uploadImg = new Image();
+                    uploadImg.src = uploadData.image_base64 || uploadData.image;
+                    await new Promise((resolve) => { uploadImg.onload = resolve; });
+                    
+                    // Calculate image position relative to object position
+                    // Object is centered in burn area, image is offset from object center
+                    const imgCenterX = burnWidthPx / 2 + image_offset_x_px;
+                    const imgCenterY = burnHeightPx / 2 + image_offset_y_px;
+                    const imgX = imgCenterX - uploadImg.width / 2;
+                    const imgY = imgCenterY - uploadImg.height / 2;
+                    
+                    ctx.drawImage(uploadImg, imgX, imgY);
+                    
+                    addLog(`Combined image: ${burnWidthPx}x${burnHeightPx}px (object: ${shapeWidthPx}x${shapeHeightPx}px)`, 'info');
+                    
+                    const compositeImageData = canvas.toDataURL('image/png');
+                    const blob = await fetch(compositeImageData).then(r => r.blob());
+                    const formData = new FormData();
+                    formData.append('image', blob, 'combined-alignment-image.png');
+                    
+                    const prepareResult = await apiCall('/api/engrave/prepare', 'POST', formData);
+                    tempPath = prepareResult.temp_path;
+                    
+                    // Combined uses material position (image already composited at correct offset)
+                    center_x = material_center_x_px + 67;  // K6 hardware offset
+                    center_y = material_center_y_px;
+                    power = material.backing.power;
+                    depth = material.backing.depth;
+                    
+                } else if (burnType === 'image-backing') {
+                    // Burn image on backing material
+                    // DO NOT use temp_path - temp files are ephemeral and may be deleted
+                    // Always use base64 upload for reliability
+                    // Image uses material position + image offset
+                    center_x = material_center_x_px + image_offset_x_px + 67;
+                    center_y = material_center_y_px + image_offset_y_px;
+                    power = material.backing.power;
+                    depth = material.backing.depth;
+                    
+                } else if (burnType === 'image-object') {
+                    // Burn image on object material
+                    // DO NOT use temp_path - temp files are ephemeral and may be deleted
+                    // Always use base64 upload for reliability
+                    // Image uses material position + image offset
+                    center_x = material_center_x_px + image_offset_x_px + 67;
+                    center_y = material_center_y_px + image_offset_y_px;
+                    power = material.target.power;
+                    depth = material.target.depth;
+                    
+                } else if (burnType === 'image-simple') {
+                    // Simple mode (backward compat) - use old positioning
+                    // DO NOT use temp_path - always use base64 for portability
+                    power = material.power || 1000;
+                    depth = material.depth || 100;
+                    center_x = layout.position?.x;
+                    center_y = layout.position?.y;
+                }
+                
+                // Upload image from base64 if needed (alignment/combined already uploaded)
+                if (!tempPath && uploadData.image_base64) {
+                    addLog('Uploading image...', 'info');
+                    const blob = await fetch(uploadData.image_base64).then(r => r.blob());
+                    const formData = new FormData();
+                    // Filename is metadata only - server generates hash-based temp file
+                    formData.append('image', blob, uploadData.original_filename || 'upload.png');
+                    
+                    const prepareResult = await apiCall('/api/engrave/prepare', 'POST', formData);
+                    tempPath = prepareResult.temp_path;
+                }
+                
+                // Start burn
+                const burnData = {
+                    temp_path: tempPath,
+                    power: power,
+                    depth: depth
+                };
+                
+                if (center_x !== undefined && center_x !== null) {
+                    burnData.center_x = center_x;
+                    burnData.center_y = center_y;
+                }
+                
+                addLog(`Burning with power=${power}, depth=${depth}...`, 'info');
+                const result = await apiCall('/api/engrave', 'POST', burnData);
+                
+                lastBurnTimestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                lastBurnResult = result;
+                btnSaveJob.style.display = 'inline-block';
+                
+                if (result.success) {
+                    addLog(`✓ Burn ${i+1} completed in ${result.total_time}s`, 'info');
+                } else {
+                    addLog(`✗ Burn ${i+1} failed`, 'error');
+                }
+            }
+            
+            showMessage(`All burns complete!`);
+            btnBurn.disabled = false;
+            btnStop.style.display = 'none';
+            
+        } catch (err) {
+            addLog(`✗ Burn failed: ${err.message}`, 'error');
+            showMessage('Burn failed: ' + err.message, true);
+            btnBurn.disabled = false;
+            btnStop.style.display = 'none';
+            
+            lastBurnTimestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            lastBurnResult = { success: false, error: err.message };
+            btnSaveJob.style.display = 'inline-block';
+        } finally {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+        }
+    });
+    
+    btnStop.addEventListener('click', async () => {
+        if (!confirm('Stop burning? This will interrupt the current operation.')) {
+            return;
+        }
+        
+        try {
+            await apiCall('/api/test/stop', 'POST');
+            addLog('Stop signal sent', 'warning');
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+        } catch (err) {
+            addLog(`Stop failed: ${err.message}`, 'error');
+        }
+    });
+    
+    // Save Job & Logs functionality
+    const btnSaveJob = document.getElementById('btnSaveJob');
+    let lastBurnTimestamp = null;
+    let lastBurnResult = null;
+    
+    btnSaveJob.addEventListener('click', () => {
+        if (!currentJob) {
+            showMessage('No job to save', true);
+            return;
+        }
+        
+        const timestamp = lastBurnTimestamp || new Date().toISOString().replace(/[:.]/g, '-');
+        
+        // Save job configuration as JSON
+        const jobData = {
+            timestamp: timestamp,
+            job: currentJob,
+            result: lastBurnResult,
+            logs: Array.from(document.querySelectorAll('#logWindow .log-entry')).map(el => el.textContent)
+        };
+        
+        const jobBlob = new Blob([JSON.stringify(jobData, null, 2)], { type: 'application/json' });
+        const jobUrl = URL.createObjectURL(jobBlob);
+        const jobLink = document.createElement('a');
+        jobLink.href = jobUrl;
+        jobLink.download = `k6-burn-job-${timestamp}.json`;
+        jobLink.click();
+        URL.revokeObjectURL(jobUrl);
+        
+        // Save logs as text file
+        const logsText = jobData.logs.join('\n');
+        const logsBlob = new Blob([logsText], { type: 'text/plain' });
+        const logsUrl = URL.createObjectURL(logsBlob);
+        const logsLink = document.createElement('a');
+        logsLink.href = logsUrl;
+        logsLink.download = `k6-burn-logs-${timestamp}.txt`;
+        logsLink.click();
+        URL.revokeObjectURL(logsUrl);
+        
+        showMessage('Job and logs saved');
+    });
+    
+    // Initial load
+    refreshStatus();
+    loadJob();
+{% endblock %}

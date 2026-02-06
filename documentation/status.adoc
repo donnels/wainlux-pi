@@ -72,7 +72,7 @@ endif::flag-book[]
 * [x] Hardware testing (raster burns with depth=10, power=1000 defaults)
 * [x] Vector-only mode validation on K6
 * [x] Calibrate burn completion timeout: Fixed serial timeout corruption, increased idle timeout to 90s, changed max timeout to 5× estimate with proper exit reason tracking
-* [x] Library refactoring: Extracted protocol into scripts/k6 package
+* [x] Library refactoring: Extracted protocol into docker-wainlux/docker/k6/ package
 * [x] Transport abstraction: SerialTransport + MockTransport for testing
 * [x] Exception-based error handling (K6Error, K6TimeoutError, K6DeviceError)
 * [x] Unit test suite: 34 tests covering protocol, driver, CSV logging
@@ -81,17 +81,38 @@ endif::flag-book[]
 * [x] Fixed Flask app k6 library integration (removed placeholder, uses docker/k6/)
 * [x] Added draw_bounds_transport method (no subprocess dependency)
 * [x] Docker container uses pure library implementation (no legacy script)
+* [x] Testing modes implementation:
+    ** Mock mode (K6_MOCK_DEVICE env, MockTransport with v0.0.1)
+    ** Dry run mode (driver-level laser disable, skips INIT commands)
+    ** Operation modes (SILENT/VERBOSE/SINGLE-STEP workflow testing)
+* [x] Mode indicators in UI (title bar shows MOCK/LIVE, DRY-RUN, operation mode)
+* [x] Settings page with mode documentation and toggles
+* [x] Sample images library with dropdown selector
+* [x] WiFi QR code generation (SSID, password, security type)
+* [x] QR burn page with preview and alignment box
+* [x] Calibration page (test patterns: center, corners, frame, grid, bottom-test)
+* [x] Calibration features: jog, mark, crosshair toggle, bounds preview/burn
+* [x] Alignment builder page for custom material positioning
+* [x] Material presets (7 materials: bamboo, leather, pine, card-stock, etc.)
+* [x] Shape presets (3 shapes: credit-card, business-card, phone-case)
+* [x] Preview service with multi-layer rendering (burn area, material, image)
+* [x] Preview tests page for visual debugging
+* [x] Pipeline API endpoints (process, build, execute) for single-step workflow
+* [x] Progress tracking via Server-Sent Events (SSE) with phase indicators
+* [x] Burn cancellation (STOP button with device reset)
+* [x] Dedicated burn page with detailed progress display
 
 == In Progress
 
-* [ ] Camera integration option (burn preview + documentation photos)
+* [ ] Single-step mode UI (pipeline endpoints exist, no UI for manual approval yet)
 * [ ] Hardware validation with new library on Pi Zero W
 
 == Pending
-* [ ] Adjust payload format for raster streaming (if needed after hardware testing)
-* [ ] Image boundary/cropping (observed behavior: crop to work area)
+
+* [ ] Camera integration in Flask app (documentation exists, not integrated in UI)
+* [ ] Image boundary/cropping enforcement (observed behavior: crop to work area)
 * [ ] Production testing on actual K6 hardware
-* [ ] Status API expansion
+* [ ] Material-based positioning calculation (ADR-016 design complete, LayoutService deleted as unimplemented)
 * [ ] Multi-job queue (if needed)
 * [ ] GitHub Actions for documentation build
 * [ ] PDF theme customization

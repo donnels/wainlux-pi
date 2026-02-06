@@ -33,14 +33,10 @@ No code is directly viewed by the user. The LLM instructions forbid showing vend
 
 [NOTE]
 ====
-I'd love to say that I'm an amazing reverse engineer... BUT!
-In this case I cannot as I really didn't have to decipher *ANY* code at all.
-Yes I spent time interacting with an LLM... and I suppose that's cool in itself.
-I now know that ghidra plus MCP plus LLM is quite a potent mix.
-I don't have a clue what the Vendor put in the java apart that from using it showed a lot of badly translated and not translated chinese.
+LLM extracted protocol via Ghidra/MCP. No manual code review.
+Vendor Java contained untranslated Chinese.
+LLM cost: ~$2-6 for full extraction.
 ====
-
-As an aside the cost for the LLM use was something like 2-6$ for the entire protocol extraction and that number is rough because I forgot to check until half way through.
 
 == Requirements
 

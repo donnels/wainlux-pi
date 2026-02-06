@@ -1,0 +1,115 @@
+= FR-013: Hardware-Independent Testing Mode
+:revdate: 2026-01-31
+:revremark: Initial version
+
+== Status
+*Proposed*
+
+== Description
+Run without K6 hardware. Enables dev/testing on any platform. All UI functional. Device operations simulated or fail gracefully.
+
+== Acceptance Criteria
+* Start without /dev/ttyUSB0
+* Status shows "Not connected", UI stays functional
+* All pages accessible
+* Pattern gen/preview work
+* Image processing works
+* Burns fail with clear error
+* Dry-run functional
+* Multi-platform: x86_64, armv7, arm64
+* No crashes on missing device
+
+== Related ADRs
+* link:../ADR/ADR-001-base-image.adoc[ADR-001: Docker Containerization on Pi Zero W]
+* link:FR-004-dry-run-mode.adoc[FR-004: Dry Run Mode]
+* link:../ADR/ADR-013-testing-modes.adoc[ADR-013: Testing Modes]
+
+== Implementation
+
+=== Dockerfile Changes
+* Multi-platform base image selection
+* Platform-specific optimizations
+* No USB device dependency at build time
+
+=== Compose Changes
+* Make /dev/ttyUSB0 optional (not required)
+* Remove privileged mode requirement for testing
+* Environment variable: `K6_MOCK_DEVICE=true` for no-hardware mode
+
+=== Device Manager Changes
+* Graceful handling of missing device
+* Mock device mode for testing
+* Clear error messages on connection attempts
+
+=== Files
+* `docker-wainlux/docker/Dockerfile` - Multi-platform support
+* `docker-wainlux/docker/compose.yaml` - Optional device mounting
+* `docker-wainlux/docker/app/services/k6_service.py` - Mock device handling
+
+== Usage Examples
+
+=== Development on Steam Deck (x86_64)
+[source,bash]
+----
+# Build for native platform
+cd docker-wainlux
+podman build -t wainlux-k6:dev ./docker
+
+# Run without USB device
+podman run -d -p 8080:8080 \
+  -e K6_MOCK_DEVICE=true \
+  wainlux-k6:dev
+----
+
+=== Testing on Pi Zero W (armv7)
+[source,bash]
+----
+# Build for Pi Zero W
+docker buildx build --platform linux/arm/v7 -t wainlux-k6:pi ./docker
+
+# Run with real device
+docker compose up -d
+----
+
+=== Cross-Platform Build
+[source,bash]
+----
+# Build for multiple platforms
+docker buildx build \
+  --platform linux/amd64,linux/arm/v7,linux/arm64 \
+  -t wainlux-k6:multi \
+  ./docker
+----
+
+== Testing Workflow
+
+=== Without Hardware
+1. Start container with `K6_MOCK_DEVICE=true`
+2. Access UI at http://localhost:8080
+3. Test pattern generation → works
+4. Test QR generation → works
+5. Test alignment builder → works
+6. Test pipeline steps (process/build) → works
+7. Attempt burn → fails gracefully with "No device connected"
+
+=== With Hardware
+1. Start container with device mounted
+2. Connect to device
+3. All operations functional
+
+== Rationale
+* Enables development on any platform
+* Faster iteration without hardware
+* CI/CD testing without Pi Zero W
+* Multi-developer workflow
+* Steam Deck development
+* Preview and validation before hardware burn
+
+== Notes
+* Mock device returns success for non-burn operations
+* Pattern generation purely software, no device needed
+* Image processing purely software, no device needed
+* Command building purely software, no device needed
+* Only actual serial I/O requires device
+* UI remains fully functional in mock mode
+* Platform detection automatic at runtime

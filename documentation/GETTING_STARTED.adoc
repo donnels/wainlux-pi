@@ -37,6 +37,41 @@ docker compose up -d
 
 Access: `http://<pi-ip>:8080`
 
+=== Testing Modes
+
+==== Mock Mode (No K6 Hardware)
+
+Test without K6 connected:
+
+[source,bash]
+----
+cd docker-wainlux
+docker compose -f compose-dev.yaml up -d
+----
+
+Uses simulated K6 (version v0.0.1). For development, CI/CD, Steam Deck testing.
+
+==== Dry Run Mode (Real K6, No Burn)
+
+Test with K6 connected but disable laser:
+
+1. Connect K6 hardware
+2. Open Settings page
+3. Enable "Dry Run Mode"
+4. Burns will upload data but skip laser firing
+
+Use for: positioning tests, material verification, protocol debugging.
+
+==== Operation Modes (Workflow Visibility)
+
+Control logging and intermediate files via Settings page:
+
+* *SILENT* (default): Production mode, no intermediate files
+* *VERBOSE*: Save all intermediates (.npy, .bin, logs) for debugging
+* *SINGLE-STEP*: Manual approval at each stage (not yet implemented)
+
+Check title bar for current mode: "Mode: MOCK | DRY-RUN | VERBOSE"
+
 == For Developers
 
 === Read Code

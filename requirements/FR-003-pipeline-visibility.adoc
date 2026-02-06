@@ -1,0 +1,46 @@
+= FR-003: Pipeline Visibility and Progress Tracking
+
+== Status
+
+Implemented (Consolidated from FR-003, FR-008)
+
+== Description
+
+Expose burn pipeline stages. Show real-time progress. Test independently. Save/replay jobs.
+
+== Acceptance Criteria
+
+* 4-step pipeline: upload → process → build → execute
+* Each step saves file, returns preview + metadata
+* Execute from saved .bin without re-processing
+* Three modes: silent, verbose, single-step
+* Real-time SSE progress stream
+* Three phases: setup (0-100%), upload (0-100%), burning (0-100%)
+* Device status parsing (FF FF 00 XX frames)
+* Keepalive events every 30s
+
+== Rationale
+
+* Test stages without device/burns
+* Debug failures at specific stage
+* Replay with different parameters
+* User feedback for long burns (5+ min)
+* See where burns fail
+* Time estimates
+
+== Related ADRs
+
+* ADR-003: Flask (SSE support)
+* ADR-012: Pipeline architecture
+
+== Implementation
+
+* `/api/engrave/prepare` - Step 1
+* `/api/pipeline/process` - Step 2
+* `/api/pipeline/build` - Step 3
+* `/api/pipeline/execute` - Step 4
+* `/api/progress/stream` - SSE endpoint
+* `PipelineService` - file-based workflow
+* `ProgressCSVLogger` - emits progress events
+* `emit_progress()` - queue events
+* Three progress bars in UI

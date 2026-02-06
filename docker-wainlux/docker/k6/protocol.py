@@ -68,11 +68,13 @@ def build_job_header_raster(
     bytes_per_line = (width + 7) // 8
     total_size = bytes_per_line * height
 
-    # Center point calculation - default to center of 1600x1520 work area (76mm actual)
+    # Center point calculation - matches working k6_burn_image.py script
+    # center_x = (width // 2) + 67 (offset for K6 coordinate system)
+    # center_y = height // 2 (relative to image, not work area)
     if center_x is None:
         center_x = (width // 2) + 67
     if center_y is None:
-        center_y = 760  # Center of 1520px work area (76mm measured Y-axis)
+        center_y = height // 2  # Center of image height, not work area
 
     return build_job_header_custom(
         raster_w=width,
@@ -413,64 +415,77 @@ def burn_payload(
         K6DeviceError: If chunk fails after max_retries
 
     Strategy:
-        - Break each line into DATA_CHUNK (1900 byte) pieces
+        - Combine all lines into continuous byte stream
+        - Break into DATA_CHUNK (1900 byte) pieces (NOT line-by-line)
         - Send each chunk with DATA (0x22) packet
         - Retry with exponential backoff on failure
         - Fail fast on max retries exceeded
     """
     chunk_count = 0
 
-    # Calculate total chunks for progress tracking
-    total_chunks = sum(
-        (len(line) + DATA_CHUNK - 1) // DATA_CHUNK for line in payload_lines
-    )
+    # Flatten all lines into continuous byte stream (matching working script)
+    all_bytes = b"".join(payload_lines)
+    total_bytes = len(all_bytes)
+    
+    # Calculate total chunks
+    total_chunks = (total_bytes + DATA_CHUNK - 1) // DATA_CHUNK
 
-    for line_idx, line in enumerate(payload_lines):
-        offset = 0
-        while offset < len(line):
-            chunk = line[offset : offset + DATA_CHUNK]
-            attempt = 0
+    offset = 0
+    while offset < total_bytes:
+        chunk = all_bytes[offset : offset + DATA_CHUNK]
+        attempt = 0
 
-            while attempt < max_retries:
-                try:
-                    pkt = build_data_packet(chunk)
-                    send_cmd_checked(
-                        transport,
-                        f"DATA chunk {chunk_count + 1}/{total_chunks} (line {line_idx})",
-                        pkt,
-                        timeout=2.0,
-                        expect_ack=True,
-                        csv_logger=csv_logger,
+        while attempt < max_retries:
+            try:
+                pkt = build_data_packet(chunk)
+                
+                # Debug: log first DATA packet details
+                if chunk_count == 0 and attempt == 0:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.info(f"First DATA packet: opcode=0x{pkt[0]:02x}, length={len(pkt)}, header={pkt[:10].hex()}, payload_start={chunk[:20].hex()}")
+                
+                send_cmd_checked(
+                    transport,
+                    f"DATA chunk {chunk_count + 1}/{total_chunks}",
+                    pkt,
+                    timeout=2.0,
+                    expect_ack=True,
+                    csv_logger=csv_logger,
+                    phase="burn",
+                )
+                chunk_count += 1
+                offset += len(chunk)
+                break  # success
+
+            except (K6TimeoutError, K6DeviceError) as e:
+                attempt += 1
+                
+                # Extract response byte from error message if present
+                response_info = ""
+                if "response:" in str(e):
+                    response_info = f" {str(e).split('response:')[-1].strip()}"
+
+                # Log retry if csv_logger provided
+                if csv_logger:
+                    csv_logger.log_operation(
                         phase="burn",
+                        operation=f"DATA offset {offset} RETRY (attempt {attempt}{response_info})",
+                        duration_ms=0,
+                        bytes_transferred=0,
+                        retry_count=attempt,
+                        state="RETRY",
+                        device_state="ERROR",
                     )
-                    chunk_count += 1
-                    break  # success
 
-                except (K6TimeoutError, K6DeviceError) as e:
-                    attempt += 1
+                if attempt >= max_retries:
+                    raise K6DeviceError(
+                        f"Chunk failed after {max_retries} attempts "
+                        f"(offset {offset}): {e}"
+                    )
 
-                    # Log retry if csv_logger provided
-                    if csv_logger:
-                        csv_logger.log_operation(
-                            phase="burn",
-                            operation=f"DATA line {line_idx} RETRY",
-                            duration_ms=0,
-                            bytes_transferred=0,
-                            retry_count=attempt,
-                            state="RETRY",
-                            device_state="ERROR",
-                        )
-
-                    if attempt >= max_retries:
-                        raise K6DeviceError(
-                            f"Chunk failed after {max_retries} attempts "
-                            f"(line {line_idx}, offset {offset}): {e}"
-                        )
-
-                    # Exponential backoff: 0.1s, 0.2s, 0.4s...
-                    backoff = 0.1 * (2 ** (attempt - 1))
-                    time.sleep(backoff)
-
-            offset += DATA_CHUNK
+                # Exponential backoff: 0.1s, 0.2s, 0.4s...
+                backoff = 0.1 * (2 ** (attempt - 1))
+                time.sleep(backoff)
 
     return chunk_count

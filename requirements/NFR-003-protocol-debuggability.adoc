@@ -1,0 +1,44 @@
+= NFR-003: Protocol Debuggability
+
+== Status
+
+Implemented
+
+== Description
+
+Serial protocol must be debuggable. Capture all I/O for reverse-engineering and troubleshooting.
+
+== Acceptance Criteria
+
+* Capture raw serial I/O (send and receive)
+* Log timing of all operations
+* Interpret device responses (ACK/ERROR/HEARTBEAT/STATUS)
+* Save to human-readable format
+* No filtering or validation (raw data only)
+* Works in verbose mode automatically
+
+== Rationale
+
+* Vendor protocol undocumented
+* Firmware bugs need proof
+* Reverse-engineering new commands
+* Timing analysis for optimization
+
+== Implementation
+
+* `ByteDumpLogger` - raw I/O capture (.dump + .dump.txt)
+* `CSVLogger` - timing and operation log
+* Verbose mode saves all logs automatically
+* No validation in byte logger (pure capture)
+
+== Related ADRs
+
+* ADR-002: Serial communication
+* ADR-006: Clean room protocol
+* ADR-012: Pipeline architecture
+
+== Format
+
+* `.dump` - binary capture
+* `.dump.txt` - hex + decimal + interpretation
+* `.csv` - timing, phase, operation, bytes_transferred

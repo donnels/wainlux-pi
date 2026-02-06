@@ -1,0 +1,8 @@
+{
+  "name": "Credit Card (Standard)",
+  "primitive": "rectangle",
+  "width_mm": 85.6,
+  "height_mm": 53.98,
+  "description": "Standard ISO/IEC 7810 ID-1 credit card size",
+  "notes": "85.6mm × 53.98mm (CR80 standard)"
+}

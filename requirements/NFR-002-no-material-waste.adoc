@@ -1,0 +1,41 @@
+= NFR-002: No Material Waste in Testing
+
+== Status
+
+Implemented
+
+== Description
+
+Test workflows must not waste engraving material or time.
+
+== Acceptance Criteria
+
+* Dry run mode uploads data without firing laser
+* Preview mode (BOUNDS 0x20) shows positioning without burn
+* Pipeline stages testable without device
+* Command replay without re-processing
+* Unit tests without hardware
+
+== Rationale
+
+* Material costs money
+* Test burns waste time (~50 min per 1600x1600)
+* Early testing before production runs
+* Safe calibration and pattern testing
+
+== Implementation
+
+* Dry run toggle (FR-004)
+* BOUNDS command for positioning
+* Pipeline architecture (FR-003)
+* Mock transport for unit tests
+
+== Related ADRs
+
+* ADR-012: Pipeline architecture
+
+== Measurements
+
+* Full burn (1600x1600): ~5 minutes + material
+* Dry run (1600x1600): ~30 seconds, no material
+* BOUNDS preview: <1 second, no material

@@ -43,3 +43,12 @@
 - /scripts Helper scripts
 - /tests Unit and integration tests (as we're not yet flying it's been removed)
 - README.adoc Top-level readme
+
+## Docker Directory Structure
+**Rule: Keep docker-name/ directories clean**
+- docker-name/ contains: README.adoc, compose.yaml, data/ (runtime), docker/ (build context)
+- docker-name/docker/ contains: Dockerfile, requirements.txt, app/, k6/, templates/, static/, tests/
+- Do NOT clutter docker-name/ with scripts, examples, or test files
+- Any asciidoc/markdown NOT in README must be prefixed "AI-SLOP-" (marks for deletion when done)
+- Examples/scripts need strong justification - uncalled code is worse than DRY violations
+- If code isn't imported/called, DELETE it - it's slop not documentation

@@ -16,7 +16,7 @@ class WainluxK6:
     """
 
     def __init__(self):
-        pass
+        self.dry_run = False  # Dry run flag: upload data but don't fire laser
 
     def draw_bounds_transport(
         self,
@@ -397,8 +397,10 @@ class WainluxK6:
         # ~1 second instead of 90 seconds for 1600x1600
         pixels = np.array(img, dtype=np.uint8)
 
-        # Threshold: 0=burn (black), 255=skip (white)
-        binary = (pixels < 128).astype(np.uint8)
+        # Threshold and INVERT: 1=burn (black), 0=skip (white)
+        # K6 protocol: bit 1 = laser ON, bit 0 = laser OFF
+        # So 0xFF byte = all burn (8 black pixels), 0x00 = all skip (8 white pixels)
+        binary = (pixels < 128).astype(np.uint8)  # 1 for dark, 0 for light - CORRECT
 
         # Pad width to multiple of 8 for bit packing
         if width % 8 != 0:
@@ -418,30 +420,22 @@ class WainluxK6:
         # Convert to list of bytes for protocol layer
         payload_lines = [packed[y].tobytes() for y in range(height)]
 
-        # Protocol sequence: FRAMING → JOB_HEADER → CONNECT x2 → burn → INIT x2
-        # FRAMING (0x21) stops preview mode from BOUNDS (0x20)
-        try:
-            import time
+        # Debug: check first few lines for burn pixels
+        if payload_lines:
+            import logging
+            logger = logging.getLogger(__name__)
+            
+            # Check first 3 lines
+            for i in range(min(3, len(payload_lines))):
+                line = payload_lines[i]
+                has_burn = any(b != 0xFF for b in line)
+                logger.info(f"Line {i}: {len(line)} bytes, has_burn={has_burn}, first_10_bytes={line[:10].hex()}")
+            
+            # Diagnostic: check binary array BEFORE packing
+            logger.info(f"Binary array: shape={binary.shape}, unique_values={np.unique(binary)}, sample_top_left_8x8={binary[:8,:8].tolist()}")
 
-            transport.write(bytes([0x21, 0x00, 0x04, 0x00]))
-            time.sleep(0.05)
-            # Drain any response
-            try:
-                transport.read(timeout=0.1)
-            except Exception:
-                pass
-        except Exception:
-            # Log but proceed - best effort
-            if csv_logger:
-                csv_logger.log_operation(
-                    phase="setup",
-                    operation="PRE_CLEAR",
-                    duration_ms=0,
-                    state="ERROR",
-                    device_state="UNKNOWN",
-                )
-
-        # FRAMING (official start of burn sequence)
+        # Protocol sequence: FRAMING → JOB_HEADER → CONNECT x2 → DATA chunks
+        # Matches working k6_burn_image.py script exactly
         protocol.send_cmd_checked(
             transport,
             "FRAMING",
@@ -456,6 +450,8 @@ class WainluxK6:
         header = protocol.build_job_header_raster(
             width, height, depth, power, center_x=center_x, center_y=center_y
         )
+        logger.info(f"JOB_HEADER: width={width}, height={height}, depth={depth}, power={power}, center_x={center_x}, center_y={center_y}")
+        logger.info(f"JOB_HEADER bytes: {header.hex()}")
         protocol.send_cmd_checked(
             transport,
             "JOB_HEADER",
@@ -485,11 +481,38 @@ class WainluxK6:
             csv_logger=csv_logger,
             phase="setup",
         )
+        
+        # Debug: check if there are any pending bytes before DATA
+        import logging
+        logger = logging.getLogger(__name__)
+        try:
+            pending = transport.read(timeout=0.1)
+            if pending:
+                logger.info(f"Pending bytes after CONNECT #2: {pending.hex()}")
+        except:
+            pass
 
-        # Burn payload with chunking + retry
+        # Burn payload with chunking + retry (no delay - matches working script)
         chunks = protocol.burn_payload(
             transport, payload_lines, max_retries=3, csv_logger=csv_logger
         )
+
+        # DRY RUN: skip INIT and completion wait (don't start laser)
+        if self.dry_run:
+            if csv_logger:
+                csv_logger.log_operation(
+                    phase="finalize",
+                    operation="DRY_RUN_STOP",
+                    duration_ms=0,
+                    state="COMPLETE",
+                    device_state="READY",
+                )
+            return {
+                "ok": True,
+                "total_time": 0,
+                "chunks": chunks,
+                "message": f"Dry run complete ({chunks} chunks uploaded, laser NOT fired)",
+            }
 
         # INIT x2 after burn - device responds with status frames (FF FF 00 XX)
         init_cmd = bytes([0x24, 0x00, 0x0B, 0x00] + [0x00] * 7)
@@ -552,3 +575,136 @@ class WainluxK6:
                     f"(last {result.get('last_pct', 0)}%)"
                 ),
             }
+
+    def execute_from_file(
+        self,
+        transport,
+        command_path: str,
+        csv_logger=None,
+        byte_logger=None,
+    ) -> Dict:
+        """Execute pre-built command sequence from file (Step 4).
+
+        Reads commands.bin from pipeline and executes on device.
+        Bypasses image processing - commands already built.
+        Enables replay and protocol debugging.
+
+        Args:
+            transport: TransportBase instance
+            command_path: Path to .bin file from build_commands()
+            csv_logger: Optional CSVLogger for timing
+            byte_logger: Optional ByteDumpLogger for raw I/O
+
+        Returns:
+            {
+                "ok": True/False,
+                "commands_sent": 1084,
+                "device_responses": {
+                    "ack_count": 6,
+                    "heartbeat_count": 2,
+                    "error_count": 0
+                }
+            }
+        """
+        from pathlib import Path
+
+        # Validate file exists
+        if not Path(command_path).exists():
+            return {
+                "ok": False,
+                "commands_sent": 0,
+                "error": f"Command file not found: {command_path}"
+            }
+
+        # Read command file
+        with open(command_path, 'rb') as f:
+            command_data = f.read()
+
+        # Parse commands (each has 4-byte header: opcode, reserved, length_le16)
+        commands = []
+        offset = 0
+        while offset < len(command_data):
+            if offset + 4 > len(command_data):
+                break
+            
+            length = int.from_bytes(command_data[offset+2:offset+4], 'little')
+            if offset + length > len(command_data):
+                break
+                
+            cmd_bytes = command_data[offset:offset+length]
+            commands.append(cmd_bytes)
+            offset += length
+
+        # Execute commands
+        response_counts = {"ack_count": 0, "heartbeat_count": 0, "error_count": 0}
+        
+        for i, cmd_bytes in enumerate(commands):
+            opcode = cmd_bytes[0]
+            
+            # Determine description
+            opcode_names = {
+                0x21: "FRAMING",
+                0x23: "JOB_HEADER",
+                0x0A: "CONNECT",
+                0x22: "DATA",
+                0x24: "INIT"
+            }
+            desc = opcode_names.get(opcode, f"OPCODE_{opcode:#04x}")
+            if opcode == 0x22:
+                desc = f"DATA chunk {i}/{len(commands)}"
+            
+            # DRY RUN: skip INIT commands (opcode 0x24)
+            if self.dry_run and opcode == 0x24:
+                if csv_logger:
+                    csv_logger.log_operation(
+                        phase="finalize",
+                        operation="INIT_SKIPPED_DRY_RUN",
+                        duration_ms=0,
+                        state="SKIPPED",
+                        device_state="READY",
+                    )
+                continue  # Skip this command
+            
+            # Log send
+            if byte_logger:
+                byte_logger.log_send(cmd_bytes, desc)
+            
+            # Send to device
+            transport.write(cmd_bytes)
+            
+            # Read response
+            try:
+                response = transport.read(timeout=1.0)
+                
+                if byte_logger:
+                    byte_logger.log_recv(response)
+                
+                # Count response types
+                if response and len(response) >= 1:
+                    resp_opcode = response[0]
+                    if resp_opcode == 0x09:
+                        response_counts["ack_count"] += 1
+                    elif resp_opcode == 0x04:
+                        response_counts["heartbeat_count"] += 1
+                    elif resp_opcode == 0x08:
+                        response_counts["error_count"] += 1
+                
+            except Exception as e:
+                if byte_logger:
+                    byte_logger.log_error(f"Read timeout on command {i}: {e}")
+            
+            # CSV logging
+            if csv_logger:
+                csv_logger.log_operation(
+                    phase="execute",
+                    operation=desc,
+                    duration_ms=0,
+                    bytes_transferred=len(cmd_bytes),
+                    state="ACTIVE"
+                )
+
+        return {
+            "ok": True,
+            "commands_sent": len(commands),
+            "device_responses": response_counts
+        }

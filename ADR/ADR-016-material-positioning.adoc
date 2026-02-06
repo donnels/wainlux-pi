@@ -1,0 +1,426 @@
+= ADR-016: Material-Based Positioning
+
+== Status
+
+Accepted (Implementation pending - LayoutService built but never integrated, removed as dead code 2026-02-04)
+
+**See ADR-017 for implemented workflow:** Three-burn object workflow (alignment box, test burn, final burn) replaces complex three-layer positioning calculator.
+
+== Context
+
+*Current model:* "Burn image at position X,Y on burn area."
+
+*Problem:* Real workflow is: "Burn image on material. Material placed on burn area."
+
+*Example (credit card QR):*
+- Material: 85.6×53.98 mm bamboo card
+- Image: 75×53.98 mm QR code
+- QR centered on card, not on burn area
+- Card extends 5.6mm past burn area edge
+- Burn area can't see full card, crops to 80mm
+
+*Current code:* Hardcodes offsets. No visual feedback. Trial and error positioning.
+
+*Solution:* Model the real world. Material sits on burn area. Image sits on material.
+
+== Decision
+
+*Three-layer positioning model:*
+
+1. *Burn area:* Fixed 1600×1520 px (80×76 mm) workspace
+2. *Material:* Rectangular shape placed on burn area (may exceed bounds)
+3. *Image:* Content positioned on material (may exceed material bounds)
+
+*Visual preview:* Shows all three layers. User sees what will burn, what will crop.
+
+== Coordinate Spaces
+
+*Burn area coordinates:*
+- Origin: Top-left corner
+- Size: 1600×1520 px, 80×76 mm
+- Reference frame: K6 hardware (firmware limits)
+
+*Material coordinates:*
+- Origin: Top-left corner of material
+- Size: Variable (e.g., 1712×1080 px, 85.6×53.98 mm)
+- Position: Offset from burn area center
+
+*Image coordinates:*
+- Origin: Top-left corner of image
+- Size: Variable (e.g., 1500×1080 px, 75×53.98 mm)
+- Position: Offset from material center
+
+== Preview Visualization
+
+*Layer rendering (color-coded reference frames):*
+
+- *Red dashed:* Burn area boundary (positioned OUTSIDE burn area, not burned)
+- *Blue dashed:* Material outline
+- *Green dashed:* Image boundary (actual burn content)
+- *Red overlay:* Cropped regions (pixels that exceed burn area)
+
+*Color rationale:*
+
+This violates the B/W UI design principle but is accepted as a tradeoff:
+
+1. *Preview is pre-burn:* Color coding used during positioning phase, not during burn
+2. *Position adjustment timing:* If laser is already burning, position no longer adjustable
+3. *Debugging value:* Color differentiation aids learning/troubleshooting three-layer model
+4. *Future consideration:* May revisit with pattern-based solution (dots/dashes/lines) if grayscale requirement becomes strict
+5. *Trade-off accepted:* Practical value outweighs aesthetic consistency for now
+
+*Reference frame positioning:*
+
+- Burn area border drawn 5px OUTSIDE actual burn area
+- Label positioned ABOVE border (external to burn area)
+- Clearly distinguishes "reference frame" from "burn content"
+- User sees: "This is the boundary" vs "This will be burned"
+
+== Positioning Workflow
+
+*Step 1: Load image*
+```
+→ Upload image
+→ Show image preview
+→ Display dimensions (800×600 px)
+```
+
+*Step 2: Choose material*
+```
+→ Material picker: [Bamboo] [Test Light] [Test Deep] [Custom]
+→ Shape picker: [Credit Card] [Custom Rectangle]
+→ Preview updates: shows material outline
+```
+
+*Step 3: Position image on material*
+```
+→ Alignment buttons: [Center] [Top-Left] [Top-Right] [Bottom-Left] [Bottom-Right]
+→ Manual offset: X: [_37.8_] mm, Y: [_26.99_] mm
+→ Preview shows: image on material
+→ Indicators: "Image fits" or "Image exceeds material by 5mm (right edge)"
+```
+
+*Step 4: Position material on burn area*
+```
+→ Alignment buttons: [Center] [Left-Align] [Right-Align] [Top] [Bottom]
+→ Manual offset: X: [_40.0_] mm, Y: [_38.0_] mm
+→ Preview shows: material on burn area, image on material
+→ Indicators: "Material exceeds burn area by 5.6mm (right edge, will crop)"
+```
+
+*Step 5: Review composite*
+```
+→ Preview layers:
+  - Gray: Burn area boundary (80×76 mm)
+  - Blue: Material boundary (85.6×53.98 mm)
+  - Black: Image content (75×53.98 mm)
+  - Red: Cropped regions (outside burn area)
+→ Burn button enabled if valid (image within burn area after cropping)
+```
+
+== Material Presets
+
+*Definition:*
+```python
+@dataclass
+class Material:
+    name: str
+    power: int        # 0-1000
+    depth: int        # 1-255
+    repeat: int = 1   # Multiple passes
+```
+
+*Built-in presets:*
+```python
+MATERIALS = {
+    "bamboo": Material("Bamboo", 1000, 15),
+    "test_light": Material("Test (Light)", 500, 10),
+    "test_deep": Material("Test (Deep)", 1000, 32, repeat=2)
+}
+```
+
+*Shape presets:*
+```python
+@dataclass
+class MaterialShape:
+    name: str
+    width_mm: float
+    height_mm: float
+
+SHAPES = {
+    "credit_card": MaterialShape("Credit Card", 85.6, 53.98),
+    "business_card": MaterialShape("Business Card", 90, 50),
+    "custom": MaterialShape("Custom", 0, 0)  # User-specified
+}
+```
+
+*Workflow:*
+1. Select material type (bamboo, test_light, test_deep)
+2. Select shape (credit_card, business_card, custom)
+3. Power/depth auto-populated from material
+4. User can override if needed
+
+== Burn Area Material
+
+*Concept:* Burn area isn't empty space. It's a surface. That surface is material.
+
+*Use case:* Alignment burns mark the bed, not the target material.
+
+*Job structure:*
+```json
+{
+  "material": {
+    "work_surface": {
+      "type": "bamboo",
+      "power": 1000,
+      "depth": 15
+    },
+    "target": {
+      "type": "bamboo_card",
+      "shape": "credit_card",
+      "power": 1000,
+      "depth": 15,
+      "position_mm": {"x": 0, "y": 0}
+    }
+  }
+}
+```
+
+*Alignment burn:*
+- Uses `work_surface` material settings
+- Marks burn area boundary on bed
+- Independent of target material
+
+*Image burn:*
+- Uses `target` material settings
+- Burns on target material
+- May differ from work surface
+
+== Preview Rendering
+
+*Layers (bottom to top):*
+
+1. *Background:* Light gray (workspace)
+2. *Burn area:* White rectangle 1600×1520 px, black border
+3. *Material:* Blue outline, dimensions label
+4. *Image:* Actual image content, semi-transparent
+5. *Crop indicators:* Red diagonal lines for out-of-bounds regions
+6. *Annotations:* Dimensions, positions, warnings
+
+*Visual feedback:*
+```
+┌─────────────────────────────────────────────────┐  Workspace (gray)
+│ ┌─────────────────────────────────────────────┐ │
+│ │ Burn Area (80×76 mm)                    ┌───┼─┼─ Material extends 5.6mm
+│ │                                         │ I │ │
+│ │         ┌─────────────────────────┐     │ M │ │
+│ │         │ Image (75×53.98 mm)    │     │ A │ │
+│ │         │ [QR CODE PREVIEW]       │     │ G │ │
+│ │         │                         │     │ E │ │
+│ │         └─────────────────────────┘     └───┼─┼─ Cropped region (red)
+│ └─────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────┘
+```
+
+*Warnings:*
+- "Material exceeds burn area by 5.6mm (right)" → Yellow
+- "Image exceeds material by 2mm (bottom)" → Orange
+- "Final crop: 1500×1080 px" → Info
+- "Ready to burn" → Green
+
+== Position Calculation
+
+*Given:*
+- Image size: 1500×1080 px (75×53.98 mm)
+- Material size: 1712×1080 px (85.6×53.98 mm)
+- Burn area: 1600×1520 px (80×76 mm)
+
+*Step 1: Image on material (centered)*
+```python
+image_on_material_offset_x = (material_width - image_width) / 2
+image_on_material_offset_y = (material_height - image_height) / 2
+# Result: (106, 0) px = (5.3, 0) mm
+```
+
+*Step 2: Material on burn area (left-aligned)*
+```python
+# Left-align: material left edge at burn area left edge
+material_on_burn_offset_x = 0
+material_on_burn_offset_y = (burn_height - material_height) / 2
+# Result: (0, 220) px = (0, 11) mm
+```
+
+*Step 3: Final K6 coordinates*
+```python
+# K6 expects center position of image
+image_center_in_burn_x = material_on_burn_offset_x + image_on_material_offset_x + (image_width / 2)
+image_center_in_burn_y = material_on_burn_offset_y + image_on_material_offset_y + (image_height / 2)
+# Result: (856, 760) px = (42.8, 38) mm
+
+# Add K6 hardware offset (center_x needs +67 px adjustment)
+k6_center_x = image_center_in_burn_x + 67
+k6_center_y = image_center_in_burn_y
+# Final: (923, 760) px
+```
+
+*Step 4: Crop detection*
+```python
+# Check if material exceeds burn area
+material_right = material_on_burn_offset_x + material_width  # 1712 px
+if material_right > burn_width:  # 1712 > 1600
+    crop_right = material_right - burn_width  # 112 px (5.6 mm)
+    warnings.append(f"Material exceeds burn area by {crop_right * 0.05}mm (right)")
+
+# Check if image (after cropping) fits in burn area
+image_left = material_on_burn_offset_x + image_on_material_offset_x  # 106 px
+image_right = image_left + image_width  # 1606 px
+if image_right > burn_width:  # 1606 > 1600
+    crop_right = image_right - burn_width  # 6 px (0.3 mm)
+    warnings.append(f"Image will be cropped by {crop_right * 0.05}mm (right)")
+```
+
+== API Endpoints
+
+*Material picker:*
+```
+GET /api/materials
+→ {
+    "materials": {...},
+    "shapes": {...}
+  }
+```
+
+*Position calculation:*
+```
+POST /api/layout/calculate
+{
+  "image": {"width": 1500, "height": 1080},
+  "material": {"shape": "credit_card", "position": {"x": 0, "y": 0}},
+  "image_on_material": {"x": "center", "y": "center"}
+}
+→ {
+    "k6_position": {"center_x": 923, "center_y": 760},
+    "bounds": {...},
+    "warnings": ["Material exceeds burn area by 5.6mm (right)"],
+    "valid": true
+  }
+```
+
+*Preview rendering:*
+```
+POST /api/layout/preview
+{
+  "job": "job_20260131_143022.k6job",
+  "show_layers": ["burn_area", "material", "image"],
+  "show_annotations": true
+}
+→ data:image/png;base64,...
+```
+
+== Testing
+
+*Inline tests (single-step mode):*
+
+1. `/test/material-picker`
+   - Load all presets
+   - Verify dimensions
+   - Check power/depth ranges
+
+2. `/test/position-center`
+   - Image 800×600, material 1000×800, burn 1600×1520
+   - Center image on material
+   - Center material on burn
+   - Verify K6 coordinates
+
+3. `/test/position-offset`
+   - Image 1500×1080, material 1712×1080, burn 1600×1520
+   - Center image on material
+   - Left-align material on burn
+   - Verify crop warnings
+
+4. `/test/position-exceed`
+   - Image 2000×2000 (exceeds burn area)
+   - Custom material 2000×2000
+   - Center on burn
+   - Verify error (not just warning)
+
+*Each test:*
+- Runs in browser
+- Shows visual preview
+- Displays calculated values
+- Pass/fail based on expected values
+
+== Migration from Current Code
+
+*Current code:*
+```python
+# Hardcoded offsets
+center_x = (burn_width // 2) + K6_CENTER_X_OFFSET
+center_y = K6_DEFAULT_CENTER_Y
+```
+
+*New code:*
+```python
+# Calculate from layout
+layout = calculate_layout(image, material, positions)
+center_x = layout["k6_position"]["center_x"]
+center_y = layout["k6_position"]["center_y"]
+```
+
+*Backward compatibility:*
+- Default material: "bare_burn_area" (no material, direct positioning)
+- Default positions: image centered on burn area
+- Result: Same as current code
+
+== Consequences
+
+=== Benefits
+
+* *Visual feedback:* User sees exactly what will burn before burning
+* *Material library:* Reusable presets, no memorizing numbers
+* *Realistic model:* Software matches physical workflow
+* *Error prevention:* Catches positioning errors before wasting material
+* *Testable:* Each positioning scenario is a test case
+
+=== Tradeoffs
+
+* *Complexity:* Three coordinate spaces vs. one (mitigated: clear layer model)
+* *UI work:* Preview rendering, drag-and-drop (mitigated: phased - buttons first, drag later)
+* *Migration:* Existing hardcoded offsets need refactor (mitigated: backward compat mode)
+
+== Implementation Order
+
+*Phase 1: Material presets* (✓ Partial - settings/material/*.json exist, `/api/materials/list` endpoint exists)
+- Add `/api/materials` endpoint
+- Material picker UI (dropdowns)
+- Auto-populate power/depth
+
+*Phase 2: Position calculation* (✗ Not started - LayoutService deleted as unintegrated code)
+- Add `/api/layout/calculate` endpoint
+- Alignment buttons (center, corners)
+- Manual offset inputs
+
+*Phase 3: Preview rendering* (✓ Partial - PreviewService exists, `/api/preview` endpoint exists, but uses hardcoded positions)
+- Add `/api/layout/preview` endpoint
+- Three-layer composite
+- Crop indicators
+
+*Phase 4: Drag-and-drop* (✗ Not started)
+- Interactive preview
+- Drag material on burn area
+- Drag image on material
+
+*Phase 5: Testing UI* (✗ Not started)
+- Expose inline tests in single-step mode
+- Visual diff against expected
+- Pass/fail results
+
+== Implementation Notes
+
+*2026-02-04:* LayoutService (340 lines) was implemented per this ADR spec but never integrated. Code imported in services/__init__.py but never called from main.py or templates. Deleted as orphaned code. If three-layer positioning is needed, re-implement with integration plan.
+
+== Related
+
+* ADR-015: Unified job format (material data in .k6job)
+* ADR-013: Testing modes (inline tests visible in single-step)
+* Credit card QR example (real use case driving this design)

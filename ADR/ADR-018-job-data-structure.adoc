@@ -1,0 +1,510 @@
+= ADR-018: K6 Job Data Structure
+:revdate: 2026-02-04
+:toc:
+
+== Status
+
+ACCEPTED
+
+== Context
+
+Workflow passes job data between pages via sessionStorage. Inconsistent field names caused data loss.
+
+== Decision
+
+Single `.k6job` structure for all pages.
+
+*Image Storage:* Base64 embedding (no filesystem dependencies).
+
+=== Design: Base64 Image Embedding
+
+**Decision:** Store images as base64 data URLs in job structure. NO temp_path dependencies.
+
+**Rationale:**
+
+* *Portability:* Jobs are self-contained JSON (no external file references)
+* *Reproducibility:* Save/load job works anywhere (no missing files)
+* *Distributed architecture:* UI can be separated from K6 driver across network
+* *Stateless:* No cleanup, no file lifecycle management
+
+**Implementation:**
+
+[source,javascript]
+----
+stages: {
+  upload: {
+    status: 'complete',
+    data: {
+      image_base64: 'data:image/png;base64,...',  // ← Self-contained
+      original_filename: 'photo.jpg',
+      source: 'upload' | 'selection' | 'qr_generation',
+      width: 800,
+      height: 600
+      // NO temp_path field - ephemeral server-side only
+    }
+  }
+}
+----
+
+**Burn workflow:**
+
+1. UI: base64 → blob → FormData → `/api/engrave/prepare`
+2. Server: saves temp PNG, processes, burns, deletes temp file
+3. Result: No filesystem state persists between operations
+
+**Future: Distributed deployment**
+
+Enables splitting app across systems:
+
+* Frontend: React SPA on laptop/tablet
+* Backend: Flask API on Pi Zero W
+* Driver: K6 protocol layer on Pi (serial USB)
+
+Job JSON transmitted over network, no shared filesystem required.
+
+=== Core Structure
+
+[source,javascript]
+----
+{
+  version: '1.0',           // Format version
+  
+  // Image data (from upload or selection)
+  stages: {
+    upload: {
+      status: 'complete',   // complete | pending | error
+      data: {
+        image_base64: 'data:image/png;base64,...',  // Base64 encoded image
+        original_filename: 'photo.jpg',              // Original filename
+        source: 'upload' | 'selection',              // Where image came from
+        width: 800,                                  // Image width in pixels
+        height: 600                                  // Image height in pixels
+      }
+    }
+  },
+  
+  // Material settings
+  material: {
+    type: 'simple' | 'object',  // Workflow mode
+    
+    // Simple mode fields (type='simple'):
+    power: 1000,        // 0-1000
+    depth: 100,         // 1-255
+    name: 'wood',       // REQUIRED: Material ID (references /app/settings/material/{name}.json)
+    
+    // Object mode fields (type='object'):
+    backing: {
+      power: 1000,      // Backing material burn power
+      depth: 15,        // Backing material burn depth
+      name: 'bamboo'    // REQUIRED: Material ID (references /app/settings/material/{name}.json)
+    },
+    target: {
+      power: 500,       // Target object burn power (from material settings)
+      depth: 10,        // Target object burn depth (from material settings)
+      material: 'plastic-card',  // REQUIRED: Material ID (references /app/settings/material/{name}.json)
+      shape: 'credit-card',      // REQUIRED: Shape ID (references /app/settings/shapes/{name}.json)
+      width_mm: 85.6,   // Physical object width (from shape settings)
+      height_mm: 53.98, // Physical object height (from shape settings)
+      shape_type: 'rectangle'    // Shape geometry (from shape settings)
+    }
+  },
+  
+  // Positioning (ADR-016 three-layer model)
+  layout: {
+    // Simple mode (type='simple'):
+    position: {
+      x: 867,           // K6 center X coordinate (px)
+      y: 800            // K6 center Y coordinate (px)
+    },
+    
+    // Object mode (type='object'):
+    material_on_burn_area: {
+      center_x_mm: 40.0,   // Material center X on 80×76mm burn area (mm)
+      center_y_mm: 38.0    // Material center Y on 80×76mm burn area (mm)
+    },
+    image_on_material: {
+      center_x_mm: 0.0,    // Image offset X on material surface (mm)
+      center_y_mm: 0.0     // Image offset Y on material surface (mm)
+    }
+  }
+}
+----
+
+=== Field Requirements
+
+==== Required Fields (All Modes)
+
+* `version`: Format version string
+* `stages.upload.status`: Workflow status
+* `stages.upload.data.image_base64`: Image data
+* `material.type`: Workflow mode selector
+
+==== Simple Mode Requirements
+
+When `material.type === 'simple'`:
+
+* `material.name`: Material ID (must match file in /app/settings/material/)
+* `material.power`: Burn power (0-1000)
+* `material.depth`: Burn depth (1-255)
+* `layout.position.x`: K6 X coordinate (px)
+* `layout.position.y`: K6 Y coordinate (px)
+
+==== Object Mode Requirements
+
+When `material.type === 'object'`:
+
+* `material.backing.name`: Backing material ID (must match file in /app/settings/material/)
+* `material.backing.power`: Backing material power
+* `material.backing.depth`: Backing material depth
+* `material.target.material`: Target object material ID (must match file in /app/settings/material/)
+* `material.target.shape`: Target object shape ID (must match file in /app/settings/shapes/)
+* `material.target.power`: Target object power
+* `material.target.depth`: Target object depth
+* `material.target.width_mm`: Physical object width (from shape settings)
+* `material.target.height_mm`: Physical object height (from shape settings)
+* `layout.material_on_burn_area.center_x_mm`: Material position X
+* `layout.material_on_burn_area.center_y_mm`: Material position Y
+* `layout.image_on_material.center_x_mm`: Image offset X
+* `layout.image_on_material.center_y_mm`: Image offset Y
+
+=== Coordinate Systems
+
+==== K6 Device Coordinates (Simple Mode)
+
+* Origin: Top-left corner of work area
+* Units: Pixels (0.05mm/px resolution)
+* Range: X = 0-1600px, Y = 0-1520px
+* Hardware offset: +67px X for centered positioning
+* Stored in: `layout.position.{x, y}`
+
+==== Material Positioning (Object Mode)
+
+Layer 1: *Burn Area* (Fixed workspace)::
+  80mm × 76mm (1600×1520px) - the K6's physical work area
+
+Layer 2: *Material on Burn Area*::
+  Position where physical material sits on burn area
+  * Units: Millimeters from burn area top-left
+  * Stored in: `layout.material_on_burn_area.{center_x_mm, center_y_mm}`
+  * Example: Credit card centered at (40mm, 38mm) on 80×76mm area
+
+Layer 3: *Image on Material*::
+  Offset where image burns relative to material center
+  * Units: Millimeters from material center
+  * Stored in: `layout.image_on_material.{center_x_mm, center_y_mm}`
+  * Example: Logo at (+10mm, -5mm) from card center
+
+==== K6 Position Calculation (Object Mode)
+
+To convert three-layer positioning to K6 device coordinates:
+
+[source,javascript]
+----
+// Convert mm to px (0.05mm/px resolution)
+const material_center_x_px = layout.material_on_burn_area.center_x_mm / 0.05;
+const material_center_y_px = layout.material_on_burn_area.center_y_mm / 0.05;
+const image_offset_x_px = layout.image_on_material.center_x_mm / 0.05;
+const image_offset_y_px = layout.image_on_material.center_y_mm / 0.05;
+
+// Calculate K6 coordinates
+const k6_x = material_center_x_px + image_offset_x_px + 67;  // +67 hardware offset
+const k6_y = material_center_y_px + image_offset_y_px;
+----
+
+=== Settings File References
+
+Material and shape are **separate**:
+- **Material**: Burn properties (power, depth)
+- **Shape**: Geometry (dimensions, shape type)
+
+==== Material Files
+
+Location: `/app/settings/material/{name}.json`
+
+[source,javascript]
+----
+// Example: /app/settings/material/bamboo.json
+{
+  "name": "Bamboo",
+  "id": "bamboo",
+  "power": 1000,
+  "depth": 15,
+  "description": "Hard dense wood, requires high power",
+  "notes": "Good for cutting boards and coasters"
+}
+
+// Example: /app/settings/material/plastic-card.json
+{
+  "name": "PVC Plastic Card",
+  "id": "plastic-card",
+  "power": 500,
+  "depth": 10,
+  "description": "Thermoplastic, low power to avoid melting/warping",
+  "notes": "Standard credit card material"
+}
+
+// Example: /app/settings/material/veneer-thin.json
+{
+  "name": "Thin Veneer",
+  "id": "veneer-thin",
+  "power": 300,
+  "depth": 255,
+  "description": "Very thin wood, cutting mode",
+  "notes": "High depth for cutting through"
+}
+----
+
+==== Shape Files
+
+Location: `/app/settings/shapes/{name}.json`
+
+Dimensions and geometry only. NO burn settings.
+
+[source,javascript]
+----
+// Example: /app/settings/shapes/credit-card.json
+{
+  "name": "Credit Card (ISO/IEC 7810)",
+  "id": "credit-card",
+  "width_mm": 85.6,
+  "height_mm": 53.98,
+  "shape_type": "rectangle",
+  "description": "Standard credit card dimensions",
+  "notes": "Can be plastic, bamboo, veneer, etc."
+}
+
+// Example: /app/settings/shapes/business-card.json
+{
+  "name": "Business Card (US Standard)",
+  "id": "business-card",
+  "width_mm": 88.9,
+  "height_mm": 50.8,
+  "shape_type": "rectangle",
+  "description": "US/Canada standard business card",
+  "notes": "3.5 × 2 inches"
+}
+
+// Example: /app/settings/shapes/round-coaster.json
+{
+  "name": "Round Coaster",
+  "id": "round-coaster",
+  "width_mm": 100.0,
+  "height_mm": 100.0,
+  "shape_type": "circle",
+  "diameter_mm": 100.0,
+  "description": "Standard drink coaster",
+  "notes": "Circle inscribed in 100mm square"
+}
+----
+
+=== Examples
+
+==== Simple Mode (Wood Coaster)
+
+[source,javascript]
+----
+{
+  version: '1.0',
+  stages: {
+    upload: {
+      status: 'complete',
+      data: {
+        image_base64: 'data:image/png;base64,iVBORw0KG...',
+        original_filename: 'logo.png',
+        source: 'upload',
+        width: 400,
+        height: 300
+      }
+    }
+  },
+  material: {
+    type: 'simple',
+    power: 800,
+    depth: 80,
+    name: 'wood'
+  },
+  layout: {
+    position: {
+      x: 867,    // Centered with hardware offset
+      y: 760     // Centered in work area
+    }
+  }
+}
+----
+
+==== Object Mode (Credit Card WiFi QR)
+
+Three-burn workflow:
+
+1. **Alignment box**: Outline on backing board
+2. **Image test**: QR on backing board (verify position)
+3. **Final burn**: QR on bamboo card
+
+Same positioning, different materials:
+
+[source,javascript]
+----
+{
+  version: '1.0',
+  stages: {
+    upload: {
+      status: 'complete',
+      data: {
+        image_base64: 'data:image/png;base64,iVBORw0KG...',
+        original_filename: 'wifi-qr.png',
+        source: 'selection',
+        width: 1500,
+        height: 1080
+      }
+    }
+  },
+  material: {
+    type: 'object',
+    backing: {
+      power: 500,               // Used for alignment box + test burn on backing board
+      depth: 10,
+      name: 'hard-backing-board'
+    },
+    target: {
+      power: 1000,              // Used for final burn on bamboo card
+      depth: 10,
+      material: 'bamboo-card',
+      shape: 'credit-card',
+      width_mm: 85.6,
+      height_mm: 53.98,
+      shape_type: 'rectangle'
+    }
+  },
+  layout: {
+    material_on_burn_area: {
+      center_x_mm: 45.0,   // Card slightly right of center
+      center_y_mm: 38.0    // Card vertically centered
+    },
+    image_on_material: {
+      center_x_mm: -5.0,   // QR code 5mm left of card center
+      center_y_mm: 0.0     // QR code vertically centered on card
+    }
+  }
+}
+----
+
+**Three burns:**
+
+* **Alignment** (backing): 85.6×53.98mm outline, 500W/10D
+* **Test** (backing): QR, 500W/10D
+* **Final** (target): QR, 1000W/10D
+
+K6 coords (all three): 867px, 760px
+
+==== Object Mode (Plastic Card)
+
+Credit card shape, plastic material:
+
+[source,javascript]
+----
+{
+  material: {
+    type: 'object',
+    backing: {
+      power: 500,
+      depth: 10,
+      name: 'hard-backing-board'
+    },
+    target: {
+      power: 500,               // Lower power for plastic
+      depth: 10,                // Shallow to avoid warping
+      material: 'plastic-card',  // Different material, same shape
+      shape: 'credit-card',
+      width_mm: 85.6,
+      height_mm: 53.98,
+      shape_type: 'rectangle'
+    }
+  }
+  // ... rest same as above
+}
+----
+
+[WARNING]
+====
+**TOXIC FUMES. FIRE HAZARD.** Plastics (PVC, ABS, polycarbonate) release HCl, dioxins, carcinogens. Requires ventilation, respiratory protection, fire suppression. Test low power first. Use wood or coated materials instead.
+====
+
+=== Session Storage
+
+Key: `materialConfig`
+
+[source,javascript]
+----
+// Save
+sessionStorage.setItem('materialConfig', JSON.stringify(job));
+
+// Load
+const job = JSON.parse(sessionStorage.getItem('materialConfig'));
+----
+
+=== Migration Notes
+
+==== Deprecated Field Names
+
+DO NOT USE these field names (from old implementations):
+
+* `material.backing_material` → Use `material.backing`
+* `material.object_material` → Use `material.target`
+* `layout.backing_position` → Use `layout.material_on_burn_area` (convert to mm)
+* `layout.position` in object mode → Use two-layer model
+
+==== Backward Compatibility
+
+[source,javascript]
+----
+if (job.material.backing_material) {
+  job.material.backing = job.material.backing_material;
+  job.material.target = job.material.object_material;
+  delete job.material.backing_material;
+  delete job.material.object_material;
+}
+
+if (job.material.type === 'object' && job.layout.position && !job.layout.material_on_burn_area) {
+  console.warn('Old positioning - reconfigure required');
+}
+----
+
+== Consequences
+
+=== Positive
+
+* Single source of truth
+* Clear simple/object separation
+* Migration path exists
+* **Portable jobs**: Base64 embedding enables save/load without filesystem
+* **Distributed ready**: Can split UI from driver across network later
+
+=== Negative
+
+* Updates all pages
+* Breaks in-flight sessions
+* More verbose
+* **Larger payloads**: Base64 encoding adds ~33% size overhead
+
+=== Neutral
+
+* Pi must match deck repo
+* Test both modes
+
+== References
+
+* ADR-016: Three-Layer Positioning Model
+* ADR-017: Object Burn Workflow (Three-Burn Options)
+* preview-tests.html Test 5 (Reference Implementation)
+
+== Implementation Checklist
+
+- [ ] alignment-builder.html: Use new structure when saving to sessionStorage
+- [ ] burn.html: Read new structure, calculate K6 coords from layout
+- [ ] index.html: Initialize stages.upload.data correctly
+- [ ] qr.html: Generate object mode structure for WiFi cards
+- [ ] preview-tests.html: Add validation tests for both modes
+- [ ] Deploy all templates to Pi
+- [ ] Test simple workflow (wood coaster)
+- [ ] Test object workflow (credit card)
+- [ ] Document examples in user guide

@@ -1,0 +1,8 @@
+{
+  "name": "Business Card (US)",
+  "primitive": "rectangle",
+  "width_mm": 88.9,
+  "height_mm": 50.8,
+  "description": "US standard business card (3.5\" × 2\")",
+  "notes": "Common in North America"
+}

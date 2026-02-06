@@ -27,11 +27,8 @@ Camera documentation for visual verification of laser tests.
 
 [NOTE]
 ====
-This is just an optional part of the setup. The camera is not required for laser operation.
-While I attached the camera I then decided to put it on the YAGNI list.
-It's here because I will use it later so might as well keep the notes.
-Consider it an unverified bonus feature that could be more but isn't anything yet.
-I'm mostly peed off with the fiddly camera and cable and now you see it now you don't so it's out for lunch.
+Optional. Not required for laser operation.
+Unverified. Added for future use.
 ====
 
 == Hardware
@@ -87,7 +84,7 @@ image::camera_test.jpg[Camera test - original orientation]
 .Corrected with 180° rotation
 image::camera_test_rotated.jpg[Camera test - rotated 180°]
 
-Camera is physically mounted upside-down. Use `--rotation 180` flag for correct orientation.
+Camera upside-down. Use `--rotation 180`.
 
 == Use Camera for Laser Testing
 

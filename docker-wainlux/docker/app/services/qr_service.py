@@ -12,22 +12,20 @@ logger = logging.getLogger(__name__)
 class QRService:
     """Service for generating WiFi QR codes"""
 
-    # WiFi QR card dimensions (credit card positioning)
-    BURN_WIDTH = 1500  # px (75mm at 0.05mm/px)
-    BURN_HEIGHT = 1080  # px (53.98mm)
-    CARD_WIDTH_PX = 1712  # px (85.6mm actual card width)
-    OFFSET_RIGHT = (CARD_WIDTH_PX - BURN_WIDTH) // 2  # ~106px shift
-
     @staticmethod
     def generate_wifi_qr(ssid: str, password: str, security: str = "WPA", 
-                         description: str = "") -> tuple[Image.Image, dict]:
-        """Generate WiFi QR code with text labels.
+                         description: str = "", show_password: bool = False) -> tuple[Image.Image, dict]:
+        """Generate WiFi QR code with text labels (tight bounding box).
+
+        Creates QR code + text with minimal canvas (no positioning).
+        Layout system handles placement on material/burn area.
 
         Args:
             ssid: WiFi network SSID
             password: WiFi password
             security: Security type (WPA, WEP, or empty)
             description: Optional description text
+            show_password: If True, display password as text in image
 
         Returns:
             Tuple of (PIL Image, metadata dict)
@@ -49,81 +47,105 @@ class QRService:
         qr.make(fit=True)
         qr_img = qr.make_image(fill_color="black", back_color="white")
 
-        # Create canvas
-        canvas = Image.new("RGB", (QRService.BURN_WIDTH, QRService.BURN_HEIGHT), "white")
-        draw = ImageDraw.Draw(canvas)
+        qr.add_data(wifi_data)
+        qr.make(fit=True)
+        qr_img = qr.make_image(fill_color="black", back_color="white")
 
-        # Load fonts - sizes for credit card readability
-        # At 0.05mm/px: 120px = 6mm, 90px = 4.5mm
+        # Load fonts - sizes for readability at 0.05mm/px
+        # 60px = 3mm, 40px = 2mm
         try:
             font_large = ImageFont.truetype(
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 120
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 60
             )
             font_small = ImageFont.truetype(
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 90
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 40
             )
         except (OSError, IOError):
+            logger.warning("DejaVu fonts missing; falling back to default.")
             font_large = ImageFont.load_default()
             font_small = ImageFont.load_default()
 
-        # Measure text
+        # Measure text to calculate canvas size
         ssid_text = f"SSID: {ssid}"
-        ssid_bbox = draw.textbbox((0, 0), ssid_text, font=font_large)
+        
+        # Create temporary draw context for measurement
+        temp_img = Image.new("RGB", (1, 1), "white")
+        temp_draw = ImageDraw.Draw(temp_img)
+        
+        ssid_bbox = temp_draw.textbbox((0, 0), ssid_text, font=font_large)
+        ssid_w = ssid_bbox[2] - ssid_bbox[0]
         ssid_h = ssid_bbox[3] - ssid_bbox[1]
 
+        # Measure password if showing
+        pwd_w = 0
+        pwd_h = 0
+        pwd_text = ""
+        if show_password and password:
+            pwd_text = f"Password: {password}"
+            pwd_bbox = temp_draw.textbbox((0, 0), pwd_text, font=font_small)
+            pwd_w = pwd_bbox[2] - pwd_bbox[0]
+            pwd_h = pwd_bbox[3] - pwd_bbox[1]
+
+        desc_w = 0
         desc_h = 0
-        line_gap = 16  # Increased gap between text lines
         if description:
-            desc_bbox = draw.textbbox((0, 0), description, font=font_small)
+            desc_bbox = temp_draw.textbbox((0, 0), description, font=font_small)
+            desc_w = desc_bbox[2] - desc_bbox[0]
             desc_h = desc_bbox[3] - desc_bbox[1]
 
-        text_block_height = ssid_h + (line_gap + desc_h if desc_h else 0)
-        gap = 30  # Gap between QR and text
-        min_margin = 60  # 3mm at 0.05 mm/px
-
-        # Calculate QR size
-        max_qr_w = QRService.BURN_WIDTH - 40 - QRService.OFFSET_RIGHT
-        available_height = QRService.BURN_HEIGHT - (2 * min_margin) - gap - text_block_height
-        qr_size = min(max_qr_w, available_height)
-
-        qr_img = qr_img.resize((qr_size, qr_size), Image.Resampling.LANCZOS)
-
-        # Position QR
-        total_block_height = qr_size + gap + text_block_height
-        qr_y = max(min_margin, (QRService.BURN_HEIGHT - total_block_height) // 2)
-        if qr_y + total_block_height + min_margin > QRService.BURN_HEIGHT:
-            qr_y = QRService.BURN_HEIGHT - total_block_height - min_margin
-            if qr_y < min_margin:
-                qr_y = min_margin
-
-        qr_x = (QRService.BURN_WIDTH - qr_size) // 2 + QRService.OFFSET_RIGHT
-        canvas.paste(qr_img, (qr_x, qr_y))
-
-        # Add text
-        text_y = qr_y + qr_size + gap
-        text_bbox = draw.textbbox((0, 0), ssid_text, font=font_large)
-        text_width = text_bbox[2] - text_bbox[0]
-        draw.text(
-            ((QRService.BURN_WIDTH - text_width) // 2 + QRService.OFFSET_RIGHT, text_y),
-            ssid_text,
-            fill="black",
-            font=font_large,
-        )
-
+        # Calculate tight canvas size
+        line_gap = 16  # Gap between text lines
+        text_gap = 30  # Gap between QR and text
+        margin = 20    # Small margin around content
+        
+        qr_size = qr_img.size[0]  # QR is square
+        
+        # Calculate text block height (SSID + password + description)
+        text_block_height = ssid_h
+        if show_password and password:
+            text_block_height += line_gap + pwd_h
         if description:
-            desc_y = text_y + ssid_h + line_gap
-            desc_bbox = draw.textbbox((0, 0), description, font=font_small)
-            desc_width = desc_bbox[2] - desc_bbox[0]
-            draw.text(
-                ((QRService.BURN_WIDTH - desc_width) // 2 + QRService.OFFSET_RIGHT, desc_y),
-                description,
-                fill="black",
-                font=font_small,
-            )
+            text_block_height += line_gap + desc_h
+        
+        canvas_width = max(qr_size, ssid_w, pwd_w, desc_w) + (2 * margin)
+        canvas_height = qr_size + text_gap + text_block_height + (2 * margin)
+        
+        # Create tight canvas
+        canvas = Image.new("RGB", (canvas_width, canvas_height), "white")
+        draw = ImageDraw.Draw(canvas)
+        
+        # Center QR horizontally (convert 1-bit → RGB before pasting)
+        qr_rgb = qr_img.convert("RGB")
+        qr_x = (canvas_width - qr_size) // 2
+        qr_y = margin
+        canvas.paste(qr_rgb, (qr_x, qr_y))
+        
+        # Center text below QR
+        text_y = qr_y + qr_size + text_gap
+        ssid_x = (canvas_width - ssid_w) // 2
+        draw.text((ssid_x, text_y), ssid_text, fill="black", font=font_large)
+        
+        # Add password if showing
+        if show_password and password:
+            pwd_y = text_y + ssid_h + line_gap
+            pwd_x = (canvas_width - pwd_w) // 2
+            draw.text((pwd_x, pwd_y), pwd_text, fill="black", font=font_small)
+            text_y = pwd_y  # Update for next line
+        
+        if description:
+            desc_y = text_y + (pwd_h if show_password and password else ssid_h) + line_gap
+            desc_x = (canvas_width - desc_w) // 2
+            draw.text((desc_x, desc_y), description, fill="black", font=font_small)
+
+        # CRITICAL: Convert to 1-bit to remove font antialiasing
+        # ImageDraw.text() produces antialiased RGB even on white background
+        # Threshold at 128 to binarize (< 128 = black, >= 128 = white)
+        gray = canvas.convert("L")
+        canvas = gray.point(lambda x: 0 if x < 128 else 255, mode="1")
 
         metadata = {
-            "width": QRService.BURN_WIDTH,
-            "height": QRService.BURN_HEIGHT,
+            "width": canvas_width,
+            "height": canvas_height,
             "qr_size": qr_size,
             "ssid": ssid,
             "security": security,
@@ -132,31 +154,7 @@ class QRService:
         return canvas, metadata
 
     @staticmethod
-    def generate_qr_preview_base64(ssid: str, password: str, security: str = "WPA",
-                                   description: str = "") -> tuple[str, dict]:
-        """Generate WiFi QR code and return as base64 data URL for preview.
-
-        Args:
-            ssid: WiFi network SSID
-            password: WiFi password
-            security: Security type
-            description: Optional description
-
-        Returns:
-            Tuple of (base64 data URL, metadata dict)
-        """
-        canvas, metadata = QRService.generate_wifi_qr(ssid, password, security, description)
-
-        # Convert to base64
-        buffer = io.BytesIO()
-        canvas.save(buffer, format="PNG")
-        img_base64 = base64.b64encode(buffer.getvalue()).decode()
-        data_url = f"data:image/png;base64,{img_base64}"
-
-        return data_url, metadata
-
-    @staticmethod
-    def generate_alignment_box() -> Image.Image:
+    def _unused_generate_alignment_box() -> Image.Image:
         """Generate alignment box for credit card positioning (75mm × 53.98mm).
 
         Returns:

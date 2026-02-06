@@ -1,0 +1,913 @@
+{% extends "base.html" %}
+{% from "macros.html" import navigation, message_display %}
+
+{% block title %}Material & Positioning{% endblock %}
+
+{% block page_styles %}
+.hidden { display: none !important; }
+.workflow-step { margin: 20px 0; padding: 20px; border: 1px solid #fff; background: #1a1a1a; }
+.workflow-step h2 { margin-top: 0; }
+.workflow-step.disabled { opacity: 0.5; pointer-events: none; }
+.radio-group label { display: block; margin: 10px 0; cursor: pointer; }
+.radio-group input[type="radio"] { margin-right: 10px; }
+.picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin: 15px 0; }
+.picker-item { 
+    padding: 15px; 
+    border: 2px solid #666; 
+    cursor: pointer; 
+    background: #0a0a0a;
+    transition: all 0.2s;
+}
+.picker-item:hover { border-color: #fff; background: #1a1a1a; }
+.picker-item.selected { border-color: #fff; background: #2a2a2a; }
+.picker-item h4 { margin: 0 0 8px 0; }
+.picker-item p { margin: 5px 0; font-size: 12px; color: #aaa; }
+.input-row { display: flex; gap: 15px; margin: 10px 0; align-items: center; }
+.input-row label { min-width: 120px; }
+.input-row input[type="number"] { width: 100px; padding: 5px; }
+.input-row input[type="text"] { flex: 1; padding: 5px; }
+.position-controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 15px 0; }
+.jog-button { padding: 30px; font-size: 20px; background: #1a1a1a; border: 2px solid #fff; cursor: pointer; }
+.jog-button:hover { background: #2a2a2a; }
+.jog-button:active { background: #3a3a3a; }
+.preview-container { margin: 20px 0; text-align: center; }
+.preview-container img { max-width: 100%; border: 1px solid #333; }
+.state-display { background: #0a0a0a; padding: 15px; margin: 15px 0; font-family: monospace; font-size: 12px; white-space: pre-wrap; border: 1px solid #333; max-height: 400px; overflow-y: auto; }
+.step-status { display: inline-block; margin-left: 10px; padding: 3px 8px; font-size: 11px; }
+.step-status.complete { background: #2a2a2a; border: 1px solid #fff; }
+.step-status.active { background: #3a3a3a; border: 1px solid #fff; color: #fff; font-weight: bold; }
+{% endblock %}
+
+{% block content %}
+{{ navigation("MATERIAL & POSITIONING") }}
+
+<div class="workflow-step" id="step1">
+    <h2>Step 1: Choose What You're Burning <span class="step-status active">◀ START HERE</span></h2>
+    <p>Where will the laser burn the image?</p>
+    <div class="radio-group">
+        <label>
+            <input type="radio" name="burnSurface" value="base" checked> 
+            <strong>Flat Base Material</strong> - Burn directly on wood/board (no positioning needed)
+        </label>
+        <label>
+            <input type="radio" name="burnSurface" value="object"> 
+            <strong>Small Object</strong> - Burn on credit card, business card, etc (requires positioning)
+        </label>
+    </div>
+</div>
+
+<div class="workflow-step" id="step2-shared">
+    <h2>Step 2: Base Material <span class="step-status">Next</span></h2>
+    <p>What material is on the burn area? <span id="baseMaterialPurpose">(your burn surface)</span></p>
+    <div style="margin: 15px 0;">
+        <select id="baseMaterialSelect" style="padding: 8px; width: 100%; max-width: 400px; font-size: 14px;">
+            <option value="">-- Select base material --</option>
+        </select>
+        <div id="baseMaterialInfo" style="margin-top: 10px; padding: 10px; border: 1px solid #666; display: none;">
+            <p id="baseMaterialDesc"></p>
+            <p id="baseMaterialSettings"></p>
+        </div>
+    </div>
+</div>
+
+<div class="workflow-step hidden" id="step3-object">
+    <h2>Step 3: Define Object <span class="step-status">Next</span></h2>
+    
+    <h3>1. Shape (pick preset or enter custom)</h3>
+    <div style="margin: 15px 0;">
+        <select id="shapeSelect" style="padding: 8px; width: 100%; max-width: 400px; font-size: 14px;">
+            <option value="">-- Select shape --</option>
+        </select>
+        <div id="shapeInfo" style="margin-top: 10px; padding: 10px; border: 1px solid #666; display: none;">
+            <p id="shapeDesc"></p>
+            <p id="shapeDims"></p>
+        </div>
+    </div>
+    
+    <div style="margin-top: 20px;">
+        <label style="display: flex; align-items: center; cursor: pointer;">
+            <input type="checkbox" id="chkManualSize" style="margin-right: 8px;">
+            <span>Or enter custom size manually</span>
+        </label>
+        
+        <div id="manualSizeInputs" style="display: none; margin-top: 10px; padding: 10px; border: 1px solid #666;">
+            <div class="input-row">
+                <label>Width (mm):</label>
+                <input type="number" id="manualWidth" min="1" max="80" step="0.1" placeholder="Width">
+                <label>Height (mm):</label>
+                <input type="number" id="manualHeight" min="1" max="76" step="0.1" placeholder="Height">
+            </div>
+            <button id="btnManualShape" style="margin-top: 10px;">Apply Custom Size</button>
+        </div>
+    </div>
+    
+    <h3 style="margin-top: 30px;">2. Material (object burn settings)</h3>
+    <div style="margin: 15px 0;">
+        <select id="objectMaterialSelect" style="padding: 8px; width: 100%; max-width: 400px; font-size: 14px;">
+            <option value="">-- Select object material --</option>
+        </select>
+        <div id="objectMaterialInfo" style="margin-top: 10px; padding: 10px; border: 1px solid #666; display: none;">
+            <p id="objectMaterialDesc"></p>
+            <p id="objectMaterialSettings"></p>
+        </div>
+    </div>
+</div>
+
+<div class="workflow-step disabled" id="step4-position">
+    <h2>Step 4: Position Object <span class="step-status">Waiting</span></h2>
+    <p>Use Live Preview controls above to position your object. Manual offsets:</p>
+    
+    <div class="input-row">
+        <label>X Offset (mm):</label>
+        <input type="number" id="objectX" value="0.0" step="0.5" min="-40" max="40">
+        <label>Y Offset (mm):</label>
+        <input type="number" id="objectY" value="0.0" step="0.5" min="-38" max="38">
+    </div>
+    <p style="color: #aaa; font-size: 0.9em; margin-top: 5px;">0,0 = center of burn area. Adjust to position object.</p>
+</div>
+
+<div class="workflow-step disabled" id="step5-image">
+    <h2>Step 5: Image <span class="step-status">Waiting</span></h2>
+    
+    <div id="noImageState">
+        <p>No image loaded yet.</p>
+        <a href="/qr" style="color: #fff; text-decoration: underline;">→ Generate QR Code</a><br>
+        <a href="/" style="color: #fff; text-decoration: underline;">→ Upload Image</a>
+    </div>
+    
+    <div id="hasImageState" class="hidden">
+        <p>Image loaded: <span id="imageName"></span></p>
+        <p>Position image on <span id="positionTarget">base material</span>:</p>
+        
+        <p style="color: #aaa; font-size: 0.9em; margin-bottom: 10px;">Use Live Preview controls above to position image. Select "Image" from Jog Target dropdown.</p>
+        
+        <div class="input-row">
+            <label>X Offset (mm):</label>
+            <input type="number" id="imageX" value="0.0" step="0.5" min="-40" max="40">
+            <label>Y Offset (mm):</label>
+            <input type="number" id="imageY" value="0.0" step="0.5" min="-38" max="38">
+        </div>
+    </div>
+</div>
+
+<div class="workflow-step">
+    <h2>Live Preview & Positioning</h2>
+    
+    <div style="margin-bottom: 15px;">
+        <label style="margin-right: 10px;">Jog Target:</label>
+        <select id="jogTarget" style="padding: 5px;">
+            <option value="object">Object/Shape</option>
+            <option value="image">Image</option>
+        </select>
+        <span style="margin-left: 15px; color: #aaa; font-size: 0.9em;">Step:</span>
+        <input type="number" id="jogStep" value="1.0" step="0.5" min="0.1" max="10" style="width: 60px; margin-left: 5px;">
+        <span style="margin-left: 3px; color: #aaa; font-size: 0.9em;">mm</span>
+    </div>
+    
+    <div style="display: grid; grid-template-columns: 60px 1fr 60px; gap: 10px; align-items: center;">
+        <!-- Left jog -->
+        <div style="text-align: center;">
+            <button class="jog-button" data-dir="w" style="padding: 15px 20px;">←</button>
+        </div>
+        
+        <!-- Center: top jog + canvas + bottom jog -->
+        <div>
+            <div style="text-align: center; margin-bottom: 10px;">
+                <button class="jog-button" data-dir="n" style="padding: 10px 25px;">↑</button>
+            </div>
+            <canvas id="previewCanvas" width="400" height="380" style="border: 1px solid #fff; background: #000; max-width: 100%; display: block; margin: 0 auto;"></canvas>
+            <div style="text-align: center; margin-top: 10px;">
+                <button class="jog-button" data-dir="s" style="padding: 10px 25px;">↓</button>
+            </div>
+        </div>
+        
+        <!-- Right jog -->
+        <div style="text-align: center;">
+            <button class="jog-button" data-dir="e" style="padding: 15px 20px;">→</button>
+        </div>
+    </div>
+    
+    <div style="text-align: center; margin-top: 15px;">
+        <button class="jog-button" data-dir="center" style="padding: 8px 20px;">● Center</button>
+    </div>
+    
+    <p style="font-size: 0.9em; margin-top: 10px; color: #aaa; text-align: center;" id="previewStatus">Position: <span id="currentPosition">(800, 800)</span></p>
+</div>
+
+<div class="workflow-step">
+    <h2>Save Configuration</h2>
+    <button id="btnSave">Save & Continue to Burn</button>
+    
+    <div style="display: none;" id="legacyPreviewContainer">
+        <img id="previewImage" alt="Preview">
+    </div>
+    
+    <div class="state-display" id="stateDisplay"></div>
+</div>
+
+{{ message_display() }}
+{% endblock %}
+
+{% block page_script %}
+// Material & Positioning Workflow
+let materials = [];
+let shapes = [];
+let currentJob = {
+    version: "1.0",
+    stages: {},
+    material: {},
+    layout: {}
+};
+
+// Live state tracking for preview
+let currentState = {
+    position: { x: 800, y: 800 }, // Default center
+    shape: null,
+    material: null,
+    image: null,
+    burnSurface: 'base'
+};
+
+// Live preview rendering (DRY - uses backend PreviewService)
+let previewUpdateTimeout = null;
+async function renderLivePreview() {
+    // Debounce preview updates
+    if (previewUpdateTimeout) clearTimeout(previewUpdateTimeout);
+    
+    previewUpdateTimeout = setTimeout(async () => {
+        try {
+            const resp = await fetch('/api/preview', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    job: currentJob,
+                    stage: 'layout',
+                    options: {
+                        show_grid: true,
+                        show_annotations: true
+                    }
+                })
+            });
+            
+            const data = await resp.json();
+            if (data.success) {
+                // Update canvas with server-rendered preview
+                const canvas = document.getElementById('previewCanvas');
+                if (canvas) {
+                    const ctx = canvas.getContext('2d');
+                    const img = new Image();
+                    img.onload = () => {
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    };
+                    img.src = data.preview;
+                }
+                
+                // Update status
+                const pos = currentState.position;
+                document.getElementById('previewStatus').innerHTML = 
+                    `Position: <span id="currentPosition">(${Math.round(pos.x)}, ${Math.round(pos.y)})</span>`;
+                
+                // Show warnings if any
+                if (data.warnings && data.warnings.length > 0) {
+                    console.warn('Preview warnings:', data.warnings);
+                }
+            } else {
+                console.error('Preview failed:', data.error);
+            }
+        } catch (err) {
+            console.error('Preview render failed:', err);
+        }
+    }, 100); // 100ms debounce
+}
+
+// Load materials and shapes on page load
+async function loadSettings() {
+    console.log('[loadSettings] Starting...');
+    try {
+        const [matsResp, shapesResp] = await Promise.all([
+            fetch('/api/materials/list'),
+            fetch('/api/shapes/list')
+        ]);
+        
+        console.log('[loadSettings] Responses received');
+        
+        const matsData = await matsResp.json();
+        const shapesData = await shapesResp.json();
+        
+        console.log('[loadSettings] Materials:', matsData);
+        console.log('[loadSettings] Shapes:', shapesData);
+        
+        if (matsData.success) {
+            materials = matsData.materials;
+            console.log('[loadSettings] Loaded', materials.length, 'materials');
+        } else {
+            console.error('[loadSettings] Materials API failed:', matsData.error);
+            showMessage('Failed to load materials: ' + (matsData.error || 'Unknown error'), true);
+        }
+        
+        if (shapesData.success) {
+            shapes = shapesData.shapes;
+            console.log('[loadSettings] Loaded', shapes.length, 'shapes');
+        } else {
+            console.error('[loadSettings] Shapes API failed:', shapesData.error);
+            showMessage('Failed to load shapes: ' + (shapesData.error || 'Unknown error'), true);
+        }
+        
+        renderMaterialPickers();
+        renderShapePicker();
+        
+        console.log('[loadSettings] Rendering complete');
+    } catch (err) {
+        console.error('[loadSettings] Failed:', err);
+        showMessage('Failed to load materials/shapes: ' + err.message, true);
+        
+        // Show error in pickers
+        document.getElementById('baseMaterialPicker').innerHTML = 
+            '<div style="padding: 20px; color: #f00;">Error loading materials. Check console.</div>';
+        document.getElementById('shapePicker').innerHTML = 
+            '<div style="padding: 20px; color: #f00;">Error loading shapes. Check console.</div>';
+        document.getElementById('objectMaterialPicker').innerHTML = 
+            '<div style="padding: 20px; color: #f00;">Error loading materials. Check console.</div>';
+    }
+}
+
+function renderMaterialPickers() {
+    console.log('[renderMaterialPickers] Starting with', materials.length, 'materials');
+    
+    // ADR-018: All materials can be used as backing or target
+    const baseMats = materials;
+    const objectMats = materials;
+    
+    // Populate base material dropdown
+    const baseSelect = document.getElementById('baseMaterialSelect');
+    if (!baseSelect) return;
+    
+    baseMats.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = `${m.name} (Power:${m.power}, Depth:${m.depth})`;
+        opt.dataset.description = m.description;
+        opt.dataset.power = m.power;
+        opt.dataset.depth = m.depth;
+        opt.dataset.repeat = m.repeat;
+        baseSelect.appendChild(opt);
+    });
+    
+    // Populate object material dropdown
+    const objectSelect = document.getElementById('objectMaterialSelect');
+    if (!objectSelect) return;
+    
+    objectMats.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m.id;
+        opt.textContent = `${m.name} (Power:${m.power}, Depth:${m.depth})`;
+        opt.dataset.description = m.description;
+        opt.dataset.power = m.power;
+        opt.dataset.depth = m.depth;
+        opt.dataset.repeat = m.repeat;
+        objectSelect.appendChild(opt);
+    });
+    
+    // Add change handlers
+    baseSelect.addEventListener('change', (e) => {
+        if (e.target.value) {
+            const opt = e.target.selectedOptions[0];
+            selectBaseMaterial(e.target.value);
+            document.getElementById('baseMaterialDesc').textContent = opt.dataset.description;
+            document.getElementById('baseMaterialSettings').textContent = 
+                `Power: ${opt.dataset.power}, Depth: ${opt.dataset.depth}, Repeat: ${opt.dataset.repeat}`;
+            document.getElementById('baseMaterialInfo').style.display = 'block';
+        } else {
+            document.getElementById('baseMaterialInfo').style.display = 'none';
+        }
+    });
+    
+    objectSelect.addEventListener('change', (e) => {
+        if (e.target.value) {
+            const opt = e.target.selectedOptions[0];
+            selectObjectMaterial(e.target.value);
+            document.getElementById('objectMaterialDesc').textContent = opt.dataset.description;
+            document.getElementById('objectMaterialSettings').textContent = 
+                `Power: ${opt.dataset.power}, Depth: ${opt.dataset.depth}, Repeat: ${opt.dataset.repeat}`;
+            document.getElementById('objectMaterialInfo').style.display = 'block';
+        } else {
+            document.getElementById('objectMaterialInfo').style.display = 'none';
+        }
+    });
+    
+    console.log('[renderMaterialPickers] Dropdowns populated');
+}
+
+function renderShapePicker() {
+    console.log('[renderShapePicker] Starting with', shapes.length, 'shapes');
+    
+    const shapeSelect = document.getElementById('shapeSelect');
+    if (!shapeSelect) return;
+    
+    shapes.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = `${s.name} (${s.width_mm} × ${s.height_mm}mm)`;
+        opt.dataset.description = s.description;
+        opt.dataset.widthMm = s.width_mm;
+        opt.dataset.heightMm = s.height_mm;
+        shapeSelect.appendChild(opt);
+    });
+    
+    shapeSelect.addEventListener('change', (e) => {
+        if (e.target.value) {
+            const opt = e.target.selectedOptions[0];
+            selectShape(e.target.value);
+            document.getElementById('shapeDesc').textContent = opt.dataset.description;
+            document.getElementById('shapeDims').textContent = 
+                `Dimensions: ${opt.dataset.widthMm} × ${opt.dataset.heightMm} mm`;
+            document.getElementById('shapeInfo').style.display = 'block';
+        } else {
+            document.getElementById('shapeInfo').style.display = 'none';
+        }
+    });
+    
+    console.log('[renderShapePicker] Dropdown populated');
+}
+
+function selectBaseMaterial(id) {
+    const material = materials.find(m => m.id === id);
+    if (!material) return;
+    
+    // Base material = backing material (same thing, DRY)
+    // Used for simple burns AND for alignment box in object workflow
+    currentJob.material.backing = {
+        material_id: id,
+        name: material.name,
+        power: material.power,
+        depth: material.depth,
+        repeat: material.repeat
+    };
+    
+    updateStepStatus('step2-shared', 'complete');
+    
+    // If simple workflow (no object), enable image step
+    if (currentJob.material.type === 'simple') {
+        updateStepStatus('step5-image', 'active');
+        document.getElementById('step5-image').classList.remove('disabled');
+    }
+    
+    currentState.material = id;
+    updateStateDisplay();
+    renderLivePreview();
+    showMessage(`Base material: ${material.name}`);
+}
+
+function selectShape(id) {
+    const shape = shapes.find(s => s.id === id);
+    if (!shape) return;
+    
+    currentState.shape = id;
+    
+    // ADR-018: Store shape in material.target structure
+    if (!currentJob.material.target) {
+        currentJob.material.target = {};
+    }
+    currentJob.material.target.shape = id;
+    currentJob.material.target.width_mm = shape.width_mm;
+    currentJob.material.target.height_mm = shape.height_mm;
+    
+    updateLayout();  // Populate layout structure for preview
+    checkObjectComplete();
+    updateStateDisplay();
+    renderLivePreview();
+    showMessage(`Shape: ${shape.name}`);
+}
+
+function selectObjectMaterial(id) {
+    const material = materials.find(m => m.id === id);
+    if (!material) return;
+    
+    // ADR-018: Store material in material.target structure
+    if (!currentJob.material.target) {
+        currentJob.material.target = {};
+    }
+    currentJob.material.target.material = id;
+    currentJob.material.target.power = material.power;
+    currentJob.material.target.depth = material.depth;
+    currentJob.material.target.repeat = material.repeat;
+    
+    checkObjectComplete();
+    updateStateDisplay();
+    renderLivePreview();
+    showMessage(`Material: ${material.name}`);
+}
+
+function checkObjectComplete() {
+    // Object workflow complete when shape and object material both selected
+    // Base material is already defined from Step 2
+    if (currentJob.material.target && 
+        currentJob.material.target.shape && 
+        currentJob.material.target.material) {
+        updateStepStatus('step3-object', 'complete');
+        updateStepStatus('step4-position', 'active');
+        document.getElementById('step4-position').classList.remove('disabled');
+        
+        // Enable image step
+        updateStepStatus('step5-image', 'active');
+        document.getElementById('step5-image').classList.remove('disabled');
+        document.getElementById('positionTarget').textContent = 'object';
+    }
+}
+
+function updateStepStatus(stepId, status) {
+    const step = document.getElementById(stepId);
+    if (!step) return;
+    
+    const statusSpan = step.querySelector('.step-status');
+    if (!statusSpan) return;
+    
+    statusSpan.className = 'step-status';
+    if (status === 'complete') {
+        statusSpan.classList.add('complete');
+        statusSpan.textContent = '✓ Done';
+    } else if (status === 'active') {
+        statusSpan.classList.add('active');
+        statusSpan.textContent = '◀ Do This Now';
+    } else {
+        statusSpan.textContent = 'Next';
+    }
+}
+
+function updateStateDisplay() {
+    document.getElementById('stateDisplay').textContent = JSON.stringify(currentJob, null, 2);
+}
+
+// Radio button handling
+document.querySelectorAll('input[name="burnSurface"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+        const value = e.target.value;
+        
+        // Step 2 (base material) is always shown - it's the backing for both workflows
+        updateStepStatus('step2-shared', 'active');
+        
+        if (value === 'base') {
+            // Simple workflow: just base + image
+            document.getElementById('step3-object').classList.add('hidden');
+            document.getElementById('step4-position').classList.add('disabled', 'hidden');
+            document.getElementById('baseMaterialPurpose').textContent = '(your burn surface)';
+            
+            currentJob.material = { type: 'simple' };
+            currentJob.layout = {};
+            
+            // Enable image step directly
+            updateStepStatus('step5-image', 'active');
+            document.getElementById('step5-image').classList.remove('disabled');
+            document.getElementById('positionTarget').textContent = 'base material';
+        } else {
+            // Object workflow: base + object shape/material + positioning
+            document.getElementById('step3-object').classList.remove('hidden');
+            document.getElementById('step4-position').classList.remove('hidden');
+            document.getElementById('baseMaterialPurpose').textContent = '(what the object sits on)';
+            
+            currentJob.material = { type: 'object' };
+            
+            updateStepStatus('step3-object', 'active');
+        }
+        
+        updateStateDisplay();
+    });
+});
+
+// Manual size checkbox toggle
+document.getElementById('chkManualSize').addEventListener('change', (e) => {
+    const manualInputs = document.getElementById('manualSizeInputs');
+    if (e.target.checked) {
+        manualInputs.style.display = 'block';
+    } else {
+        manualInputs.style.display = 'none';
+    }
+});
+
+// Manual shape entry
+document.getElementById('btnManualShape').addEventListener('click', () => {
+    const width = parseFloat(document.getElementById('manualWidth').value);
+    const height = parseFloat(document.getElementById('manualHeight').value);
+    
+    if (!width || !height || width <= 0 || height <= 0) {
+        showMessage('Invalid dimensions', true);
+        return;
+    }
+    
+    currentJob.material.shape = {
+        shape_id: 'manual',
+        name: `Custom ${width}×${height}mm`,
+        width_mm: width,
+        height_mm: height
+    };
+    
+    checkObjectComplete();
+    updateStateDisplay();
+    showMessage(`Manual shape: ${width}×${height}mm`);
+});
+
+// Jog controls (unified positioning)
+document.querySelectorAll('.jog-button[data-dir]').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const dir = btn.dataset.dir;
+        const target = document.getElementById('jogTarget').value; // Get from selector
+        const step = parseFloat(document.getElementById('jogStep').value) || 1.0;
+        
+        const xInput = target === 'image' ? document.getElementById('imageX') : document.getElementById('objectX');
+        const yInput = target === 'image' ? document.getElementById('imageY') : document.getElementById('objectY');
+        
+        let x = parseFloat(xInput.value) || 0;
+        let y = parseFloat(yInput.value) || 0;
+        
+        // Update position based on direction
+        switch(dir) {
+            case 'n': y -= step; break;
+            case 's': y += step; break;
+            case 'w': x -= step; break;
+            case 'e': x += step; break;
+            case 'center': 
+                // Reset to center (0,0 offset for both object and image)
+                x = 0;
+                y = 0;
+                break;
+        }
+        
+        xInput.value = x.toFixed(1);
+        yInput.value = y.toFixed(1);
+        
+        // Update currentState position (convert mm offset to absolute px)
+        // Unified: 0,0 offset = center of burn area = (40mm, 38mm) = (800px, 760px)
+        const centerX_px = 800;  // Center of 1600px burn area
+        const centerY_px = 760;  // Center of 1520px burn area
+        const offsetX_px = x / 0.05;
+        const offsetY_px = y / 0.05;
+        
+        currentState.position = { 
+            x: centerX_px + offsetX_px, 
+            y: centerY_px + offsetY_px 
+        };
+        
+        document.getElementById('currentPosition').textContent = 
+            `(${Math.round(currentState.position.x)}, ${Math.round(currentState.position.y)})`;
+        
+        updateLayout();
+        renderLivePreview();
+        showMessage(`Jogged ${dir}: ${target} at (${x.toFixed(1)}, ${y.toFixed(1)})mm`);
+    });
+});
+
+// NOTE: btnRecenter element not yet implemented - feature disabled
+// // Recenter button
+// document.getElementById('btnRecenter').addEventListener('click', () => {
+//     const target = document.getElementById('jogTarget').value;
+//     
+//     if (target === 'object') {
+//         // Reset object to default position (40, 38)mm
+//         document.getElementById('objectX').value = '40.0';
+//         document.getElementById('objectY').value = '38.0';
+//         currentState.position = { x: 800, y: 760 };
+//     } else {
+//         // Reset image to center (0, 0)mm offset
+//         document.getElementById('imageX').value = '0.0';
+//         document.getElementById('imageY').value = '0.0';
+//         currentState.position = { x: 800, y: 800 };
+//     }
+//     
+//     document.getElementById('currentPosition').textContent = 
+//         `(${currentState.position.x}, ${currentState.position.y})`;
+//     updateLayout();
+//     renderLivePreview();
+//     showMessage(`${target} recentered`);
+// });
+
+// Position input changes
+document.getElementById('objectX').addEventListener('input', updateLayout);
+document.getElementById('objectY').addEventListener('input', updateLayout);
+document.getElementById('imageX').addEventListener('input', updateLayout);
+document.getElementById('imageY').addEventListener('input', updateLayout);
+
+function updateLayout() {
+    const objOffsetX = parseFloat(document.getElementById('objectX').value) || 0;
+    const objOffsetY = parseFloat(document.getElementById('objectY').value) || 0;
+    const imgOffsetX = parseFloat(document.getElementById('imageX').value) || 0;
+    const imgOffsetY = parseFloat(document.getElementById('imageY').value) || 0;
+    
+    // Object position: offset from burn area center
+    // 0,0 offset = center of burn area = 40mm, 38mm absolute
+    const burnCenterX_mm = 40.0;  // Center of 80mm burn area
+    const burnCenterY_mm = 38.0;  // Center of 76mm burn area
+    
+    currentJob.layout = {
+        material_on_burn_area: {
+            center_x_mm: burnCenterX_mm + objOffsetX,
+            center_y_mm: burnCenterY_mm + objOffsetY
+        },
+        // Image position: offset from MATERIAL center (not burn area)
+        // PreviewService expects material-relative coords
+        image_on_material: {
+            center_x_mm: imgOffsetX,  // Relative to material, not burn area
+            center_y_mm: imgOffsetY
+        }
+    };
+    
+    updateStateDisplay();
+}
+
+// Generate burn jobs for handoff to burn page
+function generateBurnJobs() {
+    const uploadData = currentJob.stages.upload.data;
+    const imageData = uploadData.image_base64 || uploadData.image;
+    
+    currentJob.burn_jobs = {};
+    
+    if (currentJob.material.type === 'object') {
+        // Object mode: Generate THREE burn jobs
+        
+        // 1. Alignment box on backing material
+        if (currentJob.material.shape && currentJob.material.backing) {
+            const shapeWidthPx = Math.round(currentJob.material.shape.width_mm / 0.05);
+            const shapeHeightPx = Math.round(currentJob.material.shape.height_mm / 0.05);
+            const position = currentJob.layout.position || { x: 800, y: 800 };
+            
+            // Generate alignment box image (white canvas with black border)
+            const canvas = document.createElement('canvas');
+            canvas.width = shapeWidthPx;
+            canvas.height = shapeHeightPx;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, shapeWidthPx, shapeHeightPx);
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(2, 2, shapeWidthPx - 4, shapeHeightPx - 4);
+            const alignmentImageData = canvas.toDataURL('image/png');
+            
+            currentJob.burn_jobs.alignment = {
+                name: "Alignment Box (on backing)",
+                description: `Burn alignment frame on backing material to position ${currentJob.material.shape.name}`,
+                enabled: false,
+                image_data: alignmentImageData,
+                power: currentJob.material.backing.power,
+                depth: currentJob.material.backing.depth,
+                center_x: position.x,
+                center_y: position.y,
+                width: shapeWidthPx,
+                height: shapeHeightPx
+            };
+        }
+        
+        // 2. Image on backing material (test burn)
+        if (currentJob.material.backing) {
+            currentJob.burn_jobs.image_on_backing = {
+                name: "Image on Backing (test)",
+                description: "Burn image on backing material for testing",
+                enabled: false,
+                image_data: imageData,
+                power: currentJob.material.backing.power,
+                depth: currentJob.material.backing.depth,
+                center_x: null,  // Auto-center
+                center_y: null,
+                width: uploadData.width,
+                height: uploadData.height
+            };
+        }
+        
+        // 3. Image on object (final burn)
+        if (currentJob.material.power && currentJob.material.depth) {
+            const position = currentJob.layout.position || { x: 800, y: 800 };
+            currentJob.burn_jobs.image_on_object = {
+                name: "Image on Object (final)",
+                description: `Burn image on positioned ${currentJob.material.name || 'object'} with object material settings`,
+                enabled: true,  // Default to final burn enabled
+                image_data: imageData,
+                power: currentJob.material.power,
+                depth: currentJob.material.depth,
+                center_x: position.x,
+                center_y: position.y,
+                width: uploadData.width,
+                height: uploadData.height
+            };
+        }
+    } else {
+        // Base mode: Generate ONE burn job
+        currentJob.burn_jobs.image_on_base = {
+            name: "Image on Base Material",
+            description: "Burn image directly on base material",
+            enabled: true,
+            image_data: imageData,
+            power: currentJob.material.power,
+            depth: currentJob.material.depth,
+            center_x: null,  // Auto-center
+            center_y: null,
+            width: uploadData.width,
+            height: uploadData.height
+        };
+    }
+}
+
+// Save configuration and navigate to burn page
+document.getElementById('btnSave').addEventListener('click', () => {
+    // Validate we have required data
+    if (!currentJob.stages || !currentJob.stages.upload || !currentJob.stages.upload.data) {
+        showMessage('No image loaded. Please load an image first.', true);
+        return;
+    }
+    
+    // ADR-018: Check for backing material (required for both simple and object modes)
+    if (!currentJob.material || !currentJob.material.backing) {
+        showMessage('No material selected. Please select a base material first.', true);
+        return;
+    }
+    
+    // Object mode: validate target material and shape
+    if (currentJob.material.type === 'object') {
+        if (!currentJob.material.target || !currentJob.material.target.material) {
+            showMessage('No object material selected. Please select object material.', true);
+            return;
+        }
+        if (!currentJob.material.target.shape) {
+            showMessage('No object shape selected. Please select a shape or enter custom size.', true);
+            return;
+        }
+    }
+    
+    // Generate burn jobs based on mode (base vs object)
+    generateBurnJobs();
+    
+    // Save to sessionStorage for handoff to burn page
+    sessionStorage.setItem('materialConfig', JSON.stringify(currentJob));
+    showMessage('Configuration saved. Redirecting to burn page...');
+    
+    // Navigate to burn page
+    setTimeout(() => {
+        window.location.href = '/burn';
+    }, 500);
+});
+
+// Load default image
+async function loadDefaultImage() {
+    try {
+        const response = await fetch('/api/images/serve/default-image.png');
+        const blob = await response.blob();
+        
+        // Convert to base64
+        const reader = new FileReader();
+        reader.onloadend = function() {
+            const base64data = reader.result;
+            
+            // Get image dimensions
+            const img = new Image();
+            img.onload = function() {
+                currentJob.stages = currentJob.stages || {};
+                currentJob.stages.upload = {
+                    status: 'complete',
+                    data: {
+                        image_path: '/api/images/serve/default-image.png',
+                        image_base64: base64data,
+                        original_filename: 'default-image.png (will be replaced with logo)',
+                        source: 'default',
+                        width: img.width,
+                        height: img.height
+                    }
+                };
+                
+                // Show image state
+                document.getElementById('noImageState').classList.add('hidden');
+                document.getElementById('hasImageState').classList.remove('hidden');
+                document.getElementById('imageName').textContent = 'default-image.png (will be replaced with logo)';
+                
+                updateStateDisplay();
+            };
+            img.src = base64data;
+        };
+        reader.readAsDataURL(blob);
+    } catch (err) {
+        console.error('Failed to load default image:', err);
+    }
+}
+
+// Initialize
+loadSettings();
+updateStateDisplay();
+renderLivePreview(); // Initial preview render
+refreshStatus();
+
+// Check if we have an incoming config (from QR page or index)
+const savedConfig = sessionStorage.getItem('materialConfig');
+if (savedConfig) {
+    currentJob = JSON.parse(savedConfig);
+    
+    // If has image, show it
+    if (currentJob.stages && currentJob.stages.upload) {
+        document.getElementById('noImageState').classList.add('hidden');
+        document.getElementById('hasImageState').classList.remove('hidden');
+        document.getElementById('imageName').textContent = 
+            currentJob.stages.upload.data.original_filename || 'Unknown';
+    }
+    
+    updateStateDisplay();
+} else {
+    // No saved config, load default image
+    loadDefaultImage();
+}
+{% endblock %}

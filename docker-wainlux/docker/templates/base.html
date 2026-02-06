@@ -24,10 +24,48 @@
         function showMessage(text, isError = false) {
             const message = document.getElementById('message');
             if (message) {
-                message.textContent = text;
-                message.className = isError ? 'show error' : 'show success';
-                setTimeout(() => message.className = '', 3000);
+                if (isError) {
+                    // Error messages: add dismiss button, don't auto-clear
+                    message.innerHTML = `
+                        <span style="flex: 1;">${text}</span>
+                        <button onclick="this.parentElement.className=''" style="margin-left: 10px; padding: 5px 15px; background: #fff; color: #000; border: none; cursor: pointer;">DISMISS</button>
+                    `;
+                    message.className = 'show error';
+                    message.style.display = 'flex';
+                    message.style.alignItems = 'center';
+                    message.style.justifyContent = 'space-between';
+                } else {
+                    // Success messages: auto-clear after 3s
+                    message.textContent = text;
+                    message.className = 'show success';
+                    message.style.display = 'block';
+                    setTimeout(() => message.className = '', 3000);
+                }
             }
+        }
+        
+        // Update status display from API response
+        function updateStatusDisplay(statusElement) {
+            if (!statusElement) return;
+            
+            fetch('/api/status')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.connected && data.version) {
+                        statusElement.textContent = `Verified K6 ${data.version} connectivity`;
+                        statusElement.className = 'status';
+                    } else if (data.connected) {
+                        statusElement.textContent = 'Verified K6 connectivity';
+                        statusElement.className = 'status';
+                    } else {
+                        statusElement.textContent = 'K6 connectivity not verified (optional)';
+                        statusElement.className = 'status disconnected';
+                    }
+                })
+                .catch(() => {
+                    statusElement.textContent = 'K6 connectivity not verified (optional)';
+                    statusElement.className = 'status disconnected';
+                });
         }
         
         {% block page_script %}{% endblock %}

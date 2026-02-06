@@ -3,39 +3,27 @@ Jinja2 macros for shared UI components
 Usage: {% from 'macros.html' import macro_name %}
 #}
 
-{# Navigation section with page title and link to home #}
-{% macro navigation(current_page, connected=false) %}
-<div class="section">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
+{# Unified navigation header with status info - used on all pages #}
+{% macro navigation(current_page) %}
+<div class="section" style="border-bottom: 1px solid #fff; padding-bottom: 10px; margin-bottom: 20px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
         <h1>{{ current_page }}</h1>
-        {% if current_page != "WAINLUX K6" %}
-        <a href="/" style="color: #fff; text-decoration: none;">← BACK TO HOME</a>
-        {% endif %}
+        <div>
+            {% if current_page != "WAINLUX K6" %}
+            <a href="/" style="color: #fff; text-decoration: none; margin-right: 20px;">← HOME</a>
+            {% endif %}
+            {% if current_page != "SETTINGS" %}
+            <a href="/settings" style="color: #fff; text-decoration: none;">⚙ SETTINGS</a>
+            {% endif %}
+        </div>
     </div>
-</div>
-{% endmacro %}
-
-{# Status display with optional verification state #}
-{% macro status_display(connected=false, version="") %}
-<div id="status" class="status {% if not connected %}disconnected{% endif %}">
-    {% if connected %}
-        {% if version %}
-            VERIFIED: K6 {{ version }}
-        {% else %}
-            VERIFIED
-        {% endif %}
-    {% else %}
-        NOT VERIFIED (verify optional)
-    {% endif %}
-</div>
-{% endmacro %}
-
-{# Connection verification - optional test, not required for operation #}
-{% macro connection_controls(connected=false) %}
-<div class="section">
-    <h2>VERIFY K6 ONLINE (optional)</h2>
-    <button id="btnConnect" {% if connected %}disabled{% endif %}>VERIFY CONNECTION</button>
-    <button id="btnDisconnect" {% if not connected %}disabled{% endif %}>DISCONNECT</button>
+    
+    {# Status bar with mode, firmware, and verification state #}
+    <div id="statusBar" style="display: flex; justify-content: space-between; align-items: center; font-size: 0.9em; padding: 8px; border: 1px solid #fff; font-family: monospace;">
+        <span id="modeDisplay">Mode: Loading...</span>
+        <span id="firmwareDisplay">Firmware: —</span>
+        <span id="verifyDisplay" style="display: none; color: #0f0;">✓ Verified</span>
+    </div>
 </div>
 {% endmacro %}
 

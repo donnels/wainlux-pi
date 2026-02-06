@@ -1,0 +1,8 @@
+{
+  "name": "Backing Board",
+  "description": "General purpose backing board",
+  "power": 1000,
+  "depth": 15,
+  "repeat": 1,
+  "notes": "Standard backing material for testing"
+}

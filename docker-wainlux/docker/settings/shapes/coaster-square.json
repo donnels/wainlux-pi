@@ -1,0 +1,8 @@
+{
+  "name": "Square Coaster",
+  "primitive": "rectangle",
+  "width_mm": 90.0,
+  "height_mm": 90.0,
+  "description": "Square drink coaster",
+  "notes": "Standard 90mm square coaster size"
+}

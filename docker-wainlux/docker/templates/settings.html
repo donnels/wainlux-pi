@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% from "macros.html" import navigation, message_display %}
+
+{% block title %}Settings{% endblock %}
+
+{% block page_styles %}
+.settings-section {
+    margin: 30px 0;
+    padding: 20px;
+    background: #1a1a1a;
+    border: 1px solid #333;
+}
+.settings-section h2 {
+    margin-top: 0;
+    margin-bottom: 20px;
+    color: #fff;
+}
+.mode-option {
+    margin: 15px 0;
+    padding: 15px;
+    background: #222;
+    border: 2px solid #333;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+.mode-option:hover {
+    border-color: #666;
+}
+.mode-option.selected {
+    border-color: #4a9eff;
+    background: #2a2a3a;
+}
+.mode-option input[type="radio"] {
+    margin-right: 10px;
+}
+.mode-option label {
+    cursor: pointer;
+    display: block;
+}
+.mode-title {
+    font-weight: bold;
+    font-size: 1.1em;
+    margin-bottom: 5px;
+}
+.mode-description {
+    color: #aaa;
+    font-size: 0.9em;
+    margin-left: 25px;
+}
+.save-button {
+    margin-top: 20px;
+}
+{% endblock %}
+
+{% block content %}
+{{ navigation("SETTINGS") }}
+
+<div class="settings-section">
+    <h2>OPERATION MODE (Workflow Testing)</h2>
+    
+    <div class="mode-option" id="mode-silent" onclick="selectMode('silent')">
+        <label>
+            <input type="radio" name="mode" value="silent" id="radio-silent">
+            <span class="mode-title">SILENT (Default)</span>
+        </label>
+        <div class="mode-description">
+            Auto-pipeline, no intermediate files. Logs internal, exposed only on failure.<br>
+            <strong>Use for:</strong> Normal production burns, fastest workflow.
+        </div>
+    </div>
+    
+    <div class="mode-option" id="mode-verbose" onclick="selectMode('verbose')">
+        <label>
+            <input type="radio" name="mode" value="verbose" id="radio-verbose">
+            <span class="mode-title">VERBOSE</span>
+        </label>
+        <div class="mode-description">
+            Auto-pipeline, save all intermediate files (.npy, .bin, CSV/byte logs).<br>
+            <strong>Use for:</strong> Debugging protocol issues, audit trail, byte-level analysis.
+        </div>
+    </div>
+    
+    <div class="mode-option" id="mode-single-step" onclick="selectMode('single-step')">
+        <label>
+            <input type="radio" name="mode" value="single-step" id="radio-single-step">
+            <span class="mode-title">SINGLE-STEP</span>
+        </label>
+        <div class="mode-description">
+            Manual approval at each pipeline stage. Shows preview/stats, awaits "Next Step" button.<br>
+            <strong>Use for:</strong> Learning workflow, calibration testing, education.<br>
+            <strong>Status:</strong> NOT YET IMPLEMENTED (use pipeline API directly).
+        </div>
+    </div>
+    
+    <button class="save-button" id="btnSave">SAVE SETTINGS</button>
+</div>
+
+<div class="settings-section">
+    <h2>DRY RUN MODE</h2>
+    
+    <label style="display: flex; align-items: center; cursor: pointer;">
+        <input type="checkbox" id="dryRunToggle" style="margin-right: 10px;">
+        <span style="font-weight: bold;">Enable Dry Run (real K6, no burn)</span>
+    </label>
+    
+    <div style="color: #aaa; margin-top: 10px; font-size: 0.9em;">
+        <strong>For testing WITH real K6 hardware but WITHOUT burning.</strong><br>
+        Sends all commands including data upload, tests complete protocol flow,
+        but skips INIT commands that fire the laser.<br>
+        Use for: positioning tests, new material verification, protocol debugging.<br>
+        Works with both real hardware and mock mode.
+    </div>
+</div>
+
+<div class="settings-section">
+    <h2>MOCK MODE (read-only)</h2>
+    
+    <div style="color: #aaa; font-size: 0.9em;">
+        <strong>For testing WITHOUT K6 hardware.</strong><br>
+        Set via environment variable: <code>K6_MOCK_DEVICE=true</code><br>
+        Uses simulated transport layer (returns version v0.0.1).<br>
+        Use for: development, CI/CD, Steam Deck testing without laser.<br>
+        Check title bar for <strong>MOCK</strong> indicator.
+    </div>
+</div>
+
+{{ message_display() }}
+
+<div style="margin-top: 30px;">
+    <a href="/">← BACK TO MAIN</a>
+</div>
+{% endblock %}
+
+{% block page_script %}
+let currentMode = 'silent';
+let dryRun = false;
+
+// Load current settings
+async function loadSettings() {
+    try {
+        const response = await fetch('/api/settings');
+        const data = await response.json();
+        if (data.success) {
+            currentMode = data.operation_mode;
+            dryRun = data.dry_run || false;
+            selectMode(currentMode, false);
+            document.getElementById('dryRunToggle').checked = dryRun;
+        }
+    } catch (err) {
+        showMessage('Failed to load settings: ' + err.message, true);
+    }
+}
+
+// Select mode
+function selectMode(mode, showFeedback = true) {
+    currentMode = mode;
+    
+    // Update UI
+    document.querySelectorAll('.mode-option').forEach(opt => {
+        opt.classList.remove('selected');
+    });
+    document.getElementById(`mode-${mode}`).classList.add('selected');
+    document.getElementById(`radio-${mode}`).checked = true;
+    
+    if (showFeedback) {
+        showMessage(`Mode selected: ${mode}`, false);
+    }
+}
+
+// Save settings
+document.getElementById('btnSave').addEventListener('click', async () => {
+    try {
+        dryRun = document.getElementById('dryRunToggle').checked;
+        
+        const response = await fetch('/api/settings', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                operation_mode: currentMode,
+                dry_run: dryRun
+            })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            const dryRunMsg = data.dry_run ? ' (DRY RUN ENABLED)' : '';
+            showMessage(`Settings saved: ${data.operation_mode} mode${dryRunMsg}`, false);
+        } else {
+            showMessage('Save failed: ' + data.error, true);
+        }
+    } catch (err) {
+        showMessage('Save failed: ' + err.message, true);
+    }
+});
+
+// Initial load
+loadSettings();
+refreshStatus();
+{% endblock %}

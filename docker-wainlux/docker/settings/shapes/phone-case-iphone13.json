@@ -1,0 +1,8 @@
+{
+  "name": "Phone Case (iPhone 13)",
+  "primitive": "rectangle",
+  "width_mm": 75.0,
+  "height_mm": 150.0,
+  "description": "iPhone 13/14 case dimensions (approx)",
+  "notes": "Common phone case size, check specific model"
+}

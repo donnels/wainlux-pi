@@ -6,8 +6,8 @@ Accepted
 
 == Context
 
-Single Pi Zero W. One Docker container. Need deployment automation?
-Furher background.: IF someone else wants to use this simplicity will be better.
+Single Pi Zero W. One Docker container. Need deployment automation.
+Others may deploy this. Keep it simple.
 
 Options considered:
 
@@ -65,11 +65,11 @@ Make just wraps bash. No gain.
 * No declarative model
 * Harder to test
 
-=== When to Reconsider
+=== Scale Threshold
 
-Switch to Ansible at 3+ devices.
+Ansible at 3+ devices.
 
-Never use Terraform/OpenTofu for this.
+Terraform/OpenTofu never justified.
 
 == Consequences
 
@@ -106,10 +106,6 @@ All use standard tools: `ssh`, `scp`, `tar`, `docker`.
 
 == Notes
 
-This is the right tool for the job. Simple problem. Simple solution.
+One Pi. One container. One person. Bash wins.
 
-IaC tools solve different problems: multi-region cloud deployments, hundreds of resources, team coordination.
-
-We have: one Pi, one container, one person.
-
-Bash wins.
+IaC for fleets, not singles.

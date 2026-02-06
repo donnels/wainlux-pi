@@ -1,0 +1,16 @@
+services:
+  wainlux-k6-dev:
+    build: ./docker
+    container_name: wainlux-k6-dev
+    # Dev mode: no hardware access (uses mock transport)
+    volumes:
+      - ./data:/app/data
+      - ./docker/images:/app/images
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    environment:
+      - FLASK_ENV=development
+      - PYTHONUNBUFFERED=1
+      # Dev mode: use mock device for testing without hardware
+      - K6_MOCK_DEVICE=true

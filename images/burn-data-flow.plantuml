@@ -1,0 +1,234 @@
+@startuml burn-data-flow
+skinparam BackgroundColor #fff/aaf
+skinparam participantBackgroundColor #fff/aaf
+skinparam sequenceMessageAlign center
+skinparam SequenceLifeLineBackgroundColor #fff-lawngreen
+skinparam BoxPadding 10
+
+title K6 Burn Data Flow - Image Processing & Protocol Sequence
+
+box "Flask App" #aaf-fff
+    participant "main.py\n/api/engrave" as Flask
+end box
+
+box "Driver Layer" #aaf-fff
+    participant "driver.py\nengrave_transport()" as Driver
+    participant "protocol.py\nbuild_job_header()\nbuild_data_packet()\nburn_payload()" as Protocol
+end box
+
+box "Image Processing" #aaf-fff
+    participant "PIL + NumPy" as ImageProc
+end box
+
+box "K6 Device" #red-fff
+    participant "Serial\n/dev/ttyUSB0" as Device
+end box
+
+== Image Processing Phase ==
+
+Flask -> Driver: engrave(image_path, power, depth)
+activate Flask
+activate Driver
+
+Driver -> ImageProc: Load image & convert to grayscale
+activate ImageProc
+ImageProc --> Driver: pixels array (width×height)
+deactivate ImageProc
+
+Driver -> ImageProc: Threshold: pixels < 128 → 1 (burn)\npixels >= 128 → 0 (skip)
+activate ImageProc
+ImageProc --> Driver: binary array (0/1 values)
+deactivate ImageProc
+
+Driver -> ImageProc: Pad width to 8-pixel boundary\n(add zeros on right if needed)
+activate ImageProc
+ImageProc --> Driver: padded binary array
+deactivate ImageProc
+
+Driver -> ImageProc: **Pack 8 pixels → 1 byte (MSB first)**\nbit 1 = burn (black)\nbit 0 = skip (white)
+activate ImageProc
+note right
+  For 8 pixels: [1,0,1,0,1,0,1,0]
+  Pack to byte: 0xAA (10101010)
+  
+  Result: 0xFF = all burn
+          0x00 = all skip
+end note
+ImageProc --> Driver: packed array (height × bytes_per_line)
+deactivate ImageProc
+
+Driver -> Driver: Convert to list of bytes\npayload_lines = [line0, line1, ...]
+note right
+  Example: 628×572 image
+  - 628 pixels → 79 bytes/line
+  - 572 lines
+  - Total: 45,188 bytes
+end note
+
+== Protocol Sequence Phase ==
+
+Driver -> Protocol: **FRAMING (0x21)**\nStart burn sequence
+activate Protocol
+Protocol -> Device: [0x21, 0x00, 0x04, 0x00]
+activate Device
+Device --> Protocol: ACK (0x09)
+deactivate Device
+Protocol --> Driver: ✓
+deactivate Protocol
+
+Driver -> Protocol: **JOB_HEADER (0x23)** - 38 bytes
+activate Protocol
+note right of Protocol
+  Packet structure:
+  [0x23][0x00][38]
+  [param1: packets][0x01]
+  [width: 628][height: 572]
+  [33][power: 1000][depth: 10]
+  [vector_w: 0][vector_h: 0]
+  [total_size: 45188]
+  [vector params: 0s]
+  [center_x: 381][center_y: 286]
+  [quality: 1][0x00]
+end note
+Protocol -> Device: 38-byte header
+activate Device
+Device --> Protocol: HEARTBEAT (0xFFFFFFE)\n(waits ~500ms)
+deactivate Device
+Protocol --> Driver: ✓
+deactivate Protocol
+
+Driver -> Protocol: **CONNECT #1 (0x0A)**
+activate Protocol
+Protocol -> Device: [0x0A, 0x00, 0x04, 0x00]
+activate Device
+Device --> Protocol: ACK (0x09)
+deactivate Device
+Protocol --> Driver: ✓
+deactivate Protocol
+
+Driver -> Protocol: **CONNECT #2 (0x0A)**
+activate Protocol
+Protocol -> Device: [0x0A, 0x00, 0x04, 0x00]
+activate Device
+Device --> Protocol: ACK (0x09)
+deactivate Device
+Protocol --> Driver: ✓
+deactivate Protocol
+
+== Data Chunking & Transmission Phase ==
+
+Driver -> Protocol: burn_payload(payload_lines)
+activate Protocol
+
+Protocol -> Protocol: **Flatten all lines into continuous stream**\nall_bytes = b"".join(payload_lines)
+note right
+  CRITICAL: NOT line-by-line!
+  Combine ALL lines:
+  [line0 + line1 + ... + line571]
+  = single byte stream of 45,188 bytes
+end note
+
+Protocol -> Protocol: Calculate chunks:\ntotal_chunks = (45188 + 1899) // 1900\n= 24 chunks
+note right
+  Chunk strategy matches working script:
+  - 1900 bytes per chunk (DATA_CHUNK)
+  - Last chunk may be smaller
+  - Chunks span multiple lines
+end note
+
+loop For each 1900-byte chunk
+    Protocol -> Protocol: Extract chunk:\nchunk = all_bytes[offset:offset+1900]
+    note right
+      Chunk 0: bytes 0-1899
+      Chunk 1: bytes 1900-3799
+      Chunk 2: bytes 3800-5699
+      ...
+      Chunk 23: bytes 43700-45187 (1488 bytes)
+    end note
+    
+    Protocol -> Protocol: **Build DATA packet (0x22)**
+    note right
+      Packet structure:
+      [0x22][length_msb][length_lsb]
+      [payload: 1900 bytes]
+      [checksum]
+      
+      Length = payload_size + 4
+      Checksum = (-sum(packet[:-1])) & 0xFF
+    end note
+    
+    Protocol -> Device: DATA packet (1904 bytes)
+    activate Device
+    note right
+      First packet:
+      0x22 0x07 0x70 [1900 bytes] [checksum]
+      0x0770 = 1904 bytes total
+    end note
+    
+    alt Success
+        Device --> Protocol: ACK (0x09)
+        Protocol -> Protocol: offset += 1900\nchunk_count++
+    else Error (0x08) - Retry
+        Device --> Protocol: ERROR (0x08)
+        Protocol -> Protocol: wait 0.1s * 2^(attempt-1)
+        Protocol -> Device: Retry same chunk
+        Device --> Protocol: ACK (0x09) or ERROR
+    else Max retries exceeded
+        Protocol --> Driver: ❌ K6DeviceError
+        deactivate Device
+        deactivate Protocol
+        Driver --> Flask: ❌ Burn failed
+        deactivate Driver
+        deactivate Flask
+    end
+    deactivate Device
+end
+
+Protocol --> Driver: ✓ All chunks sent (24 chunks)
+deactivate Protocol
+
+== Finalization Phase ==
+
+Driver -> Protocol: **INIT #1 (0x24)**
+activate Protocol
+Protocol -> Device: [0x24, 0x00, 0x0B, 0x00, 0x00...]
+activate Device
+Device --> Protocol: ACK (0x09)
+deactivate Device
+Protocol --> Driver: ✓
+deactivate Protocol
+
+Driver -> Protocol: **INIT #2 (0x24)**
+activate Protocol
+Protocol -> Device: [0x24, 0x00, 0x0B, 0x00, 0x00...]
+activate Device #red
+Device --> Protocol: ACK (0x09)
+deactivate Device
+Protocol --> Driver: ✓
+deactivate Protocol
+
+Driver -> Protocol: wait_for_completion()\nMonitor status frames
+activate Protocol
+
+loop Until 100% complete
+    Device --> Protocol: STATUS frame\n[0xFF 0xFF 0x00 XX]\nXX = percentage
+    activate Device #red  
+    Protocol -> Protocol: Update progress
+    note right
+      Device sends status every ~1-2s
+      0x00 = 0%
+      0x64 = 100%
+    end note
+    deactivate Device
+end
+
+Protocol --> Driver: ✓ Burn complete
+deactivate Protocol
+
+Driver --> Flask: ✓ Success (24 chunks, ~30s)
+deactivate Driver
+
+Flask -> Flask: emit_progress("complete", 100)
+deactivate Flask
+
+@enduml

@@ -64,26 +64,45 @@ class SerialTransport(TransportBase):
 
 
 class MockTransport(TransportBase):
-    """Simple mock transport for unit tests.
+    """Simple mock transport for unit tests and mock-device runs.
 
-    Usage:
-        m = MockTransport()
-        m.queue_response(b"\xff\xff\xff\xfe")
-        m.queue_response(b"\x09")
-        m.write(b"\x0a\x00\x04\x00")
-        b = m.read(1)
+    If auto_respond is True, the transport will synthesize ACK/status/version
+    frames so higher-level code can exercise the full driver without hardware.
     """
 
-    def __init__(self):
+    def __init__(self, auto_respond: bool = False, version: tuple[int, int, int] = (0, 0, 1)):
         self._write_log = []
         self._resp = bytearray()
         self._timeout = 1.0
+        self._auto = auto_respond
+        self._version = version
 
     def queue_response(self, data: bytes):
         self._resp.extend(data)
 
     def write(self, data: bytes) -> int:
         self._write_log.append(bytes(data))
+
+        if self._auto and data:
+            opcode = data[0]
+            # VERSION request (0xFF) -> respond with version bytes only (no ACK)
+            if opcode == 0xFF:
+                self.queue_response(bytes(self._version))
+            # INIT (0x24) -> ACK + quick completion status
+            elif opcode == 0x24:
+                self.queue_response(b"\x09")
+                self.queue_response(b"\xff\xff\x00\x00")
+                self.queue_response(b"\xff\xff\x00\x64")
+            # STOP (0x16) -> no response (driver doesn't read it, see connect_transport comment)
+            elif opcode == 0x16:
+                pass  # Driver writes STOP but doesn't read response
+            # ACK-required commands (CONNECT, HOME, BOUNDS, FRAMING, DATA, JOB_HEADER, etc)
+            elif opcode in (0x0A, 0x17, 0x20, 0x21, 0x22, 0x23, 0x25, 0x28):
+                self.queue_response(bytes([0x09]))
+            # Other commands -> heartbeat
+            else:
+                self.queue_response(b"\xff\xff\xff\xfe")
+
         return len(data)
 
     def read(self, size: int = 1) -> bytes:

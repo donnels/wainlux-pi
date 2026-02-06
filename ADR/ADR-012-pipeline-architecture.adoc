@@ -1,0 +1,178 @@
+= ADR-012: Pipeline Architecture and State Management
+
+== Status
+
+Accepted (Consolidated from ADR-012, ADR-014, ADR-015)
+
+== Context
+
+Monolithic engrave endpoint hides workflow. Problems:
+
+* *No debugging:* Can't inspect processed image before burn
+* *No replay:* Must re-process for retry
+* *No testing:* Can't test stages independently
+* *State passing unclear:* How do stages share data?
+
+Need visibility. Need testing. Need state management strategy.
+
+== Decision
+
+Unix-style 4-step pipeline with file-based storage and unified job format.
+
+----
+upload.png | process | build | execute | tee logs
+     ↓         ↓         ↓        ↓
+  Step 1    Step 2    Step 3   Step 4
+----
+
+.Pipeline Steps
+. *Upload* → `/api/engrave/prepare` → saves image
+. *Process* → `/api/pipeline/process` → creates .npy + preview
+. *Build* → `/api/pipeline/build` → generates commands.bin
+. *Execute* → `/api/pipeline/execute` → burns + logs
+
+.State Management
+* Files for large data (images, arrays, commands)
+* API responses pass paths + settings
+* Client drives workflow (stateless HTTP)
+* Optional: Unified `.k6job` JSON for complete state
+
+.Three Modes
+* *Silent* (default): Auto-pipeline, no files, logs on fail only
+* *Verbose*: Auto-pipeline, saves all files, full audit
+* *Single-step*: Manual approval, preview each stage
+
+Mode stored in Flask session (per-browser).
+
+== Rationale
+
+*Unix philosophy:* Files are database. Each stage does one thing. Composable.
+
+*Stateless HTTP:* Client passes state. Server doesn't track "current job." Multi-tab safe.
+
+*Session storage rejected:* Breaks multi-tab. Invisible. Hard to debug.
+
+*Database rejected:* ADR-004. Overkill for single-user.
+
+*Testing:* Independent stage tests. Upload once, retry build with different settings.
+
+*Replay:* Saved commands.bin executes without re-processing.
+
+*Protocol analysis:* ByteDumpLogger captures raw I/O for reverse-engineering.
+
+== Architecture Evolution
+
+=== Phase 1: Basic Pipeline (Nov 2025)
+4 endpoints. File paths passed via API response. Each stage independent.
+
+=== Phase 2: State Passing Formalized (Jan 2026)
+Documented data flow:
+- Client sends: paths + new settings
+- Server saves: output files
+- Server returns: new paths + metadata
+
+Example:
+```json
+// Build stage request
+{
+  "processed_path": "/app/data/processed_123.npy",
+  "power": 1000,
+  "depth": 100
+}
+
+// Build stage response
+{
+  "command_path": "/app/data/commands_123.bin",
+  "sequence": {...},
+  "bounds": {...}
+}
+```
+
+=== Phase 3: Unified Format Option (Jan 2026)
+Optional `.k6job` JSON container:
+- Accumulates all stage data
+- Enables universal preview
+- Single-step mode benefits
+
+Not required for silent/verbose modes. File paths still work.
+
+*Design principle:* Simple path passing for production. Rich job format for debugging.
+
+== Data Structures
+
+=== Minimal (Path-Based)
+```
+/app/data/
+  upload_20260131_143022.png
+  processed_20260131_143022.npy
+  commands_20260131_143022.bin
+  execute_20260131_143022.csv
+```
+
+API responses pass paths. Lightweight. Production mode.
+
+=== Complete (.k6job)
+```json
+{
+  "version": "1.0",
+  "stages": {
+    "upload": {
+      "status": "complete",
+      "data": {
+        "image_base64": "...",
+        "width": 800,
+        "height": 600
+      }
+    },
+    "process": {...},
+    "build": {...},
+    "execute": {...}
+  },
+  "material": {...},
+  "layout": {...}
+}
+```
+
+Single file. All data. Single-step preview needs this.
+
+*Trade-off:* Memory overhead acceptable for usability.
+
+== Consequences
+
+=== Benefits
+* *Testability:* Each stage independently testable
+* *Replay:* Execute saved commands without re-processing
+* *Debugging:* Full visibility (verbose mode)
+* *Flexibility:* Three modes cover all use cases
+* *Protocol analysis:* Raw dumps for reverse-engineering
+* *Multi-tab safe:* Client-driven, no server state
+
+=== Trade-offs
+* *Disk usage:* Verbose mode accumulates files (easily purged)
+* *Dual format:* Path-based AND .k6job (justified: different use cases)
+* *Complexity:* More endpoints, mode management (mitigated: clear separation)
+
+=== Implementation
+
+.Services
+* `PipelineService`: Stage logic
+* `ByteDumpLogger`: Raw I/O capture
+* `PreviewService`: Universal job preview
+
+.Endpoints
+* `GET/POST /api/settings` - mode management
+* `POST /api/pipeline/process` - stage 2
+* `POST /api/pipeline/build` - stage 3
+* `POST /api/pipeline/execute` - stage 4
+* `POST /api/preview` - multi-layer preview
+
+.Driver
+* `execute_from_file()` - replay commands.bin
+
+== Related
+
+* ADR-002: Serial communication (ByteDumpLogger extends)
+* ADR-003: Flask (session-based modes)
+* ADR-004: No database (files are DB)
+* ADR-013: Testing modes (orthogonal: mock/dry-run/operational)
+* ADR-016: Material positioning (layout structure in .k6job)

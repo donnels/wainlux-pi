@@ -1,0 +1,8 @@
+{
+  "name": "Card Stock",
+  "description": "Heavy paper/cardstock for business cards",
+  "power": 300,
+  "depth": 8,
+  "repeat": 1,
+  "notes": "Low power to avoid burning through paper"
+}

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import navigation, status_display, connection_controls, test_controls, message_display %}
+{% from "macros.html" import navigation, message_display %}
 
 {% block title %}Wainlux K6{% endblock %}
 
@@ -12,21 +12,39 @@ input[type="file"] { display: block; margin: 10px 0; color: #fff; }
 {% endblock %}
 
 {% block content %}
-{{ navigation("WAINLUX K6", connected) }}
+{{ navigation("WAINLUX K6") }}
 
 <div class="section">
     <a href="/calibration">→ CALIBRATION &amp; TESTING</a><br>
-    <a href="/qr">→ WIFI QR CODE BURN</a>
+    <a href="/qr">→ QR GENERATE</a><br>
+    <a href="/alignment-builder">→ MATERIAL & POSITIONING</a><br>
+    <a href="/burn">→ QUICK BURN (with defaults)</a><br>
+    <a href="/preview-tests">→ PREVIEW ENGINE TESTS</a><br>
+    <button id="btnVerify" style="margin-top: 12px;">VERIFY K6</button>
 </div>
 
-{{ status_display(connected, k6_version if k6_version else "") }}
-{{ connection_controls(connected) }}
-{{ test_controls(connected) }}
-
 <div class="section">
-    <h2>ENGRAVE</h2>
-    <input type="file" id="imageFile" accept="image/*">
-    <button id="btnEngrave">BURN</button>
+    <h2>IMAGE SELECTION</h2>
+    
+    <div class="form-row">
+        <label>SELECT IMAGE:</label>
+        <select id="imageSelect" style="flex: 1; max-width: 400px;">
+            <option value="">-- Select sample image --</option>
+        </select>
+    </div>
+    
+    <div class="form-row" style="margin-top: 10px;">
+        <label>OR UPLOAD:</label>
+        <input type="file" id="imageFile" accept="image/*" style="flex: 1; max-width: 400px;">
+    </div>
+    
+    <div id="previewSection" style="display: none; margin-top: 20px; text-align: center;">
+        <h3>PREVIEW</h3>
+        <img id="previewImage" style="max-width: 400px; max-height: 400px; border: 1px solid #fff;" alt="Image Preview">
+        <div id="previewInfo" style="margin-top: 10px; font-size: 0.9em;"></div>
+    </div>
+    
+    <button id="btnNext" style="margin-top: 15px;">NEXT →</button>
 </div>
 
 {{ message_display() }}
@@ -34,83 +52,200 @@ input[type="file"] { display: block; margin: 10px 0; color: #fff; }
 
 {% block page_script %}
     // Main app code
-    let connected = false;
-    
-    const status = document.getElementById('status');
-    const btnConnect = document.getElementById('btnConnect');
-    const btnDisconnect = document.getElementById('btnDisconnect');
-    const btnBounds = document.getElementById('btnBounds');
-    const btnHome = document.getElementById('btnHome');
-    const btnStop = document.getElementById('btnStop');
-    const btnEngrave = document.getElementById('btnEngrave');
+    const modeDisplay = document.getElementById('modeDisplay');
+    const firmwareDisplay = document.getElementById('firmwareDisplay');
+    const verifyDisplay = document.getElementById('verifyDisplay');
+    const btnVerify = document.getElementById('btnVerify');
+    const btnNext = document.getElementById('btnNext');
     const imageFile = document.getElementById('imageFile');
+    const imageSelect = document.getElementById('imageSelect');
+    const previewSection = document.getElementById('previewSection');
+    const previewImage = document.getElementById('previewImage');
+    const previewInfo = document.getElementById('previewInfo');
     
-    let k6Version = '';
+    let currentImageData = null;
+    let sampleImages = [];
     
-    function updateUI() {
-        btnConnect.disabled = connected;
-        btnDisconnect.disabled = !connected;
-        
-        if (connected) {
-            status.textContent = k6Version ? `VERIFIED: K6 ${k6Version}` : 'VERIFIED';
-            status.className = 'status';
-        } else {
-            status.textContent = 'NOT VERIFIED (verify optional)';
-            status.className = 'status disconnected';
+    // Load sample images
+    async function loadSampleImages() {
+        try {
+            const data = await apiCall('/api/images/list', 'GET');
+            sampleImages = data.images || [];
+            
+            // Populate dropdown
+            imageSelect.innerHTML = '<option value="">-- Select sample image --</option>';
+            sampleImages.forEach(img => {
+                const opt = document.createElement('option');
+                opt.value = img.url;
+                opt.textContent = img.name;
+                
+                // Select default-image.png by default
+                if (img.name === 'default-image.png') {
+                    opt.selected = true;
+                }
+                
+                imageSelect.appendChild(opt);
+            });
+            
+            // Auto-load default image preview
+            if (imageSelect.value) {
+                await loadImagePreview(imageSelect.value, 'default-image.png');
+            }
+        } catch (err) {
+            console.error('Failed to load sample images:', err);
         }
     }
     
-    btnConnect.addEventListener('click', async () => {
-        const data = await apiCall('/api/connect');
-        connected = data.connected;
-        k6Version = data.version || '';
-        updateUI();
-        showMessage(`Connected to K6 ${k6Version}`);
-    });
-    
-    btnDisconnect.addEventListener('click', async () => {
-        await apiCall('/api/disconnect');
-        connected = false;
-        k6Version = '';
-        updateUI();
-        showMessage('Disconnected');
-    });
-    
-    btnBounds.addEventListener('click', async () => {
-        showMessage('Drawing bounds...');
-        await apiCall('/api/test/bounds');
-        showMessage('Bounds drawn');
-    });
-    
-    btnHome.addEventListener('click', async () => {
-        await apiCall('/api/test/home');
-        showMessage('Homed');
-    });
-    
-    btnStop.addEventListener('click', async () => {
-        // EMERGENCY STOP - no confirmation, immediate action
+    // Load and display image preview
+    async function loadImagePreview(url, filename) {
         try {
-            await apiCall('/api/test/stop');
-            showMessage('STOP command sent');
+            const response = await fetch(url);
+            const blob = await response.blob();
+            
+            // Convert to base64
+            const reader = new FileReader();
+            reader.onloadend = function() {
+                const base64data = reader.result;
+                
+                // Get dimensions
+                const img = new Image();
+                img.onload = function() {
+                    currentImageData = {
+                        image_base64: base64data,
+                        original_filename: filename,
+                        source: 'selection',
+                        width: img.width,
+                        height: img.height,
+                        url: url
+                    };
+                    
+                    // Display preview
+                    previewImage.src = base64data;
+                    previewInfo.textContent = `${filename} (${img.width} × ${img.height}px)`;
+                    previewSection.style.display = 'block';
+                    
+                    updateNextButtonText();
+                };
+                img.src = base64data;
+            };
+            reader.readAsDataURL(blob);
         } catch (err) {
-            showMessage('Stop failed: ' + err.message, true);
+            console.error('Failed to load image preview:', err);
+            showMessage('Failed to load image preview', true);
+        }
+    }
+    
+    // Update Next button text based on workflow state
+    function updateNextButtonText() {
+        const savedConfig = sessionStorage.getItem('materialConfig');
+        if (savedConfig) {
+            const config = JSON.parse(savedConfig);
+            // Check if material and layout are configured
+            if (config.material && Object.keys(config.material).length > 0) {
+                btnNext.textContent = 'BURN →';
+                btnNext.style.background = '#2a2a2a';
+                return;
+            }
+        }
+        btnNext.textContent = 'NEXT: MATERIAL & POSITIONING →';
+        btnNext.style.background = '';
+    }
+    
+    // Handle image selection change
+    imageSelect.addEventListener('change', async (e) => {
+        if (e.target.value) {
+            const filename = e.target.value.split('/').pop();
+            await loadImagePreview(e.target.value, filename);
         }
     });
     
-    btnEngrave.addEventListener('click', async () => {
-        if (!imageFile.files[0]) {
-            showMessage('Select an image', true);
+    // Handle file upload
+    imageFile.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = function() {
+                const base64data = reader.result;
+                
+                const img = new Image();
+                img.onload = function() {
+                    currentImageData = {
+                        image_base64: base64data,
+                        original_filename: file.name,
+                        source: 'upload',
+                        width: img.width,
+                        height: img.height
+                    };
+                    
+                    previewImage.src = base64data;
+                    previewInfo.textContent = `${file.name} (${img.width} × ${img.height}px)`;
+                    previewSection.style.display = 'block';
+                    
+                    updateNextButtonText();
+                };
+                img.src = base64data;
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+    
+    // Status bar functions now in shared api.js
+    
+    btnVerify.addEventListener('click', async () => {
+        const data = await apiCall('/api/connect');
+        await refreshStatus();  // Refresh to show updated firmware version
+        showMessage(`K6 ${data.version || ''} verified`);
+    });
+    
+    btnNext.addEventListener('click', async () => {
+        if (!currentImageData) {
+            showMessage('Select or upload an image first', true);
             return;
         }
         
-        const formData = new FormData();
-        formData.append('image', imageFile.files[0]);
+        // Build job structure with image data
+        const job = {
+            version: '1.0',
+            stages: {
+                upload: {
+                    status: 'complete',
+                    data: currentImageData
+                }
+            },
+            material: {},
+            layout: {}
+        };
         
-        showMessage('Engraving...');
-        await apiCall('/api/engrave', 'POST', formData);
-        showMessage('Engraved');
+        // Check if material/positioning already configured
+        const savedConfig = sessionStorage.getItem('materialConfig');
+        if (savedConfig) {
+            const config = JSON.parse(savedConfig);
+            if (config.material && Object.keys(config.material).length > 0) {
+                // Material configured → proceed to burn
+                job.material = config.material;
+                job.layout = config.layout || {};
+                
+                // Save updated job
+                sessionStorage.setItem('materialConfig', JSON.stringify(job));
+                
+                showMessage('Burning with saved material settings...');
+                
+                // TODO: Implement direct burn from main page
+                // For now, redirect to alignment-builder which has burn capability
+                window.location.href = '/alignment-builder';
+                return;
+            }
+        }
+        
+        // No material configured → go to alignment-builder
+        sessionStorage.setItem('materialConfig', JSON.stringify(job));
+        showMessage('Redirecting to material & positioning...');
+        setTimeout(() => {
+            window.location.href = '/alignment-builder';
+        }, 500);
     });
     
-    // Initial state
-    updateUI();
+    // Initial load
+    refreshStatus();
+    loadSampleImages();
 {% endblock %}

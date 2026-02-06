@@ -1,0 +1,40 @@
+= FR-009: Test Pattern Generation
+
+== Status
+
+Implemented
+
+== Description
+
+Generate calibration and test patterns for alignment, focus, and hardware validation.
+
+== Acceptance Criteria
+
+* **Center pattern**: Small box with crosshair in center of work area
+* **Corners pattern**: Boxes in all four corners
+* **Frame pattern**: Full work area outline
+* **Grid pattern**: Graph paper lines at configurable spacing
+* **Bottom-test pattern**: Diagonal line at Y-axis limit (tests cropping)
+* Configurable resolution (mm/px)
+* Configurable size (mm)
+* Preview before burn
+
+== Rationale
+
+* Alignment: position material correctly
+* Focus: test laser focus at different positions
+* Limits: verify work area boundaries
+* Debugging: test Y-axis cropping issues
+
+== Related ADRs
+
+* ADR-012: Pipeline architecture (calibration uses standard workflow)
+
+== Implementation
+
+* `/api/calibration/generate` - pattern generation
+* `/api/calibration/burn` - burn pattern
+* `/api/calibration/preview` - BOUNDS preview
+* `PatternService` - pattern generation (DRY)
+* Patterns use standard engrave workflow
+* Work area: 1600×1520px measured limits

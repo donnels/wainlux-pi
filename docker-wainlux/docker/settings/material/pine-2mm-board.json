@@ -1,0 +1,8 @@
+{
+  "name": "Pine 2mm Board",
+  "description": "Thin pine plywood",
+  "power": 500,
+  "depth": 12,
+  "repeat": 1,
+  "notes": "Soft wood, lower power to avoid burning through"
+}

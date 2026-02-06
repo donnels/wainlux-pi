@@ -27,6 +27,51 @@ Browse: `http://<pi-ip>:8080`
 * *Privileged*: Required for serial
 * *Volume*: `./data`
 
+== Testing Modes
+
+=== Mock Mode (No Hardware)
+
+Test without K6 connected. Uses simulated transport layer.
+
+[source,bash]
+----
+# Run with mock device
+docker compose -f compose-dev.yaml up -d
+----
+
+Or set environment variable:
+
+[source,bash]
+----
+export K6_MOCK_DEVICE=true
+----
+
+* Simulates protocol responses (VERSION, ACK, STATUS)
+* Returns version v0.0.1
+* No serial hardware required
+* Use for development, CI/CD, Steam Deck testing
+
+=== Dry Run Mode (Real K6, No Burn)
+
+Test with real K6 connected but disable laser firing.
+
+* Enable via Settings page or API: `POST /api/settings {"dry_run": true}`
+* Sends all commands including data upload
+* Tests complete protocol flow
+* Skips INIT commands that start laser
+* Use for testing with new material or verifying positioning
+* Works with both real hardware and mock mode
+
+=== Operation Modes (Workflow Testing)
+
+Control logging and intermediate file generation:
+
+* *SILENT* (default): Monolithic pipeline, minimal logs, production use
+* *VERBOSE*: Save all intermediates (.npy, .bin, CSV logs), debugging
+* *SINGLE-STEP*: Manual approval at each stage (NOT YET IMPLEMENTED)
+
+Set via Settings page or API: `POST /api/settings {"operation_mode": "verbose"}`
+
 == Commands
 
 [source,bash]
