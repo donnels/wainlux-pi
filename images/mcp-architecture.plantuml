@@ -1,0 +1,132 @@
+@startuml
+title MCP combined architecture for K6 on piz
+skinparam backgroundColor #fff/aaf
+skinparam rectanglebackgroundColor #fff/aaf
+skinparam nodebackgroundColor #fff/dfd
+skinparam defaultFontName monospace
+skinparam shadowing true
+
+title K6 MCP Architecture - Networked Testing Environment
+
+' Network boundary
+cloud "Network" as net
+
+' Steam Deck (development machine)
+node "Steam Deck" as deck {
+  component "Claude Desktop\n(MCP Client)" as claude
+  component "Browser" as browser
+  database "Local Files" as files
+}
+
+' Pi Zero W (laser controller)
+node "Pi Zero W (piz-k6)" as pi {
+  rectangle "Docker Container: wainlux-k6" as container {
+    rectangle "Port 8080" as port8080 {
+      component "Flask REST API\n(main.py)" as flask
+      note left of flask
+  Existing Web UI
+  - Image upload
+  - QR generation
+  - Calibration
+  - Alignment builder
+end note
+
+
+    }
+    
+    rectangle "Port 8081" as port8081 {
+        component "MCP Server\n(mcp_server.py)\nHTTP/SSE" as mcp
+        note right of mcp
+            **Purpose: Testing & Experiments**
+
+            Phase 1: High-level job structures
+              - Generate QR codes
+              - Load/process images
+              - Execute burns (dry run default)
+              - Compatible with web UI jobs
+
+            Phase 2: Direct serial access (future)
+              - Test unknown opcodes
+              - Reset experiments
+              - Protocol debugging
+              - Streaming responses
+        end note
+    }
+    
+    rectangle "Shared Services Layer" as services {
+        component "device_manager\n(singleton)" as dm
+        component "QRService" as qr
+        component "ImageService" as img
+        component "K6Service" as k6svc
+        note right of dm
+          **Critical: Single Serial Connection**
+
+          Only ONE process can access
+          /dev/ttyUSB0 at a time.
+
+          Both Flask and MCP share
+          same device_manager instance.
+
+          OS-level lock prevents conflicts.
+        end note
+
+    }
+    
+    rectangle "K6 Driver" as driver {
+      component "protocol.py\n(command builder)" as proto
+      component "driver.py\n(transport)" as drv
+    }
+    
+    database "/app/data\n(logs, temp)" as data
+    note right of data
+  CSV Logs Format:
+  - Timestamp
+  - Phase (connect/burn/wait)
+  - Operation
+  - Duration
+  - Device response
+  - Status %
+end note
+  }
+  
+  component "/dev/ttyUSB0\n(CP2102 serial)" as serial
+}
+
+' Hardware
+node "Wainlux K6" as laser {
+  component "Laser Hardware\nFirmware v9.4.1" as fw
+}
+
+' Connections - Network
+claude -down-> net : "HTTP\n(MCP protocol)"
+browser -down-> net : "HTTP\n(REST API)"
+net -down-> port8081 : ":8081\nSSE stream"
+net -down-> port8080 : ":8080"
+
+' Connections - Internal
+flask -down-> services : "shared"
+mcp -down-> services : "shared"
+
+services -down-> driver : "uses"
+driver -down-> data : "CSV logs"
+
+dm -down-> serial : "exclusive\nlock"
+
+' Connections - Hardware
+serial -down-> fw : "115200 baud\nK6 protocol"
+
+' Notes
+
+
+
+
+
+legend right
+  |= Symbol |= Meaning |
+  | HTTP | REST/MCP protocol |
+  | SSE | Server-Sent Events (streaming) |
+  | Shared | DRY - single implementation |
+  | Exclusive | Hardware lock |
+endlegend
+
+@enduml

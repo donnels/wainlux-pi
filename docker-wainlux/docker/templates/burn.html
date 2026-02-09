@@ -57,6 +57,19 @@
 }
 .job-info h3 { margin-top: 0; }
 .job-params { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.stats-card { border: 1px solid #666; padding: 10px; background: #0a0a0a; }
+.stats-card h4 { margin: 0 0 8px 0; }
+.stats-meta { font-size: 0.9em; color: #aaa; margin-bottom: 8px; }
+.stats-row { display: flex; justify-content: space-between; font-size: 0.9em; margin: 3px 0; }
+.stats-actions { margin-top: 10px; display: flex; gap: 8px; }
+.stats-actions button { background: #333; border: 1px solid #888; color: #fff; padding: 6px 10px; cursor: pointer; }
+.stats-actions button:hover { background: #444; }
+.stats-graph-panel { margin-top: 16px; border: 1px solid #666; background: #0a0a0a; padding: 12px; }
+.stats-graph-controls { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+.stats-graph-controls select { background: #111; color: #fff; border: 1px solid #888; padding: 4px 8px; }
+.stats-graph-canvas { width: 100%; min-height: 320px; background: linear-gradient(135deg, #ffffff 0%, #aaaaff 100%); border: 1px solid #333; }
+.stats-graph-title { margin: 0 0 8px 0; color: #ddd; font-size: 0.95em; }
 {% endblock %}
 
 {% block content %}
@@ -117,17 +130,43 @@
     <div class="log-window" id="logWindow"></div>
 </div>
 
+<div class="section" id="statsSection" style="display: none;">
+    <h2>RUN STATS</h2>
+    <div id="statsContent" class="stats-grid"></div>
+    <div id="statsGraphPanel" class="stats-graph-panel" style="display:none;">
+        <h3 id="statsGraphTitle" class="stats-graph-title">Run Graph</h3>
+        <div class="stats-graph-controls">
+            <label for="statsGraphType">Graph:</label>
+            <select id="statsGraphType">
+                <option value="timeline">Timeline</option>
+                <option value="phase-bars">Phase Time Breakdown</option>
+                <option value="status">Burn Status Progress</option>
+            </select>
+        </div>
+        <canvas id="statsGraphCanvas" class="stats-graph-canvas" width="1080" height="360"></canvas>
+    </div>
+</div>
+
 {{ message_display() }}
 {% endblock %}
 
 {% block page_script %}
-    // K6 hardware limits
-    const K6_MAX_WIDTH = 1600;   // px (80mm)
-    const K6_MAX_HEIGHT = 1520;  // px (76mm actual Y-axis)
-    const RESOLUTION = 0.05;     // mm per pixel
-    
     let currentJob = null;
     let eventSource = null;
+    
+    function cleanupProgressStream() {
+        if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+        }
+    }
+    window.addEventListener('beforeunload', cleanupProgressStream);
+    window.addEventListener('pagehide', cleanupProgressStream);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            cleanupProgressStream();
+        }
+    });
     
     const modeDisplay = document.getElementById('modeDisplay');
     const firmwareDisplay = document.getElementById('firmwareDisplay');
@@ -141,6 +180,14 @@
     const jobDimensions = document.getElementById('jobDimensions');
     const jobDetails = document.getElementById('jobDetails');
     const logWindow = document.getElementById('logWindow');
+    const statsSection = document.getElementById('statsSection');
+    const statsContent = document.getElementById('statsContent');
+    const statsGraphPanel = document.getElementById('statsGraphPanel');
+    const statsGraphTitle = document.getElementById('statsGraphTitle');
+    const statsGraphType = document.getElementById('statsGraphType');
+    const statsGraphCanvas = document.getElementById('statsGraphCanvas');
+    const reportsByCsv = new Map();
+    let activeGraphCsv = null;
     
     // Progress elements
     const progressSetup = document.getElementById('progressSetup');
@@ -152,8 +199,9 @@
     
     // Status bar functions now in shared api.js
     
-    function addLog(message, type = 'info') {
-        const timestamp = new Date().toLocaleTimeString();
+    function addLog(message, type = 'info', eventTimestamp = null) {
+        const sourceDate = eventTimestamp ? new Date(eventTimestamp) : new Date();
+        const timestamp = formatLogTimestamp(sourceDate);
         const entry = document.createElement('div');
         entry.className = `log-entry ${type}`;
         entry.textContent = `[${timestamp}] ${message}`;
@@ -161,8 +209,8 @@
         logWindow.scrollTop = logWindow.scrollHeight;
     }
     
-    function updateProgress(phase, progress, message) {
-        addLog(`${phase.toUpperCase()}: ${message}`, 'info');
+    function updateProgress(phase, progress, message, eventTimestamp = null) {
+        addLog(`${phase.toUpperCase()}: ${message}`, 'info', eventTimestamp);
         
         if (phase === 'setup' || phase === 'prepare' || phase === 'connect') {
             progressSetup.style.width = `${progress}%`;
@@ -193,22 +241,289 @@
             btnStop.style.display = 'none';
         }
     }
+
+    async function postJobBurn(payload) {
+        return apiCall('/api/job/burn', 'POST', payload);
+    }
+
+    function renderStatsCard(report) {
+        const phaseRows = Object.entries(report.phase_stats || {})
+            .map(([phase, s]) => `<div class="stats-row"><span>${phase}</span><span>${s.count} ops / ${(s.duration_ms/1000).toFixed(2)}s</span></div>`)
+            .join('');
+        const responseRows = Object.entries(report.response_counts || {})
+            .map(([resp, count]) => `<div class="stats-row"><span>${resp}</span><span>${count}</span></div>`)
+            .join('');
+        const summary = report.summary || {};
+        const timing = report.timing_summary || {};
+        const finalStatus = timing.final_status_pct == null ? 'n/a' : `${timing.final_status_pct}%`;
+
+        return `
+            <div class="stats-card">
+                <h4>${report.job_id || report.run_id || 'Run'}</h4>
+                <div class="stats-meta">${report.csv_log}</div>
+                <div class="stats-row"><span>Run ID</span><span>${report.run_id || 'n/a'}</span></div>
+                <div class="stats-row"><span>Operations</span><span>${summary.operations || 0}</span></div>
+                <div class="stats-row"><span>Total Time</span><span>${summary.total_elapsed_s || 0}s</span></div>
+                <div class="stats-row"><span>Total Bytes</span><span>${summary.total_bytes || 0}</span></div>
+                <div class="stats-row"><span>Avg Throughput</span><span>${summary.avg_throughput_kbps || 0} KB/s</span></div>
+                <hr>
+                <div style="font-weight:bold; margin-bottom:4px;">Phases</div>
+                ${phaseRows || '<div class="stats-row"><span>n/a</span><span>0</span></div>'}
+                <hr>
+                <div style="font-weight:bold; margin-bottom:4px;">Responses</div>
+                ${responseRows || '<div class="stats-row"><span>n/a</span><span>0</span></div>'}
+                <hr>
+                <div style="font-weight:bold; margin-bottom:4px;">Timing</div>
+                <div class="stats-row"><span>Chunks</span><span>${timing.chunk_count || 0}</span></div>
+                <div class="stats-row"><span>Chunk Avg</span><span>${timing.chunk_avg_ms || 0} ms</span></div>
+                <div class="stats-row"><span>Chunk P95</span><span>${timing.chunk_p95_ms || 0} ms</span></div>
+                <div class="stats-row"><span>Chunk Max</span><span>${timing.chunk_max_ms || 0} ms</span></div>
+                <div class="stats-row"><span>Final Status</span><span>${finalStatus}</span></div>
+                <div class="stats-actions">
+                    <button type="button" data-action="graph" data-csv-log="${report.csv_log}">📈 Show Graph</button>
+                </div>
+            </div>
+        `;
+    }
+
+    function resizeGraphCanvas() {
+        const dpr = window.devicePixelRatio || 1;
+        const cssWidth = statsGraphCanvas.clientWidth || 1080;
+        const cssHeight = 360;
+        statsGraphCanvas.width = Math.floor(cssWidth * dpr);
+        statsGraphCanvas.height = Math.floor(cssHeight * dpr);
+        const ctx = statsGraphCanvas.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        return { ctx, width: cssWidth, height: cssHeight };
+    }
+
+    function drawAxes(ctx, width, height, margin, xLabel, yLabel) {
+        const left = margin.left;
+        const top = margin.top;
+        const right = width - margin.right;
+        const bottom = height - margin.bottom;
+
+        ctx.strokeStyle = '#222';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(left, top);
+        ctx.lineTo(left, bottom);
+        ctx.lineTo(right, bottom);
+        ctx.stroke();
+
+        ctx.fillStyle = '#111';
+        ctx.font = '12px monospace';
+        ctx.fillText(xLabel, right - 80, bottom + 22);
+        ctx.save();
+        ctx.translate(14, (top + bottom) / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillText(yLabel, 0, 0);
+        ctx.restore();
+        return { left, top, right, bottom };
+    }
+
+    function drawTimelineGraph(report) {
+        const timeline = report?.timing?.timeline || [];
+        const phases = Object.keys(report.phase_stats || {});
+        const { ctx, width, height } = resizeGraphCanvas();
+        const margin = { left: 64, right: 24, top: 20, bottom: 44 };
+        ctx.clearRect(0, 0, width, height);
+        const axis = drawAxes(ctx, width, height, margin, 'Time (s)', 'Phase');
+
+        if (!timeline.length || !phases.length) {
+            ctx.fillStyle = '#111';
+            ctx.font = '14px monospace';
+            ctx.fillText('No timeline data available for this run.', axis.left + 8, axis.top + 20);
+            return;
+        }
+
+        const maxElapsed = Math.max(1, ...timeline.map(t => Number(t.elapsed_s || 0)));
+        const phaseOrder = phases;
+        const laneHeight = Math.max(14, Math.floor((axis.bottom - axis.top - 8) / phaseOrder.length));
+        const phaseColors = {
+            connect: '#ff9999',
+            setup: '#ffcc99',
+            prepare: '#ffcc99',
+            upload: '#99ff99',
+            burn: '#9999ff',
+            wait: '#9999ff',
+            finalize: '#9999ff'
+        };
+
+        phaseOrder.forEach((phase, idx) => {
+            const y = axis.top + idx * laneHeight;
+            ctx.fillStyle = '#111';
+            ctx.font = '11px monospace';
+            ctx.fillText(phase, 4, y + 11);
+            ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+            ctx.beginPath();
+            ctx.moveTo(axis.left, y + laneHeight);
+            ctx.lineTo(axis.right, y + laneHeight);
+            ctx.stroke();
+        });
+
+        for (const op of timeline) {
+            const phase = op.phase || 'unknown';
+            const phaseIdx = Math.max(0, phaseOrder.indexOf(phase));
+            const start = Number(op.elapsed_s || 0);
+            const durationSec = Math.max(0.001, Number(op.duration_ms || 0) / 1000.0);
+            const x = axis.left + (start / maxElapsed) * (axis.right - axis.left);
+            const w = Math.max(1, (durationSec / maxElapsed) * (axis.right - axis.left));
+            const y = axis.top + phaseIdx * laneHeight + 2;
+            ctx.fillStyle = phaseColors[phase] || '#ccc';
+            ctx.fillRect(x, y, w, Math.max(3, laneHeight - 4));
+        }
+
+        ctx.fillStyle = '#111';
+        ctx.font = '11px monospace';
+        for (let i = 0; i <= 5; i++) {
+            const t = (i / 5) * maxElapsed;
+            const x = axis.left + (i / 5) * (axis.right - axis.left);
+            ctx.fillText(t.toFixed(1), x - 10, axis.bottom + 14);
+        }
+    }
+
+    function drawPhaseBarsGraph(report) {
+        const phaseEntries = Object.entries(report.phase_stats || {});
+        const { ctx, width, height } = resizeGraphCanvas();
+        const margin = { left: 120, right: 20, top: 20, bottom: 44 };
+        ctx.clearRect(0, 0, width, height);
+        const axis = drawAxes(ctx, width, height, margin, 'Duration (s)', 'Phase');
+
+        if (!phaseEntries.length) {
+            ctx.fillStyle = '#111';
+            ctx.font = '14px monospace';
+            ctx.fillText('No phase duration data available for this run.', axis.left + 8, axis.top + 20);
+            return;
+        }
+
+        const durationsSec = phaseEntries.map(([_, s]) => Number(s.duration_ms || 0) / 1000.0);
+        const maxValue = Math.max(1, ...durationsSec);
+        const barHeight = Math.max(12, Math.floor((axis.bottom - axis.top - 10) / phaseEntries.length) - 4);
+
+        phaseEntries
+            .sort((a, b) => (b[1].duration_ms || 0) - (a[1].duration_ms || 0))
+            .forEach(([phase, s], idx) => {
+                const value = Number(s.duration_ms || 0) / 1000.0;
+                const y = axis.top + idx * (barHeight + 6);
+                const w = (value / maxValue) * (axis.right - axis.left);
+                ctx.fillStyle = '#3366cc';
+                ctx.fillRect(axis.left, y, w, barHeight);
+                ctx.fillStyle = '#111';
+                ctx.font = '11px monospace';
+                ctx.fillText(phase, 10, y + barHeight - 2);
+                ctx.fillText(`${value.toFixed(2)}s`, axis.left + w + 6, y + barHeight - 2);
+            });
+    }
+
+    function drawStatusGraph(report) {
+        const statusSeries = report?.timing?.status_series || [];
+        const { ctx, width, height } = resizeGraphCanvas();
+        const margin = { left: 52, right: 20, top: 20, bottom: 44 };
+        ctx.clearRect(0, 0, width, height);
+        const axis = drawAxes(ctx, width, height, margin, 'Time (s)', 'Status %');
+
+        if (!statusSeries.length) {
+            ctx.fillStyle = '#111';
+            ctx.font = '14px monospace';
+            ctx.fillText('No burn status samples available for this run.', axis.left + 8, axis.top + 20);
+            return;
+        }
+
+        const maxElapsed = Math.max(1, ...statusSeries.map(p => Number(p.elapsed_s || 0)));
+        const xFor = (t) => axis.left + (t / maxElapsed) * (axis.right - axis.left);
+        const yFor = (pct) => axis.bottom - (Math.max(0, Math.min(100, pct)) / 100) * (axis.bottom - axis.top);
+
+        ctx.strokeStyle = '#cc3366';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        statusSeries.forEach((point, idx) => {
+            const x = xFor(Number(point.elapsed_s || 0));
+            const y = yFor(Number(point.pct || 0));
+            if (idx === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        ctx.fillStyle = '#111';
+        ctx.font = '11px monospace';
+        for (let p = 0; p <= 100; p += 20) {
+            const y = yFor(p);
+            ctx.fillText(`${p}`, axis.left - 24, y + 4);
+            ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+            ctx.beginPath();
+            ctx.moveTo(axis.left, y);
+            ctx.lineTo(axis.right, y);
+            ctx.stroke();
+        }
+    }
+
+    function renderGraphForReport(report) {
+        if (!report) return;
+        const graphType = statsGraphType.value;
+        if (graphType === 'phase-bars') {
+            drawPhaseBarsGraph(report);
+        } else if (graphType === 'status') {
+            drawStatusGraph(report);
+        } else {
+            drawTimelineGraph(report);
+        }
+    }
+
+    function showGraphForCsv(csvLog) {
+        const report = reportsByCsv.get(csvLog);
+        if (!report) return;
+        activeGraphCsv = csvLog;
+        statsGraphTitle.textContent = `Run Graph: ${report.job_id || report.run_id || 'Unknown'} (${statsGraphType.value})`;
+        statsGraphPanel.style.display = 'block';
+        renderGraphForReport(report);
+        statsGraphPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    async function loadReportsFromResults(results) {
+        if (!results || results.length === 0) return;
+        statsContent.innerHTML = '';
+        statsSection.style.display = 'block';
+
+        for (const result of results) {
+            if (!result.csv_log) continue;
+            try {
+                const report = await apiCall('/api/reports/summary', 'POST', { csv_log: result.csv_log });
+                report.job_id = result.job || report.job_id;
+                reportsByCsv.set(report.csv_log, report);
+                statsContent.insertAdjacentHTML('beforeend', renderStatsCard(report));
+            } catch (err) {
+                statsContent.insertAdjacentHTML(
+                    'beforeend',
+                    `<div class="stats-card"><h4>${result.job || 'job'}</h4><div class="stats-meta">Failed to load report: ${err.message}</div></div>`
+                );
+            }
+        }
+    }
     
-    function loadJob() {
-        const saved = sessionStorage.getItem('materialConfig');
+    async function loadJob() {
+        const saved = getMaterialConfig();
         if (!saved) {
             // No saved job - create default job with default image and material
             addLog('No saved job found - loading defaults', 'info');
-            loadDefaultJob();
+            await loadDefaultJob();
             return;
         }
         
-        currentJob = JSON.parse(saved);
+        currentJob = saved;
         
-        // Validate job has required data
-        if (!currentJob.stages || !currentJob.stages.upload || !currentJob.stages.upload.data) {
-            addLog('Invalid saved job - loading defaults', 'warning');
-            loadDefaultJob();
+        // Ensure image exists via shared ingest path while preserving existing job data.
+        try {
+            const { addedDefault } = await ensureJobHasUploadImage(currentJob, {
+                source: 'default',
+                sourceReference: '/api/images/serve/default-image.png',
+            });
+            if (addedDefault) {
+                addLog('Saved job had no image; default image injected', 'warning');
+            }
+        } catch (err) {
+            addLog(`Could not ensure job image: ${err.message}`, 'warning');
+            await loadDefaultJob();
             return;
         }
         
@@ -217,65 +532,45 @@
     
     async function loadDefaultJob() {
         try {
-            // Fetch default image
-            const response = await fetch('/api/images/serve/default-image.png');
-            const blob = await response.blob();
-            
-            const reader = new FileReader();
-            reader.onloadend = async function() {
-                const base64data = reader.result;
-                const img = new Image();
-                img.onload = async function() {
-                    // Fetch materials and look for 'default' material
-                    const materialsData = await apiCall('/api/materials/list', 'GET');
-                    let defaultMaterial = materialsData.materials.find(m => m.id === 'default');
-                    
-                    if (!defaultMaterial) {
-                        // Fallback: first base material
-                        defaultMaterial = materialsData.materials.find(m => m.type === 'base_material');
-                        addLog('Default material not found, using first base material', 'warning');
-                    }
-                    
-                    if (!defaultMaterial) {
-                        showMessage('No materials found. Cannot create default job.', true);
-                        addLog('No materials available', 'error');
-                        return;
-                    }
-                    
-                    // Create default job
-                    currentJob = {
-                        version: '1.0',
-                        stages: {
-                            upload: {
-                                status: 'complete',
-                                data: {
-                                    image_base64: base64data,
-                                    original_filename: 'default-image.png',
-                                    source: 'default',
-                                    width: img.width,
-                                    height: img.height
-                                }
-                            }
-                        },
-                        material: {
-                            type: 'base',
-                            material_id: defaultMaterial.id,
-                            name: defaultMaterial.name,
-                            power: defaultMaterial.power,
-                            depth: defaultMaterial.depth,
-                            repeat: defaultMaterial.repeat || 1
-                        },
-                        layout: {
-                            position: { x: 800, y: 800 }  // Default center position
-                        }
-                    };
-                    
-                    addLog(`Default job created: ${defaultMaterial.name}, center position (800, 800)`, 'info');
-                    displayJob();
-                };
-                img.src = base64data;
+            const materialsData = await apiCall('/api/materials/list', 'GET');
+            let defaultMaterial = materialsData.materials.find(m => m.id === 'default');
+
+            if (!defaultMaterial) {
+                defaultMaterial = materialsData.materials.find(m => m.type === 'base_material');
+                addLog('Default material not found, using first base material', 'warning');
+            }
+
+            if (!defaultMaterial) {
+                showMessage('No materials found. Cannot create default job.', true);
+                addLog('No materials available', 'error');
+                return;
+            }
+
+            currentJob = {
+                version: '1.0',
+                stages: {},
+                material: {
+                    type: 'base',
+                    material_id: defaultMaterial.id,
+                    name: defaultMaterial.name,
+                    power: defaultMaterial.power,
+                    depth: defaultMaterial.depth,
+                    repeat: defaultMaterial.repeat || 1
+                },
+                layout: {
+                    position: { x: 800, y: 800 }  // Default center position
+                }
             };
-            reader.readAsDataURL(blob);
+
+            const { addedDefault } = await ensureJobHasUploadImage(currentJob, {
+                source: 'default',
+                sourceReference: '/api/images/serve/default-image.png',
+            });
+            if (addedDefault) {
+                addLog('Default image loaded via shared ingest path', 'info');
+            }
+            addLog(`Default job created: ${defaultMaterial.name}, center position (800, 800)`, 'info');
+            displayJob();
         } catch (err) {
             showMessage('Failed to load default job: ' + err.message, true);
             addLog('Failed to load defaults: ' + err.message, 'error');
@@ -286,10 +581,6 @@
         const uploadData = currentJob.stages.upload.data;
         const material = currentJob.material || {};
         const layout = currentJob.layout || {};
-        
-        // Show image preview
-        jobImage.src = uploadData.image_base64 || uploadData.image;
-        jobDimensions.textContent = `${uploadData.width} × ${uploadData.height}px`;
         
         // Build burn options based on available data
         let options = '';
@@ -373,13 +664,23 @@
         }
         
         document.getElementById('burnOptions').innerHTML = options;
+        attachBurnOptionPreviewHandlers();
         
         // Summary details
         let details = `
             <div style="border-top: 1px solid #666; padding-top: 15px; margin-top: 15px;">
                 <strong>Image:</strong> ${uploadData.original_filename || 'Unknown'} (${uploadData.width}×${uploadData.height}px)
         `;
-        
+        if (uploadData.resized && uploadData.original_width && uploadData.original_height) {
+            details += `<br><strong>Image Resize:</strong> scaled from ${uploadData.original_width}×${uploadData.original_height}px to ${uploadData.width}×${uploadData.height}px`;
+        }
+        if (uploadData.source) {
+            details += `<br><strong>Image Source:</strong> ${uploadData.source}`;
+        }
+        if (uploadData.source_reference) {
+            details += `<br><strong>Source Reference:</strong> ${uploadData.source_reference}`;
+        }
+
         if (material.target) {
             details += `<br><strong>Object:</strong> ${material.target.shape || 'Custom'} (${material.target.width_mm}×${material.target.height_mm}mm)`;
         }
@@ -396,22 +697,113 @@
         jobDetails.innerHTML = details;
         
         jobSection.style.display = 'block';
+        refreshBurnPlanPreview();
     }
-    
-    async function refreshStatus() {
+
+    function buildBurnJobsFromSelection(selected) {
+        const material = currentJob.material || {};
+        const burnJobs = {};
+        const alignmentBorderRaw = Number.parseInt(document.getElementById('alignmentBorderWidth')?.value ?? '3', 10);
+        const combinedBorderRaw = Number.parseInt(document.getElementById('combinedBorderWidth')?.value ?? '3', 10);
+        const alignmentBorder = Number.isFinite(alignmentBorderRaw) ? Math.max(1, Math.min(10, alignmentBorderRaw)) : 3;
+        const combinedBorder = Number.isFinite(combinedBorderRaw) ? Math.max(1, Math.min(10, combinedBorderRaw)) : 3;
+
+        selected.forEach((burnType) => {
+            if (burnType === 'alignment') {
+                burnJobs.alignment = {
+                    enabled: true,
+                    power: material.backing?.power || 500,
+                    depth: material.backing?.depth || 10,
+                    center_strategy: 'material_only',
+                    render_spec: {
+                        mode: 'bounds',
+                        border_width: alignmentBorder
+                    }
+                };
+            } else if (burnType === 'combined') {
+                burnJobs.combined = {
+                    enabled: true,
+                    power: material.backing?.power || 500,
+                    depth: material.backing?.depth || 10,
+                    center_strategy: 'material_only',
+                    render_spec: {
+                        mode: 'combined',
+                        border_width: combinedBorder
+                    }
+                };
+            } else if (burnType === 'image-backing') {
+                burnJobs.image_on_backing = {
+                    enabled: true,
+                    power: material.backing?.power || 500,
+                    depth: material.backing?.depth || 10,
+                    center_strategy: 'material_plus_image',
+                    render_spec: { mode: 'image' }
+                };
+            } else if (burnType === 'image-object') {
+                burnJobs.image_on_object = {
+                    enabled: true,
+                    power: material.target?.power || 500,
+                    depth: material.target?.depth || 10,
+                    center_strategy: 'material_plus_image',
+                    render_spec: { mode: 'image' }
+                };
+            } else if (burnType === 'image-simple') {
+                burnJobs.image_on_base = {
+                    enabled: true,
+                    power: material.backing?.power || material.power || 1000,
+                    depth: material.backing?.depth || material.depth || 100,
+                    center_strategy: 'material_plus_image',
+                    render_spec: { mode: 'image' }
+                };
+            }
+        });
+
+        return burnJobs;
+    }
+
+    function attachBurnOptionPreviewHandlers() {
+        document.querySelectorAll('input[name="burnOption"]').forEach((el) => {
+            el.addEventListener('change', refreshBurnPlanPreview);
+        });
+        const alignmentBorder = document.getElementById('alignmentBorderWidth');
+        const combinedBorder = document.getElementById('combinedBorderWidth');
+        if (alignmentBorder) alignmentBorder.addEventListener('input', refreshBurnPlanPreview);
+        if (combinedBorder) combinedBorder.addEventListener('input', refreshBurnPlanPreview);
+    }
+
+    async function refreshBurnPlanPreview() {
+        if (!currentJob || !currentJob.stages?.upload?.data) return;
+
+        const selected = Array.from(document.querySelectorAll('input[name="burnOption"]:checked'))
+            .map(cb => cb.value);
+        if (selected.length === 0) return;
+
         try {
-            const data = await apiCall('/api/status', 'GET');
-            updateStatusBar(data);
+            const burnJobs = buildBurnJobsFromSelection(selected);
+            const previewPayload = {
+                job: {
+                    ...currentJob,
+                    burn_jobs: burnJobs
+                }
+            };
+
+            const data = await apiCall('/api/job/preview', 'POST', previewPayload);
+            const primary = (data.previews || [])[0];
+            if (!primary) return;
+
+            jobImage.src = primary.preview_image;
+            jobDimensions.textContent =
+                `${primary.width} × ${primary.height}px | center=(${primary.center_x ?? 'auto'}, ${primary.center_y ?? 'auto'}) | ` +
+                `P${primary.power}/D${primary.depth} | chunks≈${primary.estimate.total_chunks}`;
         } catch (err) {
-            console.error('Status fetch failed:', err);
+            addLog(`Preview update failed: ${err.message}`, 'warning');
         }
     }
     
     btnVerify.addEventListener('click', async () => {
         try {
             addLog('Verifying K6 connection...', 'info');
-            const data = await apiCall('/api/connect');
-            await refreshStatus();  // Refresh to show updated firmware version
+            const data = await verifyConnectionAndRefreshStatus();
             addLog(`✓ K6 ${data.version || ''} verified`, 'info');
             showMessage(`K6 ${data.version || ''} verified`);
         } catch (err) {
@@ -451,6 +843,11 @@
         progressBurn.style.width = '0%';
         progressBurnText.textContent = '0%';
         logWindow.innerHTML = '';
+        statsSection.style.display = 'none';
+        statsContent.innerHTML = '';
+        statsGraphPanel.style.display = 'none';
+        reportsByCsv.clear();
+        activeGraphCsv = null;
         
         addLog(`Starting ${selected.length} burn job(s)...`, 'info');
         
@@ -458,225 +855,42 @@
         eventSource = new EventSource('/api/progress/stream');
         eventSource.onmessage = (event) => {
             const data = JSON.parse(event.data);
-            updateProgress(data.phase, data.progress, data.message);
+            updateProgress(data.phase, data.progress, data.message, data.timestamp);
         };
         
-        eventSource.onerror = () => {
-            eventSource.close();
-            eventSource = null;
-        };
+        eventSource.onerror = cleanupProgressStream;
         
         try {
-            const uploadData = currentJob.stages.upload.data;
-            const material = currentJob.material || {};
-            const layout = currentJob.layout || {};
-            
-            // Process each selected burn
-            for (let i = 0; i < selected.length; i++) {
-                const burnType = selected[i];
-                addLog(`\n=== Burn ${i+1}/${selected.length}: ${burnType} ===`, 'info');
-                
-                let tempPath = null;
-                let power, depth, center_x, center_y;
-                
-                // Calculate K6 position from layout data (ADR-016/017 three-layer model)
-                const layout = currentJob.layout || {};
-                let material_center_x_px = 800;  // Default center
-                let material_center_y_px = 800;
-                let image_offset_x_px = 0;
-                let image_offset_y_px = 0;
-                
-                if (layout.material_on_burn_area) {
-                    // Convert mm to px (0.05mm/px resolution)
-                    material_center_x_px = layout.material_on_burn_area.center_x_mm / 0.05;
-                    material_center_y_px = layout.material_on_burn_area.center_y_mm / 0.05;
+            selected.forEach((burnType, index) => {
+                addLog(`\n=== Queue ${index + 1}/${selected.length}: ${burnType} ===`, 'info');
+            });
+            const burnJobs = buildBurnJobsFromSelection(selected);
+
+            const burnPayload = {
+                job: {
+                    ...currentJob,
+                    burn_jobs: burnJobs
                 }
-                
-                if (layout.image_on_material) {
-                    image_offset_x_px = layout.image_on_material.center_x_mm / 0.05;
-                    image_offset_y_px = layout.image_on_material.center_y_mm / 0.05;
-                }
-                
-                if (burnType === 'alignment') {
-                    // Generate alignment box image (cropped to burn area)
-                    addLog('Generating alignment box...', 'info');
-                    const shapeWidthPx = Math.round(material.target.width_mm / RESOLUTION);
-                    const shapeHeightPx = Math.round(material.target.height_mm / RESOLUTION);
-                    const borderWidth = parseInt(document.getElementById('alignmentBorderWidth')?.value || 3);
-                    
-                    // Create canvas at burn area size
-                    const burnWidthPx = Math.min(shapeWidthPx, K6_MAX_WIDTH);
-                    const burnHeightPx = Math.min(shapeHeightPx, K6_MAX_HEIGHT);
-                    
-                    const canvas = document.createElement('canvas');
-                    canvas.width = burnWidthPx;
-                    canvas.height = burnHeightPx;
-                    const ctx = canvas.getContext('2d', { alpha: false });  // No alpha channel
-                    
-                    // Disable antialiasing for crisp 1-bit conversion
-                    ctx.imageSmoothingEnabled = false;
-                    
-                    // White background (RGB 255,255,255)
-                    ctx.fillStyle = '#FFFFFF';
-                    ctx.fillRect(0, 0, burnWidthPx, burnHeightPx);
-                    
-                    // Calculate object position (centered in burn area)
-                    const objX = (burnWidthPx - shapeWidthPx) / 2;
-                    const objY = (burnHeightPx - shapeHeightPx) / 2;
-                    
-                    // Draw full-size rectangle at position - canvas clips overflow automatically
-                    ctx.strokeStyle = '#000000';  // Pure black (RGB 0,0,0)
-                    ctx.lineWidth = borderWidth;
-                    const margin = borderWidth / 2;
-                    ctx.strokeRect(objX + margin, objY + margin, shapeWidthPx - borderWidth, shapeHeightPx - borderWidth);
-                    
-                    addLog(`Alignment box: ${burnWidthPx}x${burnHeightPx}px (object: ${shapeWidthPx}x${shapeHeightPx}px)`, 'info');
-                    
-                    const alignmentImageData = canvas.toDataURL('image/png');
-                    const blob = await fetch(alignmentImageData).then(r => r.blob());
-                    const formData = new FormData();
-                    formData.append('image', blob, 'alignment-box.png');
-                    
-                    const prepareResult = await apiCall('/api/engrave/prepare', 'POST', formData);
-                    tempPath = prepareResult.temp_path;
-                    
-                    // Alignment box uses material position only (no image offset)
-                    center_x = material_center_x_px + 67;  // K6 hardware offset
-                    center_y = material_center_y_px;
-                    power = material.backing.power;
-                    depth = material.backing.depth;
-                    
-                } else if (burnType === 'combined') {
-                    // Generate combined alignment box + image (cropped to burn area)
-                    addLog('Compositing alignment box + image...', 'info');
-                    const shapeWidthPx = Math.round(material.target.width_mm / RESOLUTION);
-                    const shapeHeightPx = Math.round(material.target.height_mm / RESOLUTION);
-                    const borderWidth = parseInt(document.getElementById('combinedBorderWidth')?.value || 3);
-                    
-                    // Create canvas at burn area size
-                    const burnWidthPx = Math.min(shapeWidthPx, K6_MAX_WIDTH);
-                    const burnHeightPx = Math.min(shapeHeightPx, K6_MAX_HEIGHT);
-                    
-                    const canvas = document.createElement('canvas');
-                    canvas.width = burnWidthPx;
-                    canvas.height = burnHeightPx;
-                    const ctx = canvas.getContext('2d', { alpha: false });  // No alpha channel
-                    
-                    // Disable antialiasing for crisp 1-bit conversion
-                    ctx.imageSmoothingEnabled = false;
-                    
-                    // White background (RGB 255,255,255)
-                    ctx.fillStyle = '#FFFFFF';
-                    ctx.fillRect(0, 0, burnWidthPx, burnHeightPx);
-                    
-                    // Calculate object position (centered in burn area)
-                    const objX = (burnWidthPx - shapeWidthPx) / 2;
-                    const objY = (burnHeightPx - shapeHeightPx) / 2;
-                    
-                    // Step 1: Draw full-size alignment box - canvas clips overflow
-                    ctx.strokeStyle = '#000000';  // Pure black (RGB 0,0,0)
-                    ctx.lineWidth = borderWidth;
-                    const margin = borderWidth / 2;
-                    ctx.strokeRect(objX + margin, objY + margin, shapeWidthPx - borderWidth, shapeHeightPx - borderWidth);
-                    
-                    // Step 2: Overlay image at material-relative position
-                    const uploadImg = new Image();
-                    uploadImg.src = uploadData.image_base64 || uploadData.image;
-                    await new Promise((resolve) => { uploadImg.onload = resolve; });
-                    
-                    // Calculate image position relative to object position
-                    // Object is centered in burn area, image is offset from object center
-                    const imgCenterX = burnWidthPx / 2 + image_offset_x_px;
-                    const imgCenterY = burnHeightPx / 2 + image_offset_y_px;
-                    const imgX = imgCenterX - uploadImg.width / 2;
-                    const imgY = imgCenterY - uploadImg.height / 2;
-                    
-                    ctx.drawImage(uploadImg, imgX, imgY);
-                    
-                    addLog(`Combined image: ${burnWidthPx}x${burnHeightPx}px (object: ${shapeWidthPx}x${shapeHeightPx}px)`, 'info');
-                    
-                    const compositeImageData = canvas.toDataURL('image/png');
-                    const blob = await fetch(compositeImageData).then(r => r.blob());
-                    const formData = new FormData();
-                    formData.append('image', blob, 'combined-alignment-image.png');
-                    
-                    const prepareResult = await apiCall('/api/engrave/prepare', 'POST', formData);
-                    tempPath = prepareResult.temp_path;
-                    
-                    // Combined uses material position (image already composited at correct offset)
-                    center_x = material_center_x_px + 67;  // K6 hardware offset
-                    center_y = material_center_y_px;
-                    power = material.backing.power;
-                    depth = material.backing.depth;
-                    
-                } else if (burnType === 'image-backing') {
-                    // Burn image on backing material
-                    // DO NOT use temp_path - temp files are ephemeral and may be deleted
-                    // Always use base64 upload for reliability
-                    // Image uses material position + image offset
-                    center_x = material_center_x_px + image_offset_x_px + 67;
-                    center_y = material_center_y_px + image_offset_y_px;
-                    power = material.backing.power;
-                    depth = material.backing.depth;
-                    
-                } else if (burnType === 'image-object') {
-                    // Burn image on object material
-                    // DO NOT use temp_path - temp files are ephemeral and may be deleted
-                    // Always use base64 upload for reliability
-                    // Image uses material position + image offset
-                    center_x = material_center_x_px + image_offset_x_px + 67;
-                    center_y = material_center_y_px + image_offset_y_px;
-                    power = material.target.power;
-                    depth = material.target.depth;
-                    
-                } else if (burnType === 'image-simple') {
-                    // Simple mode (backward compat) - use old positioning
-                    // DO NOT use temp_path - always use base64 for portability
-                    power = material.power || 1000;
-                    depth = material.depth || 100;
-                    center_x = layout.position?.x;
-                    center_y = layout.position?.y;
-                }
-                
-                // Upload image from base64 if needed (alignment/combined already uploaded)
-                if (!tempPath && uploadData.image_base64) {
-                    addLog('Uploading image...', 'info');
-                    const blob = await fetch(uploadData.image_base64).then(r => r.blob());
-                    const formData = new FormData();
-                    // Filename is metadata only - server generates hash-based temp file
-                    formData.append('image', blob, uploadData.original_filename || 'upload.png');
-                    
-                    const prepareResult = await apiCall('/api/engrave/prepare', 'POST', formData);
-                    tempPath = prepareResult.temp_path;
-                }
-                
-                // Start burn
-                const burnData = {
-                    temp_path: tempPath,
-                    power: power,
-                    depth: depth
-                };
-                
-                if (center_x !== undefined && center_x !== null) {
-                    burnData.center_x = center_x;
-                    burnData.center_y = center_y;
-                }
-                
-                addLog(`Burning with power=${power}, depth=${depth}...`, 'info');
-                const result = await apiCall('/api/engrave', 'POST', burnData);
-                
-                lastBurnTimestamp = new Date().toISOString().replace(/[:.]/g, '-');
-                lastBurnResult = result;
-                btnSaveJob.style.display = 'inline-block';
-                
-                if (result.success) {
-                    addLog(`✓ Burn ${i+1} completed in ${result.total_time}s`, 'info');
+            };
+
+            addLog(`Submitting ${Object.keys(burnJobs).length} job(s) to server renderer...`, 'info');
+            const result = await postJobBurn(burnPayload);
+
+            lastBurnTimestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            lastBurnResult = result;
+            btnSaveJob.style.display = 'inline-block';
+
+            (result.results || []).forEach((r, idx) => {
+                if (r.success) {
+                    addLog(`✓ Burn ${idx + 1} (${r.job}) complete in ${r.total_time}s`, 'info');
                 } else {
-                    addLog(`✗ Burn ${i+1} failed`, 'error');
+                    addLog(`✗ Burn ${idx + 1} (${r.job}) failed: ${r.error || r.message}`, 'error');
                 }
-            }
-            
-            showMessage(`All burns complete!`);
+            });
+
+            await loadReportsFromResults(result.results || []);
+
+            showMessage('All burns complete!');
             btnBurn.disabled = false;
             btnStop.style.display = 'none';
             
@@ -687,14 +901,34 @@
             btnStop.style.display = 'none';
             
             lastBurnTimestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            lastBurnResult = { success: false, error: err.message };
+            lastBurnResult = { success: false, error: err.message, details: err.data || null };
             btnSaveJob.style.display = 'inline-block';
-        } finally {
-            if (eventSource) {
-                eventSource.close();
-                eventSource = null;
+            if (err.data && Array.isArray(err.data.results)) {
+                await loadReportsFromResults(err.data.results);
             }
+        } finally {
+            cleanupProgressStream();
         }
+    });
+
+    statsContent.addEventListener('click', (event) => {
+        const btn = event.target.closest('button[data-action="graph"]');
+        if (!btn) return;
+        const csvLog = btn.getAttribute('data-csv-log');
+        if (!csvLog) return;
+        showGraphForCsv(csvLog);
+    });
+
+    statsGraphType.addEventListener('change', () => {
+        if (!activeGraphCsv) return;
+        const report = reportsByCsv.get(activeGraphCsv);
+        statsGraphTitle.textContent = `Run Graph: ${report?.job_id || report?.run_id || 'Unknown'} (${statsGraphType.value})`;
+        renderGraphForReport(report);
+    });
+
+    window.addEventListener('resize', () => {
+        if (!activeGraphCsv || statsGraphPanel.style.display === 'none') return;
+        renderGraphForReport(reportsByCsv.get(activeGraphCsv));
     });
     
     btnStop.addEventListener('click', async () => {
@@ -705,10 +939,7 @@
         try {
             await apiCall('/api/test/stop', 'POST');
             addLog('Stop signal sent', 'warning');
-            if (eventSource) {
-                eventSource.close();
-                eventSource = null;
-            }
+            cleanupProgressStream();
         } catch (err) {
             addLog(`Stop failed: ${err.message}`, 'error');
         }

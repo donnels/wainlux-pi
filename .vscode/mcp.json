@@ -3,6 +3,10 @@
     "pyghidra-mcp": {
       "type": "sse",
       "url": "http://127.0.0.1:8000/sse"
+    },
+    "k6-laser-mcp": {
+      "type": "streamable-http",
+      "url": "http://127.0.0.1:8082/mcp"
     }
   }
 }

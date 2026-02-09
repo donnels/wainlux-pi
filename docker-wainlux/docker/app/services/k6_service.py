@@ -2,12 +2,15 @@
 
 from typing import Optional
 import logging
+import threading
+import time
 
 import os
 
 from k6.driver import WainluxK6
 from k6.transport import SerialTransport, MockTransport
 from k6 import protocol
+from k6.byte_logger import ByteDumpLogger
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +23,7 @@ class K6DeviceManager:
         self.connected = False
         self.version: Optional[str] = None
         self._dry_run = False  # Driver-level dry run toggle
+        self.serial_lock = threading.RLock()
         self.mock_mode = os.getenv("K6_MOCK_DEVICE", "false").lower() == "true"
         
         # Initialize transport based on mock mode
@@ -102,6 +106,114 @@ class K6Service:
 
     def __init__(self, device_manager: K6DeviceManager):
         self.device = device_manager
+
+    @staticmethod
+    def parse_hex_bytes(packet_hex: str) -> bytes:
+        """Parse hex text into bytes.
+
+        Supports formats like:
+        - "ff000400"
+        - "ff 00 04 00"
+        - "0xFF,0x00,0x04,0x00"
+        """
+        if not packet_hex or not isinstance(packet_hex, str):
+            raise ValueError("packet_hex is required")
+
+        normalized = (
+            packet_hex.replace("0x", "")
+            .replace("0X", "")
+            .replace(",", " ")
+            .replace("\n", " ")
+            .strip()
+        )
+        hex_text = "".join(normalized.split())
+        if len(hex_text) % 2 != 0:
+            raise ValueError("Hex payload must contain an even number of characters")
+
+        try:
+            return bytes.fromhex(hex_text)
+        except ValueError as exc:
+            raise ValueError(f"Invalid hex payload: {exc}") from exc
+
+    def raw_send(
+        self,
+        payload: bytes,
+        timeout: float = 2.0,
+        read_size: int = 256,
+        flush_input: bool = False,
+        settle_ms: int = 120,
+        log_prefix: Optional[str] = None,
+    ) -> tuple[bool, dict]:
+        """Send raw bytes to device and collect raw response bytes.
+
+        This bypasses protocol validation intentionally for opcode testing.
+        """
+        if not self.device.transport:
+            return False, {"success": False, "error": "Device not connected"}
+        if not payload:
+            return False, {"success": False, "error": "Empty payload"}
+
+        timeout = max(0.05, min(float(timeout), 30.0))
+        read_size = max(1, min(int(read_size), 4096))
+        settle_ms = max(10, min(int(settle_ms), 1000))
+
+        byte_logger = None
+        response = bytearray()
+        tx_time = time.time()
+
+        try:
+            if log_prefix:
+                timestamp = time.strftime("%Y%m%d_%H%M%S")
+                base_path = f"{log_prefix}_{timestamp}"
+                byte_logger = ByteDumpLogger(base_path)
+
+            with self.device.serial_lock:
+                transport = self.device.transport
+                if flush_input:
+                    transport.reset_input_buffer()
+                transport.set_timeout(timeout)
+
+                if byte_logger:
+                    byte_logger.log_send(payload, "RAW_SEND")
+                bytes_written = transport.write(payload)
+
+                deadline = time.time() + timeout
+                idle_deadline = time.time() + (settle_ms / 1000.0)
+                while time.time() < deadline and len(response) < read_size:
+                    chunk = transport.read(1)
+                    if chunk:
+                        response.extend(chunk)
+                        idle_deadline = time.time() + (settle_ms / 1000.0)
+                    elif response and time.time() >= idle_deadline:
+                        break
+
+                if byte_logger and response:
+                    byte_logger.log_recv(bytes(response))
+
+            hb_count, ack_count, response_type = protocol.parse_response_frames(bytes(response))
+            return True, {
+                "success": True,
+                "tx_hex": payload.hex(),
+                "tx_len": len(payload),
+                "bytes_written": bytes_written,
+                "rx_hex": bytes(response).hex(),
+                "rx_len": len(response),
+                "response_type": response_type,
+                "ack_count": ack_count,
+                "heartbeat_count": hb_count,
+                "timeout": timeout,
+                "read_size": read_size,
+                "flush_input": flush_input,
+                "elapsed_ms": round((time.time() - tx_time) * 1000, 2),
+            }
+        except Exception as e:
+            logger.error(f"Raw send failed: {e}")
+            if byte_logger:
+                byte_logger.log_error(str(e))
+            return False, {"success": False, "error": str(e)}
+        finally:
+            if byte_logger:
+                byte_logger.close()
 
     def draw_bounds(self, width: int = 1600, height: int = 1520, 
                     center_x: int = 800, center_y: int = 760) -> bool:
@@ -286,7 +398,7 @@ class K6Service:
 
     def engrave(self, image_path: str, power: int = 1000, depth: int = 100, 
                 center_x: Optional[int] = None, center_y: Optional[int] = None, 
-                csv_logger=None) -> dict:
+                csv_logger=None, dry_run_override: Optional[bool] = None) -> dict:
         """Engrave an image.
 
         Args:
@@ -296,20 +408,37 @@ class K6Service:
             center_x: Center X position (optional)
             center_y: Center Y position (optional)
             csv_logger: Optional CSV logger for burn tracking
+            dry_run_override: Optional per-request dry-run setting (does not persist)
 
         Returns:
             Dict with keys: ok (bool), message (str), total_time (float), chunks (int)
         """
         try:
-            result = self.device.driver.engrave_transport(
-                self.device.transport,
-                image_path,
-                power=power,
-                depth=depth,
-                center_x=center_x,
-                center_y=center_y,
-                csv_logger=csv_logger
-            )
+            if not self.device.transport:
+                return {"ok": False, "message": "Device not connected", "total_time": 0, "chunks": 0}
+
+            logger.info("Engrave request waiting for serial lock")
+            # Serialize all burn operations so protocol frames cannot interleave.
+            with self.device.serial_lock:
+                logger.info("Engrave request acquired serial lock")
+                previous_dry_run = self.device.dry_run
+                if dry_run_override is not None:
+                    self.device.dry_run = bool(dry_run_override)
+                try:
+                    result = self.device.driver.engrave_transport(
+                        self.device.transport,
+                        image_path,
+                        power=power,
+                        depth=depth,
+                        center_x=center_x,
+                        center_y=center_y,
+                        csv_logger=csv_logger
+                    )
+                finally:
+                    if dry_run_override is not None:
+                        self.device.dry_run = previous_dry_run
+
+            logger.info("Engrave request released serial lock")
             return result
         except Exception as e:
             logger.error(f"Engrave failed: {e}")

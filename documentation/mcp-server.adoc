@@ -1,0 +1,118 @@
+= MCP Server for K6 Laser Control
+
+Model Context Protocol server for AI-assisted K6 protocol testing.
+
+== Purpose
+
+Enable AI assistance in systematic K6 protocol experiments:
+
+* Generate test patterns (QR codes, calibration grids)
+* Execute burns with parameter variations
+* Analyze CSV logs and device responses
+* Later: direct serial access for opcode testing
+
+== Architecture
+
+----
+Steam Deck (MCP client) ──HTTP──> Pi (MCP server :8081)
+                                   └─> K6 hardware (/dev/ttyUSB0)
+----
+
+See: link:../images/mcp-architecture.plantuml[Architecture Diagram]
+
+Both Flask (port 8080) and MCP (port 8081) share:
+
+* `device_manager` singleton (exclusive serial connection)
+* Services layer (QRService, ImageService, K6Service)
+* CSV logging infrastructure
+* Data directory
+
+== Network Transport
+
+*HTTP/SSE* (not stdio - Pi is remote from Steam Deck)
+
+Endpoint: `http://piz-k6:8081/sse`
+
+== Starting MCP Server
+
+Flask runs automatically on container start.
+MCP server starts separately when needed:
+
+[source,bash]
+----
+# Foreground (recommended for testing)
+docker exec -it wainlux-k6 python app/mcp_server.py
+
+# Background (daemon mode)
+docker exec -d wainlux-k6 python app/mcp_server.py
+----
+
+== Safety: Dry Run Mode
+
+*Default: DRY_RUN=true* (no laser firing)
+
+All protocol executes normally.
+Laser power sent as 0.
+CSV logs capture full sequence.
+
+Enable real burns explicitly:
+[source,json]
+----
+k6_set_dry_run {"enabled": false}
+----
+
+== Available MCP Tools
+
+[options="header"]
+|===
+| Tool | Purpose
+
+| `k6_verify_connection`
+| Connect to device, get firmware version
+
+| `k6_get_status`
+| Device state (connected, dry_run, mock_mode)
+
+| `k6_set_dry_run`
+| Toggle laser safety mode
+
+| `k6_list_samples`
+| List available test images
+
+| `k6_load_image`
+| Load sample or base64 image
+
+| `k6_generate_qr`
+| Create WiFi QR code
+
+| `k6_burn_job`
+| Execute full burn sequence
+|===
+
+== Testing Workflow
+
+1. Verify device: `k6_verify_connection`
+2. Generate pattern: `k6_generate_qr` or `k6_load_image`
+3. Test burn (safe): `k6_burn_job` with `dry_run=true`
+4. Analyze CSV logs in `/app/data/`
+5. Real burn (opt-in): `k6_set_dry_run` then `k6_burn_job`
+
+== Security Warning
+
+*NO AUTHENTICATION OR HTTPS*
+
+For POC/testing only.
+
+Before production:
+
+* OAuth2 or API key authentication
+* TLS certificates
+* Role-based authorization
+* Rate limiting
+* Audit logging
+
+== See Also
+
+* link:../ADR/ADR-011-mcp-integration.adoc[ADR-011: MCP Integration]
+* link:../images/mcp-architecture.plantuml[Architecture Diagram]
+* link:reference-k6_protocol.adoc[K6 Protocol Reference]

@@ -6,16 +6,18 @@ Access at http://<pi-ip>:8080
 """
 
 from flask import Flask, render_template, request, jsonify, Response
+from werkzeug.exceptions import HTTPException
 from pathlib import Path
 import logging
 import tempfile
 import sys
 import os
-from datetime import datetime
 import json
 import time
 import queue
 import threading
+from typing import Optional
+from uuid import uuid4
 from PIL import Image, ImageDraw
 
 # Add k6 library to path (located in /app/k6 in container)
@@ -27,12 +29,33 @@ from k6.csv_logger import CSVLogger
 from k6.commands import K6CommandBuilder, CommandSequence
 from services import ImageService, K6Service, QRService, PatternService, PipelineService, PreviewService
 from services.k6_service import K6DeviceManager
+from constants import K6Constants
+from utils import safe_int, safe_float, parse_bool, file_timestamp, iso_timestamp
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__, template_folder="../templates", static_folder="../static")
 app.secret_key = 'k6-laser-session-key-change-in-production'
+
+
+@app.errorhandler(Exception)
+def handle_unexpected_error(err):
+    """Ensure API endpoints always return JSON, even for unhandled failures."""
+    if request.path.startswith("/api/"):
+        status = 500
+        message = str(err) or "Internal Server Error"
+        if isinstance(err, HTTPException):
+            status = err.code or 500
+            message = err.description or message
+        if status >= 500:
+            logger.exception("Unhandled API error on %s: %s", request.path, err)
+        return jsonify({"success": False, "error": message}), status
+
+    if isinstance(err, HTTPException):
+        return err
+    logger.exception("Unhandled web error on %s: %s", request.path, err)
+    return "Internal Server Error", 500
 
 # Device manager and services
 device_manager = K6DeviceManager()
@@ -42,7 +65,7 @@ qr_service = QRService()
 
 # Operational mode (workflow testing): silent (default) / verbose / single-step
 # Controls logging and intermediate file generation for debugging/learning
-# Stored in session, persists per-browser
+# Request-scoped mode defaults (client may override per request via header/query).
 VALID_MODES = {'silent', 'verbose', 'single-step'}
 DEFAULT_MODE = 'silent'
 
@@ -59,31 +82,60 @@ logger.info(f"Operation mode default: {DEFAULT_MODE}")
 logger.info(f"================================")
 
 def get_operation_mode():
-    """Get current operation mode from session."""
-    from flask import session
-    return session.get('operation_mode', DEFAULT_MODE)
+    """Get request-scoped operation mode."""
+    requested = request.headers.get("X-K6-Operation-Mode") or request.args.get("operation_mode")
+    if isinstance(requested, str) and requested in VALID_MODES:
+        return requested
+    return DEFAULT_MODE
 
 def set_operation_mode(mode: str):
-    """Set operation mode in session."""
-    from flask import session
-    if mode in VALID_MODES:
-        session['operation_mode'] = mode
-        return True
-    return False
+    """Validate operation mode (stateless: no server-side persistence)."""
+    return mode in VALID_MODES
 
 def get_dry_run():
-    """Get dry run setting from session."""
-    from flask import session
-    return session.get('dry_run', DEFAULT_DRY_RUN)
+    """Get request-scoped dry-run preference."""
+    requested = request.headers.get("X-K6-Dry-Run")
+    if requested is None:
+        requested = request.args.get("dry_run")
+    if requested is None:
+        return DEFAULT_DRY_RUN
+    return parse_bool(requested)
 
 def set_dry_run(enabled: bool):
-    """Set dry run setting in session."""
-    from flask import session
-    session['dry_run'] = bool(enabled)
+    """Validate dry run setting (stateless: no server-side persistence)."""
+    bool(enabled)
     return True
 
-# Progress tracking for SSE
-progress_queue = queue.Queue()
+
+def _json_payload() -> dict:
+    """Return JSON object payload or raise ValueError."""
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        raise ValueError("Invalid JSON payload")
+    return data
+
+
+def _safe_data_path(path_str: str, require_exists: bool = True) -> Path:
+    """Resolve and validate a path inside DATA_DIR."""
+    if not path_str:
+        raise ValueError("Path is required")
+    path = Path(path_str).resolve()
+    data_root = DATA_DIR.resolve()
+    if data_root not in path.parents and path != data_root:
+        raise ValueError("Path must be inside data directory")
+    if require_exists and not path.exists():
+        raise FileNotFoundError(f"Path not found: {path}")
+    return path
+
+
+def _safe_log_path(path_str: str) -> Path:
+    """Resolve and validate a CSV/log path inside DATA_DIR."""
+    return _safe_data_path(path_str, require_exists=True)
+
+# Progress tracking for SSE (pub/sub broadcast model)
+PROGRESS_SUBSCRIBER_MAX = 200
+progress_subscribers: set[queue.Queue] = set()
+progress_subscribers_lock = threading.Lock()
 burn_in_progress = False
 burn_cancel_event = threading.Event()  # Signal to cancel active burn
 
@@ -91,15 +143,64 @@ burn_cancel_event = threading.Event()  # Signal to cancel active burn
 DATA_DIR = Path(__file__).parents[1] / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
-# K6 hardware constants
-K6_MAX_WIDTH = 1600  # px (80mm at 0.05mm/px resolution)
-K6_MAX_HEIGHT = 1520  # px (76mm actual Y-axis measured)
-K6_CENTER_X_OFFSET = 67  # px offset for centered positioning
-K6_CENTER_Y = 760  # px (middle of 1520px work area)
-K6_DEFAULT_CENTER_X = 800  # px default position
-K6_DEFAULT_CENTER_Y = 800  # px default position
+
+def _ensure_device_connected(auto_connect: bool = True) -> None:
+    """Ensure device transport is ready; optionally auto-connect."""
+    if device_manager.is_connected() and device_manager.transport is not None:
+        return
+    if not auto_connect:
+        raise RuntimeError("Device not connected")
+
+    logger.info("Device not connected, attempting auto-connect...")
+    success, version = device_manager.connect(port="/dev/ttyUSB0", baudrate=115200, timeout=2.0)
+    if not success or device_manager.transport is None:
+        raise RuntimeError("Device not connected. Please verify connection first.")
+    logger.info(f"Auto-connected to K6 {version}")
+
+
+# K6 hardware constants (shared single source of truth)
+K6_MAX_WIDTH = K6Constants.MAX_WIDTH_PX
+K6_MAX_HEIGHT = K6Constants.MAX_HEIGHT_PX
+K6_CENTER_X_OFFSET = K6Constants.CENTER_X_OFFSET_PX
+K6_CENTER_Y = K6Constants.CENTER_Y_PX
+K6_DEFAULT_CENTER_X = K6Constants.DEFAULT_CENTER_X_PX
+K6_DEFAULT_CENTER_Y = K6Constants.DEFAULT_CENTER_Y_PX
+MAX_EMBED_IMAGE_DIM = K6Constants.MAX_WIDTH_PX
 
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "bmp", "gif"}
+
+
+def _normalize_embed_image(
+    image: Image.Image,
+    max_dimension: int = MAX_EMBED_IMAGE_DIM,
+) -> tuple[Image.Image, dict]:
+    """Normalize image for embedded base64 payloads.
+
+    - Preserves aspect ratio
+    - Limits longest edge to max_dimension
+    - Converts to 1-bit to avoid gray artifacts in burn pipeline
+    """
+    gray = image.convert("L")
+    original_width, original_height = gray.size
+    resized = False
+
+    if max(original_width, original_height) > max_dimension:
+        scale = max_dimension / float(max(original_width, original_height))
+        target_width = max(1, int(round(original_width * scale)))
+        target_height = max(1, int(round(original_height * scale)))
+        gray = gray.resize((target_width, target_height), Image.LANCZOS)
+        resized = True
+
+    normalized = gray.point(lambda x: 0 if x < 128 else 255, mode="1")
+
+    return normalized, {
+        "original_width": original_width,
+        "original_height": original_height,
+        "width": normalized.width,
+        "height": normalized.height,
+        "resized": resized,
+        "max_dimension": max_dimension,
+    }
 
 
 def emit_progress(phase: str, progress: int, message: str):
@@ -108,15 +209,137 @@ def emit_progress(phase: str, progress: int, message: str):
         "phase": phase,
         "progress": progress,
         "message": message,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": iso_timestamp(),
     }
     logger.info(f"EMIT_PROGRESS: phase={phase}, progress={progress}, message={message}")
+    dropped = 0
+    delivered = 0
+    with progress_subscribers_lock:
+        subscribers = list(progress_subscribers)
+    for subscriber in subscribers:
+        try:
+            subscriber.put_nowait(event)
+            delivered += 1
+        except queue.Full:
+            dropped += 1
+    logger.info(f"EMIT_PROGRESS: delivered={delivered}, dropped={dropped}")
+
+
+def _run_burn_with_csv(
+    *,
+    image_path: str,
+    power: int,
+    depth: int,
+    center_x: Optional[int],
+    center_y: Optional[int],
+    csv_prefix: str,
+    job_id: str,
+    dry_run_override: Optional[bool] = None,
+    start_message: Optional[str] = None,
+    setup_message: Optional[str] = None,
+    complete_message_template: Optional[str] = None,
+    emit_error: bool = True,
+) -> tuple[dict, int]:
+    """Execute one burn via pipeline stages (process/build/execute) with CSV logging."""
+    timestamp = file_timestamp()
+    run_id = str(uuid4())
+    csv_path = DATA_DIR / f"{csv_prefix}-{timestamp}.csv"
+    process_result = None
+    build_result = None
+    keep_pipeline_artifacts = False
+
+    _ensure_device_connected(auto_connect=True)
+
+    if start_message:
+        emit_progress("start", 0, start_message)
+
     try:
-        progress_queue.put_nowait(event)
-        logger.info("EMIT_PROGRESS: queued successfully")
-    except queue.Full:
-        logger.warning("EMIT_PROGRESS: queue full, dropped event")
-        pass  # Drop events if queue is full
+        if setup_message:
+            emit_progress("setup", 0, setup_message)
+
+        emit_progress("prepare", 10, "Pipeline step 2/4: processing image")
+        process_result = PipelineService.process_image(
+            image_path,
+            DATA_DIR,
+            threshold=128,
+            invert=False,
+        )
+
+        resolved_center_x = center_x
+        resolved_center_y = center_y
+        if resolved_center_x is None:
+            resolved_center_x = (process_result["width"] // 2) + K6_CENTER_X_OFFSET
+        if resolved_center_y is None:
+            resolved_center_y = process_result["height"] // 2
+
+        emit_progress("prepare", 45, "Pipeline step 3/4: building command sequence")
+        build_result = PipelineService.build_commands(
+            process_result["processed_path"],
+            power,
+            depth,
+            resolved_center_x,
+            resolved_center_y,
+            DATA_DIR,
+        )
+
+        emit_progress("upload", 70, "Pipeline step 4/4: executing commands")
+        with ProgressCSVLogger(str(csv_path), run_id=run_id, job_id=job_id) as csv_logger:
+            previous_dry_run = device_manager.dry_run
+            if dry_run_override is not None:
+                device_manager.dry_run = bool(dry_run_override)
+            started = time.time()
+            try:
+                with device_manager.serial_lock:
+                    result = device_manager.driver.execute_from_file(
+                        device_manager.transport,
+                        build_result["command_path"],
+                        csv_logger=csv_logger,
+                    )
+            finally:
+                elapsed = time.time() - started
+                if dry_run_override is not None:
+                    device_manager.dry_run = previous_dry_run
+    except (ValueError, RuntimeError, OSError) as exc:
+        if emit_error:
+            emit_progress("error", 0, str(exc))
+        return {"success": False, "error": str(exc)}, 500
+    finally:
+        mode = get_operation_mode()
+        keep_pipeline_artifacts = mode in {"verbose", "single-step"}
+        if not keep_pipeline_artifacts and process_result and build_result:
+            for key in ("processed_path", "preview_path"):
+                path = process_result.get(key)
+                if path:
+                    Path(path).unlink(missing_ok=True)
+            for key in ("command_path", "metadata_path"):
+                path = build_result.get(key)
+                if path:
+                    Path(path).unlink(missing_ok=True)
+
+    if burn_cancel_event.is_set():
+        emit_progress("stopped", 0, "Burn cancelled by user")
+        return {"success": False, "error": "Cancelled by user"}, 400
+
+    if result.get("ok"):
+        chunk_count = 0
+        if build_result:
+            chunk_count = build_result.get("sequence", {}).get("data_chunks", 0)
+        if complete_message_template:
+            emit_progress("complete", 100, complete_message_template.format(total_time=elapsed))
+        return {
+            "success": True,
+            "message": "Burn complete",
+            "total_time": round(elapsed, 3),
+            "chunks": chunk_count,
+            "csv_log": str(csv_path),
+            "run_id": run_id,
+            "command_path": build_result.get("command_path") if (build_result and keep_pipeline_artifacts) else None,
+            "metadata_path": build_result.get("metadata_path") if (build_result and keep_pipeline_artifacts) else None,
+        }, 200
+
+    if emit_error:
+        emit_progress("error", 0, result.get("error", "Pipeline execution failed"))
+    return {"success": False, "error": result.get("error", "Pipeline execution failed")}, 500
 
 
 class ProgressCSVLogger(CSVLogger):
@@ -234,7 +457,7 @@ def list_materials():
                     materials.append(material_data)
         materials.sort(key=lambda x: x.get('name', ''))
         return jsonify({"success": True, "materials": materials})
-    except Exception as e:
+    except (OSError, json.JSONDecodeError) as e:
         logger.error(f"List materials failed: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -254,7 +477,7 @@ def list_shapes():
                     shapes.append(shape_data)
         shapes.sort(key=lambda x: x.get('name', ''))
         return jsonify({"success": True, "shapes": shapes})
-    except Exception as e:
+    except (OSError, json.JSONDecodeError) as e:
         logger.error(f"List shapes failed: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -297,7 +520,7 @@ def list_images():
         # Return relative paths for URL fetching
         images = [{"name": f.name, "url": f"/api/images/serve/{f.name}"} for f in sorted(image_files)]
         return jsonify({"success": True, "images": images})
-    except Exception as e:
+    except OSError as e:
         logger.error(f"List images failed: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -330,7 +553,7 @@ def connect():
             return jsonify({"success": True, "connected": True, "version": version_str})
         else:
             return jsonify({"success": False, "connected": False, "error": "Connection failed"}), 500
-    except Exception as e:
+    except (RuntimeError, OSError) as e:
         logger.error(f"Connect failed: {e}")
         return jsonify({"success": False, "connected": False, "error": str(e)}), 500
 
@@ -340,7 +563,7 @@ def test_bounds():
     try:
         success = k6_service.draw_bounds()
         return jsonify({"success": success})
-    except Exception as e:
+    except (RuntimeError, OSError) as e:
         logger.error(f"Bounds test failed: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -350,7 +573,7 @@ def test_home():
     try:
         success = k6_service.home()
         return jsonify({"success": success})
-    except Exception as e:
+    except (RuntimeError, OSError) as e:
         logger.error(f"Home test failed: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -359,10 +582,10 @@ def test_home():
 def jog():
     """Move laser head to absolute position using BOUNDS positioning"""
     try:
-        data = request.get_json()
-        center_x = int(data.get("x", 800))
-        center_y = int(data.get("y", 800))
-        disable_limits = data.get("disable_limits", False)
+        data = _json_payload()
+        center_x = safe_int(data.get("x", 800), "x")
+        center_y = safe_int(data.get("y", 800), "y")
+        disable_limits = parse_bool(data.get("disable_limits", False))
 
         success, result = k6_service.jog(center_x, center_y, disable_limits)
 
@@ -371,7 +594,9 @@ def jog():
         else:
             return jsonify({"success": False, "error": "BOUNDS command failed"}), 500
 
-    except Exception as e:
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except (RuntimeError, OSError) as e:
         logger.error(f"Jog failed: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -380,11 +605,11 @@ def jog():
 def mark():
     """Burn a single pixel mark at current position"""
     try:
-        data = request.get_json()
-        center_x = int(data.get("x", K6_DEFAULT_CENTER_X))
-        center_y = int(data.get("y", K6_DEFAULT_CENTER_Y))
-        power = int(data.get("power", 500))
-        depth = int(data.get("depth", 10))
+        data = _json_payload()
+        center_x = safe_int(data.get("x", K6_DEFAULT_CENTER_X), "x")
+        center_y = safe_int(data.get("y", K6_DEFAULT_CENTER_Y), "y")
+        power = safe_int(data.get("power", 500), "power", 0, 1000)
+        depth = safe_int(data.get("depth", 10), "depth", 1, 255)
 
         success, result = k6_service.mark(center_x, center_y, power, depth)
 
@@ -393,7 +618,9 @@ def mark():
         else:
             return jsonify({"success": False, "error": "Mark failed"}), 500
 
-    except Exception as e:
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except (RuntimeError, OSError) as e:
         logger.error(f"Mark failed: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -402,8 +629,8 @@ def mark():
 def crosshair():
     """Toggle crosshair/positioning laser (0x06 ON, 0x07 OFF)"""
     try:
-        data = request.get_json()
-        enable = data.get("enable", False)
+        data = _json_payload()
+        enable = parse_bool(data.get("enable", False))
 
         success, result = k6_service.crosshair(enable)
 
@@ -412,7 +639,9 @@ def crosshair():
         else:
             return jsonify({"success": False, "error": "Crosshair command failed"}), 500
 
-    except Exception as e:
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except (RuntimeError, OSError) as e:
         logger.error(f"Crosshair toggle failed: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -455,14 +684,17 @@ def engrave_prepare():
 
     try:
         # Save with timestamp hash - filename is irrelevant, PIL validates format
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        timestamp = file_timestamp()
         temp_path = DATA_DIR / f"upload_{timestamp}.png"
         original_filename = file.filename  # Metadata only (for logging)
+        source = str(request.form.get("source", "upload") or "upload")
+        source_reference = str(request.form.get("source_reference", original_filename) or original_filename)
         
         # Detect SVG by content (XML declaration or <svg tag)
         file_content = file.read()
         file.seek(0)  # Reset for save
         
+        file_size_bytes = len(file_content)
         is_svg = False
         if file_content[:100].lower().find(b'<svg') != -1 or file_content[:100].lower().find(b'<?xml') != -1:
             is_svg = True
@@ -487,32 +719,31 @@ def engrave_prepare():
 
         # PIL validates image format - will fail here if invalid
         with Image.open(temp_path) as img:
-            width, height = img.size
-            
-            # CRITICAL: Force all images to 1-bit to prevent antialiasing artifacts
-            # QR codes are already 1-bit, but canvas composites may introduce gray pixels
-            # Threshold: < 128 = black (0), >= 128 = white (255)
-            if img.mode != "1":
-                gray = img.convert("L")
-                img = gray.point(lambda x: 0 if x < 128 else 255, mode="1")
-                # Save back to temp file as clean 1-bit
-                img.save(str(temp_path))
-            
-            # Generate base64 (OPTION 2: embedded in job structure)
-            data_url = image_service.image_to_base64(img)
+            normalized_img, image_meta = _normalize_embed_image(img, max_dimension=MAX_EMBED_IMAGE_DIM)
+            # Save normalized image to temp file for downstream burn path
+            normalized_img.save(str(temp_path))
+            # Generate base64 (embedded source of truth for job structure)
+            data_url = image_service.image_to_base64(normalized_img)
 
         return jsonify({
             "success": True,
             "image": data_url,  # For immediate preview display
-            "image_base64": data_url,  # NEW: For embedding in job structure
+            "image_base64": data_url,  # Embedded source of truth for job structure
             "temp_path": str(temp_path),
             "original_filename": original_filename,  # Track original name
-            "source": "upload",  # Track source type
-            "width": width,
-            "height": height,
+            "source": source,
+            "source_reference": source_reference,
+            "file_size_bytes": file_size_bytes,
+            "mime_type": file.mimetype or "application/octet-stream",
+            "width": image_meta["width"],
+            "height": image_meta["height"],
+            "original_width": image_meta["original_width"],
+            "original_height": image_meta["original_height"],
+            "resized": image_meta["resized"],
+            "max_dimension": image_meta["max_dimension"],
         })
 
-    except Exception as e:
+    except (ValueError, OSError) as e:
         logger.error(f"Engrave prepare failed: {e}")
         if "temp_path" in locals():
             Path(temp_path).unlink(missing_ok=True)
@@ -523,29 +754,29 @@ def engrave_prepare():
 def engrave():
     """Burn image - mode-aware workflow
     
-    Respects operation_mode and dry_run settings.
-    Silent: monolithic, minimal logs
-    Verbose: saves all intermediate files
-    Single-step: NOT IMPLEMENTED (use pipeline endpoints directly)
+    Respects request-scoped dry_run and operation mode settings.
+    Execution path is pipeline-backed (process/build/execute).
     """
     try:
-        # Ensure device is connected - always reconnect if transport is None
-        if not device_manager.is_connected() or device_manager.transport is None:
-            logger.info("Device not connected, attempting auto-connect...")
-            success, version = device_manager.connect(port="/dev/ttyUSB0", baudrate=115200, timeout=2.0)
-            if not success:
-                return jsonify({"success": False, "error": "Device not connected. Please verify connection first."}), 400
-            logger.info(f"Auto-connected to K6 {version}")
-        
-        mode = get_operation_mode()
-        dry_run = get_dry_run()
-        
+        _ensure_device_connected(auto_connect=True)
+
         # Accept both JSON (with temp_path) and FormData (direct upload)
-        data = request.get_json(silent=True) or {}
+        data = _json_payload()
         temp_path = data.get("temp_path", "")
+
+        # SAFETY: request-level dry_run must override session defaults.
+        dry_run_input = data.get("dry_run", None)
+        if dry_run_input is None and "dry_run" in request.form:
+            dry_run_input = request.form.get("dry_run")
+        effective_dry_run = get_dry_run() if dry_run_input is None else parse_bool(dry_run_input)
         
         # Fallback: if no temp_path, accept direct file upload (backward compat)
-        if not temp_path and "image" in request.files:
+        if temp_path:
+            try:
+                temp_path = str(_safe_data_path(temp_path, require_exists=True))
+            except (ValueError, FileNotFoundError) as e:
+                return jsonify({"success": False, "error": str(e)}), 400
+        elif "image" in request.files:
             file = request.files["image"]
             with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
                 file.save(tmp.name)
@@ -555,10 +786,8 @@ def engrave():
             return jsonify({"success": False, "error": "No image file"}), 400
 
         # Get parameters
-        depth = int(data.get("depth", 100))
-        depth = max(1, min(255, depth))
-        power = int(data.get("power", 1000))
-        power = max(0, min(1000, power))
+        depth = safe_int(data.get("depth", 100), "depth", 1, 255)
+        power = safe_int(data.get("power", 1000), "power", 0, 1000)
         
         # Positioning: Use provided coordinates or let driver auto-calculate
         # Driver auto-calc: center_x = (width // 2) + 67, center_y = height // 2
@@ -566,21 +795,10 @@ def engrave():
         center_y = data.get("center_y", None)
         
         if center_x is not None:
-            center_x = int(center_x)
+            center_x = safe_int(center_x, "center_x")
         if center_y is not None:
-            center_y = int(center_y)
+            center_y = safe_int(center_y, "center_y")
 
-        # Silent: monolithic, with progress updates (default)
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        csv_path = DATA_DIR / f"burn-{timestamp}.csv"
-        
-        # Clear progress queue before starting
-        while not progress_queue.empty():
-            try:
-                progress_queue.get_nowait()
-            except queue.Empty:
-                break
-        
         # Clear cancel flag
         global burn_cancel_event
         burn_cancel_event.clear()
@@ -588,38 +806,27 @@ def engrave():
         logger.info(f"=== ENGRAVE START === temp_path={temp_path}, power={power}, depth={depth}")
         logger.info(f"Device connected: {device_manager.is_connected()}")
         
-        emit_progress("start", 0, "Starting image burn")
-        
-        with ProgressCSVLogger(str(csv_path)) as csv_logger:
-            logger.info("ProgressCSVLogger context entered")
-            emit_progress("setup", 0, "Initializing burn sequence...")
-            result = k6_service.engrave(
-                temp_path, power=power, depth=depth, 
-                center_x=center_x, center_y=center_y,
-                csv_logger=csv_logger
-            )
-            logger.info(f"k6_service.engrave returned: {result}")
+        response, status_code = _run_burn_with_csv(
+            image_path=temp_path,
+            power=power,
+            depth=depth,
+            center_x=center_x,
+            center_y=center_y,
+            csv_prefix="burn",
+            job_id="engrave",
+            dry_run_override=effective_dry_run,
+            start_message="Starting image burn",
+            setup_message="Initializing burn sequence...",
+            complete_message_template="Burn complete in {total_time:.1f}s",
+            emit_error=True,
+        )
         
         # Clean up temp file
         Path(temp_path).unlink(missing_ok=True)
         
-        if burn_cancel_event.is_set():
-            emit_progress("stopped", 0, "Burn cancelled by user")
-            return jsonify({"success": False, "error": "Cancelled by user"}), 400
-        
-        if result["ok"]:
-            emit_progress("complete", 100, f"Burn complete in {result['total_time']:.1f}s")
-            return jsonify({
-                "success": True,
-                "message": result["message"],
-                "total_time": result["total_time"],
-                "chunks": result["chunks"],
-                "csv_log": str(csv_path),
-                "dry_run": device_manager.dry_run
-            })
-        else:
-            emit_progress("error", 0, result["message"])
-            return jsonify({"success": False, "error": result["message"]}), 500
+        if status_code == 200:
+            response["dry_run"] = effective_dry_run
+        return jsonify(response), status_code
 
     except KeyboardInterrupt:
         logger.info("Burn cancelled by user")
@@ -627,7 +834,9 @@ def engrave():
         if "temp_path" in locals():
             Path(temp_path).unlink(missing_ok=True)
         return jsonify({"success": False, "error": "Cancelled by user"}), 400
-    except Exception as e:
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except (RuntimeError, OSError) as e:
         logger.error(f"Engrave failed: {e}")
         emit_progress("error", 0, str(e))
         if "temp_path" in locals():
@@ -643,13 +852,15 @@ def pipeline_process():
     Single-step mode: stores data, awaits approval before next step
     """
     try:
-        data = request.get_json()
+        data = _json_payload()
         temp_path = data.get("temp_path", "")
-        threshold = int(data.get("threshold", 128))
-        invert = bool(data.get("invert", False))
-        
-        if not temp_path or not Path(temp_path).exists():
-            return jsonify({"success": False, "error": "Invalid temp_path"}), 400
+        threshold = safe_int(data.get("threshold", 128), "threshold", 0, 255)
+        invert = parse_bool(data.get("invert", False))
+
+        try:
+            temp_path = str(_safe_data_path(temp_path, require_exists=True))
+        except (ValueError, FileNotFoundError) as e:
+            return jsonify({"success": False, "error": str(e)}), 400
 
         # Process image
         result = PipelineService.process_image(temp_path, DATA_DIR, threshold, invert)
@@ -667,7 +878,9 @@ def pipeline_process():
             "stats": result["stats"]
         })
 
-    except Exception as e:
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except (RuntimeError, OSError) as e:
         logger.error(f"Pipeline process failed: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -680,15 +893,17 @@ def pipeline_build():
     Exposes all settings (power, depth, position) and command statistics
     """
     try:
-        data = request.get_json()
+        data = _json_payload()
         processed_path = data.get("processed_path", "")
-        power = int(data.get("power", 1000))
-        depth = int(data.get("depth", 100))
-        center_x = int(data.get("center_x", K6_DEFAULT_CENTER_X))
-        center_y = int(data.get("center_y", K6_DEFAULT_CENTER_Y))
+        power = safe_int(data.get("power", 1000), "power", 0, 1000)
+        depth = safe_int(data.get("depth", 100), "depth", 1, 255)
+        center_x = safe_int(data.get("center_x", K6_DEFAULT_CENTER_X), "center_x")
+        center_y = safe_int(data.get("center_y", K6_DEFAULT_CENTER_Y), "center_y")
         
-        if not processed_path or not Path(processed_path).exists():
-            return jsonify({"success": False, "error": "Invalid processed_path"}), 400
+        try:
+            processed_path = str(_safe_data_path(processed_path, require_exists=True))
+        except (ValueError, FileNotFoundError) as e:
+            return jsonify({"success": False, "error": str(e)}), 400
 
         # Build commands
         result = PipelineService.build_commands(
@@ -707,7 +922,7 @@ def pipeline_build():
     except ValueError as e:
         logger.error(f"Pipeline build validation failed: {e}")
         return jsonify({"success": False, "error": str(e)}), 400
-    except Exception as e:
+    except (RuntimeError, OSError) as e:
         logger.error(f"Pipeline build failed: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -720,15 +935,23 @@ def pipeline_execute():
     Raw byte logging (like `tee`) - captures ALL I/O for debugging
     """
     try:
-        data = request.get_json()
+        data = _json_payload()
         command_path = data.get("command_path", "")
         log_mode = data.get("log_mode", "both")  # "csv" | "bytes" | "both"
-        
-        if not command_path or not Path(command_path).exists():
-            return jsonify({"success": False, "error": "Invalid command_path"}), 400
+
+        try:
+            command_path = str(_safe_data_path(command_path, require_exists=True))
+        except (ValueError, FileNotFoundError) as e:
+            return jsonify({"success": False, "error": str(e)}), 400
+
+        try:
+            _ensure_device_connected(auto_connect=False)
+        except RuntimeError as e:
+            return jsonify({"success": False, "error": str(e)}), 400
 
         # Setup logging
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = file_timestamp()
+        run_id = str(uuid4())
         
         csv_logger = None
         byte_logger = None
@@ -736,7 +959,7 @@ def pipeline_execute():
         if log_mode in ("csv", "both"):
             from k6.csv_logger import CSVLogger
             csv_path = DATA_DIR / f"execute_{timestamp}.csv"
-            csv_logger = CSVLogger(str(csv_path))
+            csv_logger = CSVLogger(str(csv_path), run_id=run_id, job_id="pipeline_execute")
         
         if log_mode in ("bytes", "both"):
             from k6.byte_logger import ByteDumpLogger
@@ -745,12 +968,13 @@ def pipeline_execute():
 
         try:
             # Execute commands with logging
-            result = device_manager.driver.execute_from_file(
-                device_manager.transport,
-                command_path,
-                csv_logger=csv_logger,
-                byte_logger=byte_logger
-            )
+            with device_manager.serial_lock:
+                result = device_manager.driver.execute_from_file(
+                    device_manager.transport,
+                    command_path,
+                    csv_logger=csv_logger,
+                    byte_logger=byte_logger
+                )
 
             response = {
                 "success": result["ok"],
@@ -760,6 +984,7 @@ def pipeline_execute():
 
             if csv_logger:
                 response["csv_log"] = str(csv_path)
+                response["run_id"] = run_id
             if byte_logger:
                 response["byte_dump"] = str(byte_path) + ".dump"
                 response["byte_dump_text"] = str(byte_path) + ".dump.txt"
@@ -772,7 +997,7 @@ def pipeline_execute():
             if byte_logger:
                 byte_logger.close()
 
-    except Exception as e:
+    except (RuntimeError, OSError) as e:
         logger.error(f"Pipeline execute failed: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -788,6 +1013,13 @@ def status():
         "message": "Ready" if connected else "Not connected",
         "max_width": K6_MAX_WIDTH,
         "max_height": K6_MAX_HEIGHT,
+        "resolution_mm_per_px": K6Constants.RESOLUTION_MM_PER_PX,
+        "center_x_offset_px": K6Constants.CENTER_X_OFFSET_PX,
+        "center_y_px": K6Constants.CENTER_Y_PX,
+        "default_center_x_px": K6Constants.DEFAULT_CENTER_X_PX,
+        "default_center_y_px": K6Constants.DEFAULT_CENTER_Y_PX,
+        "work_width_mm": K6Constants.WORK_WIDTH_MM,
+        "work_height_mm": K6Constants.WORK_HEIGHT_MM,
     }
     version = device_manager.version
     if version:
@@ -797,9 +1029,9 @@ def status():
         else:
             response["version"] = str(version)
     
-    # Add operation mode info
+    # Request-scoped settings (stateless semantics)
     response["operation_mode"] = get_operation_mode()
-    response["dry_run"] = device_manager.dry_run  # Use driver state as source of truth
+    response["dry_run"] = get_dry_run()
     response["mock_mode"] = device_manager.mock_mode
     
     return jsonify(response)
@@ -831,40 +1063,47 @@ def debug_env():
 
 @app.route("/api/settings", methods=["GET"])
 def get_settings():
-    """Get current settings including operation mode and dry run"""
+    """Get request-scoped settings (stateless server)."""
     return jsonify({
         "success": True,
         "operation_mode": get_operation_mode(),
         "dry_run": get_dry_run(),
-        "valid_modes": list(VALID_MODES)
+        "valid_modes": list(VALID_MODES),
+        "persisted": False,
     })
 
 
 @app.route("/api/settings", methods=["POST"])
 def update_settings():
-    """Update settings including operation mode and dry run"""
+    """Validate request-scoped settings (stateless, no server-side persistence)."""
     try:
-        data = request.get_json()
-        
-        # Update operation mode if provided
+        data = _json_payload()
+
+        effective_mode = get_operation_mode()
+        effective_dry_run = get_dry_run()
+
         if "operation_mode" in data:
             mode = data["operation_mode"]
             if not set_operation_mode(mode):
                 return jsonify({"success": False, "error": f"Invalid mode: {mode}"}), 400
-        
-        # Update dry run if provided (driver-level setting)
+            effective_mode = mode
+
         if "dry_run" in data:
-            dry_run_enabled = bool(data["dry_run"])
+            dry_run_enabled = parse_bool(data["dry_run"])
             set_dry_run(dry_run_enabled)
-            device_manager.dry_run = dry_run_enabled  # Set on device manager for driver access
-        
+            effective_dry_run = dry_run_enabled
+
         return jsonify({
             "success": True,
-            "operation_mode": get_operation_mode(),
-            "dry_run": get_dry_run()
+            "operation_mode": effective_mode,
+            "dry_run": effective_dry_run,
+            "persisted": False,
+            "message": "Settings are request-scoped. Client should include them per request.",
         })
     
-    except Exception as e:
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except (RuntimeError, OSError) as e:
         logger.error(f"Settings update failed: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -874,6 +1113,10 @@ def progress_stream():
     """SSE endpoint for real-time progress updates."""
 
     def generate():
+        client_queue = queue.Queue(maxsize=PROGRESS_SUBSCRIBER_MAX)
+        with progress_subscribers_lock:
+            progress_subscribers.add(client_queue)
+
         # Send initial connection event
         initial_event = {
             "phase": "connected",
@@ -882,18 +1125,18 @@ def progress_stream():
         }
         yield f"data: {json.dumps(initial_event)}\n\n"
 
-        while True:
-            try:
-                # Wait for events with timeout
-                event = progress_queue.get(timeout=30)
-                yield f"data: {json.dumps(event)}\n\n"
-
-                # Check if burn is complete
-                if event.get("phase") == "complete" or event.get("phase") == "error":
-                    break
-            except queue.Empty:
-                # Send keepalive
-                yield ": keepalive\n\n"
+        try:
+            while True:
+                try:
+                    # Wait for events with timeout
+                    event = client_queue.get(timeout=30)
+                    yield f"data: {json.dumps(event)}\n\n"
+                except queue.Empty:
+                    # Send keepalive
+                    yield ": keepalive\n\n"
+        finally:
+            with progress_subscribers_lock:
+                progress_subscribers.discard(client_queue)
 
     return Response(generate(), mimetype="text/event-stream")
 
@@ -902,16 +1145,16 @@ def progress_stream():
 def calibration_generate():
     """Generate calibration test pattern - unified workflow step 1"""
     try:
-        data = request.get_json()
-        resolution = float(data.get("resolution", 0.05))
+        data = _json_payload()
+        resolution = safe_float(data.get("resolution", K6Constants.RESOLUTION_MM_PER_PX), "resolution", 0.001)
         pattern = data.get("pattern", "center")
-        size_mm = float(data.get("size_mm", 10.0))
+        size_mm = safe_float(data.get("size_mm", 10.0), "size_mm", 0.1)
 
         # Generate pattern using service (DRY - single source)
         img = PatternService.generate(pattern, resolution, size_mm)
 
         # Save to temp file
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        timestamp = file_timestamp()
         temp_path = DATA_DIR / f"calibration_preview_{timestamp}.png"
         img.save(str(temp_path))
 
@@ -932,7 +1175,9 @@ def calibration_generate():
             }
         )
 
-    except Exception as e:
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except (RuntimeError, OSError) as e:
         logger.error(f"Calibration generate failed: {e}")
         if "temp_path" in locals():
             Path(temp_path).unlink(missing_ok=True)
@@ -943,13 +1188,9 @@ def calibration_generate():
 def calibration_preview():
     """Draw preview bounds using fast 0x20 BOUNDS command"""
     try:
-        data = request.get_json()
-        width = int(data.get("width", K6_MAX_WIDTH))
-        height = int(data.get("height", K6_MAX_HEIGHT))
-
-        # Validate dimensions
-        width = max(1, min(K6_MAX_WIDTH, width))
-        height = max(1, min(K6_MAX_HEIGHT, height))
+        data = _json_payload()
+        width = safe_int(data.get("width", K6_MAX_WIDTH), "width", 1, K6_MAX_WIDTH)
+        height = safe_int(data.get("height", K6_MAX_HEIGHT), "height", 1, K6_MAX_HEIGHT)
 
         # Use fast BOUNDS command (0x20)
         success = device_manager.driver.draw_bounds_transport(
@@ -968,7 +1209,9 @@ def calibration_preview():
         else:
             return jsonify({"success": False, "error": "BOUNDS command failed"}), 500
 
-    except Exception as e:
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except (RuntimeError, OSError) as e:
         logger.error(f"Calibration preview failed: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -977,17 +1220,11 @@ def calibration_preview():
 def calibration_burn_bounds():
     """Burn bounds frame - creates physical positioning guide"""
     try:
-        data = request.get_json()
-        width = int(data.get("width", K6_MAX_WIDTH))
-        height = int(data.get("height", K6_MAX_HEIGHT))
-        power = int(data.get("power", 500))
-        depth = int(data.get("depth", 10))
-
-        # Validate
-        width = max(1, min(K6_MAX_WIDTH, width))
-        height = max(1, min(K6_MAX_HEIGHT, height))
-        power = max(0, min(1000, power))
-        depth = max(1, min(255, depth))
+        data = _json_payload()
+        width = safe_int(data.get("width", K6_MAX_WIDTH), "width", 1, K6_MAX_WIDTH)
+        height = safe_int(data.get("height", K6_MAX_HEIGHT), "height", 1, K6_MAX_HEIGHT)
+        power = safe_int(data.get("power", 500), "power", 0, 1000)
+        depth = safe_int(data.get("depth", 10), "depth", 1, 255)
 
         # Create rectangle frame image (white background, black outline)
         img = Image.new("1", (width, height), 1)  # 1=white
@@ -1007,14 +1244,20 @@ def calibration_burn_bounds():
             tmp_path = tmp.name
 
         try:
-            start_time = time.time()
+            response, status_code = _run_burn_with_csv(
+                image_path=tmp_path,
+                power=power,
+                depth=depth,
+                center_x=(width // 2) + K6_CENTER_X_OFFSET,
+                center_y=height // 2,
+                csv_prefix="calibration-bounds",
+                job_id="calibration_bounds",
+                setup_message="Preparing bounds frame burn",
+                complete_message_template=None,
+                emit_error=True,
+            )
 
-            # Burn the frame
-            result = k6_service.engrave(tmp_path, power=power, depth=depth)
-
-            elapsed = time.time() - start_time
-
-            if result["ok"]:
+            if status_code == 200:
                 return jsonify(
                     {
                         "success": True,
@@ -1023,16 +1266,20 @@ def calibration_burn_bounds():
                         "height": height,
                         "power": power,
                         "depth": depth,
-                        "total_time": elapsed,
-                        "chunks": result["chunks"],
+                        "total_time": response.get("total_time", 0),
+                        "chunks": response.get("chunks", 0),
+                        "csv_log": response.get("csv_log"),
+                        "run_id": response.get("run_id"),
                     }
                 )
             else:
-                return jsonify({"success": False, "error": result["message"]}), 500
+                return jsonify({"success": False, "error": response.get("error", "Bounds burn failed")}), status_code
         finally:
             Path(tmp_path).unlink(missing_ok=True)
 
-    except Exception as e:
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except (RuntimeError, OSError) as e:
         logger.error(f"Burn bounds failed: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -1041,13 +1288,9 @@ def calibration_burn_bounds():
 def calibration_set_speed_power():
     """Test SET_SPEED_POWER (0x25) command - no observable effect expected"""
     try:
-        data = request.get_json()
-        speed = int(data.get("speed", 115))
-        power = int(data.get("power", 1000))
-
-        # Validate
-        speed = max(0, min(65535, speed))  # 16-bit value
-        power = max(0, min(1000, power))
+        data = _json_payload()
+        speed = safe_int(data.get("speed", 115), "speed", 0, 65535)
+        power = safe_int(data.get("power", 1000), "power", 0, 1000)
 
         success = device_manager.driver.set_speed_power_transport(
             device_manager.transport, speed=speed, power=power
@@ -1065,7 +1308,9 @@ def calibration_set_speed_power():
         else:
             return jsonify({"success": False, "error": "Command failed"}), 500
 
-    except Exception as e:
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except (RuntimeError, OSError) as e:
         logger.error(f"Set speed/power failed: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -1074,13 +1319,9 @@ def calibration_set_speed_power():
 def calibration_set_focus_angle():
     """Test SET_FOCUS_ANGLE (0x28) command - no observable effect expected"""
     try:
-        data = request.get_json()
-        focus = int(data.get("focus", 20))
-        angle = int(data.get("angle", 0))
-
-        # Validate
-        focus = max(0, min(200, focus))
-        angle = max(0, min(255, angle))  # 8-bit value
+        data = _json_payload()
+        focus = safe_int(data.get("focus", 20), "focus", 0, 200)
+        angle = safe_int(data.get("angle", 0), "angle", 0, 255)
 
         success = device_manager.driver.set_focus_angle_transport(
             device_manager.transport, focus=focus, angle=angle
@@ -1098,8 +1339,56 @@ def calibration_set_focus_angle():
         else:
             return jsonify({"success": False, "error": "Command failed"}), 500
 
-    except Exception as e:
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except (RuntimeError, OSError) as e:
         logger.error(f"Set focus/angle failed: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/lab/raw/send", methods=["POST"])
+def lab_raw_send():
+    """Raw serial send for protocol experiments (MCP/API lab mode)."""
+    try:
+        data = _json_payload()
+
+        packet_hex = str(data.get("packet_hex", "")).strip()
+        timeout = safe_float(data.get("timeout", 2.0), "timeout", 0.05, 30.0)
+        read_size = safe_int(data.get("read_size", 256), "read_size", 1, 4096)
+        flush_input = parse_bool(data.get("flush_input", False))
+        settle_ms = safe_int(data.get("settle_ms", 120), "settle_ms", 10, 1000)
+        connect_if_needed = parse_bool(data.get("connect_if_needed", True))
+        save_logs = parse_bool(data.get("save_logs", True))
+
+        if not packet_hex:
+            return jsonify({"success": False, "error": "packet_hex is required"}), 400
+
+        if connect_if_needed and not device_manager.is_connected():
+            success, _ = device_manager.connect(port="/dev/ttyUSB0", baudrate=115200, timeout=2.0)
+            if not success:
+                return jsonify({"success": False, "error": "Unable to connect to K6 device"}), 500
+
+        if not device_manager.is_connected():
+            return jsonify({"success": False, "error": "Device not connected"}), 400
+
+        payload = K6Service.parse_hex_bytes(packet_hex)
+        log_prefix = str(DATA_DIR / "raw_io") if save_logs else None
+
+        ok, result = k6_service.raw_send(
+            payload=payload,
+            timeout=timeout,
+            read_size=read_size,
+            flush_input=flush_input,
+            settle_ms=settle_ms,
+            log_prefix=log_prefix,
+        )
+        if ok:
+            return jsonify(result)
+        return jsonify(result), 500
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except (RuntimeError, OSError) as e:
+        logger.error(f"Raw send failed: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -1107,12 +1396,12 @@ def calibration_set_focus_angle():
 def qr_generate():
     """Generate WiFi QR code ONCE - save to temp file and return preview"""
     try:
-        data = request.get_json()
+        data = _json_payload()
         ssid = data.get("ssid", "")
         password = data.get("password", "")
         security = data.get("security", "WPA")
         description = data.get("description", "")
-        show_password = data.get("show_password", False)
+        show_password = parse_bool(data.get("show_password", False))
 
         if not ssid:
             return jsonify({"success": False, "error": "SSID required"}), 400
@@ -1121,7 +1410,7 @@ def qr_generate():
         canvas, metadata = qr_service.generate_wifi_qr(ssid, password, security, description, show_password)
         
         # Save to temp file (will be used by burn endpoint)
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        timestamp = file_timestamp()
         temp_path = DATA_DIR / f"qr_preview_{timestamp}.png"
         canvas.save(str(temp_path))
         
@@ -1140,7 +1429,9 @@ def qr_generate():
             }
         )
 
-    except Exception as e:
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except (RuntimeError, OSError) as e:
         logger.error(f"QR generation failed: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
@@ -1155,20 +1446,20 @@ def qr_preview():
     try:
         import numpy as np
 
-        data = request.get_json()
+        data = _json_payload()
         ssid = data.get("ssid", "")
         password = data.get("password", "")
         security = data.get("security", "WPA")
         description = data.get("description", "")
-        power = int(data.get("power", 500))
-        depth = int(data.get("depth", 10))
+        power = safe_int(data.get("power", 500), "power", 0, 1000)
+        depth = safe_int(data.get("depth", 10), "depth", 1, 255)
 
         if not ssid:
             return jsonify({"success": False, "error": "SSID required"}), 400
 
         # Validate
-        power = max(0, min(1000, power))
-        depth = max(1, min(255, depth))
+        power = _clamp_int(power, 0, 1000)
+        depth = _clamp_int(depth, 1, 255)
 
         # Use QRService to generate QR image (DRY - single source of truth)
         canvas, metadata = qr_service.generate_wifi_qr(ssid, password, security, description)
@@ -1260,10 +1551,10 @@ def qr_preview():
             "summary": seq.summary()
         })
 
-    except Exception as e:
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except (RuntimeError, OSError) as e:
         logger.error(f"QR preview failed: {e}")
-        import traceback
-        traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -1275,11 +1566,11 @@ def qr_burn():
         global burn_cancel_event
         burn_cancel_event.clear()
 
-        data = request.get_json()
+        data = _json_payload()
         temp_path = data.get("temp_path", "")
         ssid = data.get("ssid", "")  # For logging/metadata
-        power = int(data.get("power", 500))
-        depth = int(data.get("depth", 10))
+        power = safe_int(data.get("power", 500), "power", 0, 1000)
+        depth = safe_int(data.get("depth", 10), "depth", 1, 255)
 
         # Check if we have a temp file from preview, otherwise generate on-demand
         if not temp_path or not Path(temp_path).exists():
@@ -1293,23 +1584,16 @@ def qr_burn():
                 return jsonify({"success": False, "error": "SSID required"}), 400
             
             canvas, _ = qr_service.generate_wifi_qr(ssid, password, security, description)
-            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            timestamp = file_timestamp()
             temp_path = str(DATA_DIR / f"qr_ondemand_{timestamp}.png")
             canvas.save(temp_path)
 
         # Validate
-        power = max(0, min(1000, power))
-        depth = max(1, min(255, depth))
+        power = _clamp_int(power, 0, 1000)
+        depth = _clamp_int(depth, 1, 255)
 
         # Use the temp_path from preview (image already generated)
         logger.info(f"Using pre-generated QR image: {temp_path}")
-
-        # Clear progress queue
-        while not progress_queue.empty():
-            try:
-                progress_queue.get_nowait()
-            except queue.Empty:
-                break
 
         # Get dimensions from the image
         with Image.open(temp_path) as img:
@@ -1319,47 +1603,23 @@ def qr_burn():
         emit_progress("prepare", 10, f"SSID: {ssid}, {burn_width}x{burn_height}px")
 
         try:
-            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-            csv_path = DATA_DIR / f"qr-wifi-{timestamp}.csv"
-
             # Position at center (default for left-aligned card)
             center_x = (burn_width // 2) + K6_CENTER_X_OFFSET
             center_y = K6_DEFAULT_CENTER_Y
 
-            with ProgressCSVLogger(str(csv_path)) as csv_logger:
-                emit_progress("setup", 0, "Starting burn sequence...")
-                result = k6_service.engrave(
-                    temp_path,
-                    power=power,
-                    depth=depth,
-                    center_x=center_x,
-                    center_y=center_y,
-                    csv_logger=csv_logger,
-                )
-
-            # Clean up temp file after successful burn
-            Path(temp_path).unlink(missing_ok=True)
-
-            if burn_cancel_event.is_set():
-                emit_progress("stopped", 0, "Burn cancelled by user")
-                return jsonify({"success": False, "error": "Cancelled by user"}), 400
-
-            if result["ok"]:
-                emit_progress(
-                    "complete", 100, f"Burn complete in {result['total_time']:.1f}s"
-                )
-                return jsonify(
-                    {
-                        "success": True,
-                        "message": result["message"],
-                        "total_time": result["total_time"],
-                        "chunks": result["chunks"],
-                        "csv_log": str(csv_path),
-                    }
-                )
-            else:
-                emit_progress("error", 0, result["message"])
-                return jsonify({"success": False, "error": result["message"]}), 500
+            response, status_code = _run_burn_with_csv(
+                image_path=temp_path,
+                power=power,
+                depth=depth,
+                center_x=center_x,
+                center_y=center_y,
+                csv_prefix="qr-wifi",
+                job_id="qr_wifi",
+                setup_message="Starting burn sequence...",
+                complete_message_template="Burn complete in {total_time:.1f}s",
+                emit_error=True,
+            )
+            return jsonify(response), status_code
 
         finally:
             # Clean up temp file
@@ -1372,7 +1632,9 @@ def qr_burn():
         if "temp_path" in locals():
             Path(temp_path).unlink(missing_ok=True)
         return jsonify({"success": False, "error": "Cancelled by user"}), 400
-    except Exception as e:
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except (RuntimeError, OSError) as e:
         logger.error(f"QR burn failed: {e}")
         emit_progress("error", 0, str(e))
         if "temp_path" in locals():
@@ -1384,12 +1646,9 @@ def qr_burn():
 def qr_alignment():
     """Burn alignment box for credit card positioning"""
     try:
-        data = request.get_json()
-        power = int(data.get("power", 300))
-        depth = int(data.get("depth", 5))
-
-        power = max(0, min(1000, power))
-        depth = max(1, min(255, depth))
+        data = _json_payload()
+        power = safe_int(data.get("power", 300), "power", 0, 1000)
+        depth = safe_int(data.get("depth", 5), "depth", 1, 255)
 
         # Generate alignment box (75mm × 53.98mm)
         burn_width = 1500
@@ -1445,39 +1704,31 @@ def qr_alignment():
             tmp_path = tmp.name
 
         try:
-            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-            csv_path = DATA_DIR / f"qr-alignment-{timestamp}.csv"
-
             # Position at center
             center_x = (burn_width // 2) + K6_CENTER_X_OFFSET
             center_y = K6_DEFAULT_CENTER_Y
 
-            with CSVLogger(str(csv_path)) as csv_logger:
-                result = k6_service.engrave(
-                    tmp_path,
-                    power=power,
-                    depth=depth,
-                    center_x=center_x,
-                    center_y=center_y,
-                    csv_logger=csv_logger,
-                )
-
-            if result["ok"]:
-                return jsonify(
-                    {
-                        "success": True,
-                        "message": "Alignment box burned",
-                        "total_time": result["total_time"],
-                        "csv_log": str(csv_path),
-                    }
-                )
-            else:
-                return jsonify({"success": False, "error": result["message"]}), 500
+            response, status_code = _run_burn_with_csv(
+                image_path=tmp_path,
+                power=power,
+                depth=depth,
+                center_x=center_x,
+                center_y=center_y,
+                csv_prefix="qr-alignment",
+                job_id="qr_alignment",
+                complete_message_template=None,
+                emit_error=False,
+            )
+            if status_code == 200:
+                response["message"] = "Alignment box burned"
+            return jsonify(response), status_code
 
         finally:
             Path(tmp_path).unlink(missing_ok=True)
 
-    except Exception as e:
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except (RuntimeError, OSError) as e:
         logger.error(f"Alignment burn failed: {e}")
         if "tmp_path" in locals():
             Path(tmp_path).unlink(missing_ok=True)
@@ -1493,14 +1744,14 @@ def alignment_builder_api():
     subsequent image positioning.
     """
     try:
-        data = request.get_json()
-        width_mm = float(data.get("width_mm", 50.0))
-        height_mm = float(data.get("height_mm", 30.0))
+        data = _json_payload()
+        width_mm = safe_float(data.get("width_mm", 50.0), "width_mm", 0.1)
+        height_mm = safe_float(data.get("height_mm", 30.0), "height_mm", 0.1)
         align_x = data.get("align_x", "center")  # left/right/center
         align_y = data.get("align_y", "center")  # top/bottom/center
-        burn_offset_x = float(data.get("burn_offset_x", 0.0))
-        burn_offset_y = float(data.get("burn_offset_y", 0.0))
-        resolution = float(data.get("resolution", 0.05))
+        burn_offset_x = safe_float(data.get("burn_offset_x", 0.0), "burn_offset_x")
+        burn_offset_y = safe_float(data.get("burn_offset_y", 0.0), "burn_offset_y")
+        resolution = safe_float(data.get("resolution", K6Constants.RESOLUTION_MM_PER_PX), "resolution", 0.001)
         
         # Validate dimensions
         if width_mm <= 0 or height_mm <= 0:
@@ -1553,7 +1804,7 @@ def alignment_builder_api():
         preview_b64 = image_service.image_to_base64(img)
         
         # Save temp file for burning
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        timestamp = file_timestamp()
         temp_path = DATA_DIR / f"alignment_builder_{timestamp}.png"
         img.save(str(temp_path))
         
@@ -1567,8 +1818,318 @@ def alignment_builder_api():
     except ValueError as e:
         logger.error(f"Alignment builder validation failed: {e}")
         return jsonify({"success": False, "error": str(e)}), 400
-    except Exception as e:
+    except (RuntimeError, OSError) as e:
         logger.error(f"Alignment builder failed: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+def _decode_data_url_image(data_url: str) -> Image.Image:
+    """Decode data URL/base64 image into a PIL image."""
+    import base64
+    import io
+
+    b64_data = data_url
+    if data_url.startswith("data:image"):
+        b64_data = data_url.split(",", 1)[1]
+    raw = base64.b64decode(b64_data)
+    return Image.open(io.BytesIO(raw))
+
+
+def _get_layout_pixels(job: dict) -> tuple[float, float, float, float]:
+    """Return material center and image offset in pixels from job layout."""
+    layout = job.get("layout", {})
+    material_layout = layout.get("material_on_burn_area", {})
+    image_layout = layout.get("image_on_material", {})
+
+    mm_per_px = K6Constants.RESOLUTION_MM_PER_PX
+    material_center_x_px = float(material_layout.get("center_x_mm", 40.0)) / mm_per_px
+    material_center_y_px = float(material_layout.get("center_y_mm", 38.0)) / mm_per_px
+    image_offset_x_px = float(image_layout.get("center_x_mm", 0.0)) / mm_per_px
+    image_offset_y_px = float(image_layout.get("center_y_mm", 0.0)) / mm_per_px
+
+    return material_center_x_px, material_center_y_px, image_offset_x_px, image_offset_y_px
+
+
+def _render_job_image(job: dict, job_config: dict) -> Image.Image:
+    """Render a burn image from job metadata (image/bounds/combined)."""
+    render_spec = job_config.get("render_spec", {})
+    mode = render_spec.get("mode", "image")
+
+    upload_data = job.get("stages", {}).get("upload", {}).get("data", {})
+    image_data = upload_data.get("image_base64") or upload_data.get("image")
+
+    if not image_data:
+        raise ValueError("No source image available in job.stages.upload.data")
+
+    source_img = _decode_data_url_image(image_data)
+
+    if mode == "image":
+        # Keep source untouched; driver pipeline normalizes to burn format.
+        return source_img
+
+    material = job.get("material", {})
+    target = material.get("target", {})
+    target_width_mm = float(target.get("width_mm", 0))
+    target_height_mm = float(target.get("height_mm", 0))
+    if target_width_mm <= 0 or target_height_mm <= 0:
+        raise ValueError("Target object dimensions required for bounds/combined modes")
+
+    shape_width_px = int(round(target_width_mm / K6Constants.RESOLUTION_MM_PER_PX))
+    shape_height_px = int(round(target_height_mm / K6Constants.RESOLUTION_MM_PER_PX))
+    burn_width_px = min(shape_width_px, K6_MAX_WIDTH)
+    burn_height_px = min(shape_height_px, K6_MAX_HEIGHT)
+    border_width = safe_int(render_spec.get("border_width", 3), "border_width", 1, 10)
+
+    canvas = Image.new("1", (burn_width_px, burn_height_px), 1)
+    draw = ImageDraw.Draw(canvas)
+
+    # Rectangle centered on burn canvas; overflow is clipped intentionally.
+    obj_x = (burn_width_px - shape_width_px) / 2
+    obj_y = (burn_height_px - shape_height_px) / 2
+    margin = border_width / 2
+    draw.rectangle(
+        (
+            obj_x + margin,
+            obj_y + margin,
+            obj_x + shape_width_px - border_width,
+            obj_y + shape_height_px - border_width,
+        ),
+        outline=0,
+        width=border_width,
+    )
+
+    if mode == "bounds":
+        return canvas
+
+    if mode == "combined":
+        _, _, image_offset_x_px, image_offset_y_px = _get_layout_pixels(job)
+        source_bw = source_img.convert("1")
+        img_x = int(round((burn_width_px / 2) + image_offset_x_px - (source_bw.width / 2)))
+        img_y = int(round((burn_height_px / 2) + image_offset_y_px - (source_bw.height / 2)))
+        canvas.paste(source_bw, (img_x, img_y))
+        return canvas
+
+    raise ValueError(f"Unknown render_spec mode: {mode}")
+
+
+def _resolve_job_center(job: dict, job_config: dict) -> tuple[Optional[int], Optional[int]]:
+    """Resolve burn center from explicit values or strategy."""
+    center_x = job_config.get("center_x")
+    center_y = job_config.get("center_y")
+    if center_x is not None and center_y is not None:
+        return int(center_x), int(center_y)
+
+    strategy = job_config.get("center_strategy", "auto")
+    material_center_x_px, material_center_y_px, image_offset_x_px, image_offset_y_px = _get_layout_pixels(job)
+
+    if strategy == "material_only":
+        return int(round(material_center_x_px + K6_CENTER_X_OFFSET)), int(round(material_center_y_px))
+    if strategy == "material_plus_image":
+        return (
+            int(round(material_center_x_px + image_offset_x_px + K6_CENTER_X_OFFSET)),
+            int(round(material_center_y_px + image_offset_y_px)),
+        )
+    return None, None
+
+
+@app.route("/api/reports/summary", methods=["POST"])
+def report_summary():
+    """Generate structured timing/statistics summary from a CSV log."""
+    try:
+        import csv
+
+        payload = _json_payload()
+        csv_log = payload.get("csv_log", "")
+        if not csv_log:
+            return jsonify({"success": False, "error": "csv_log is required"}), 400
+
+        csv_path = _safe_log_path(csv_log)
+        rows = []
+        with open(csv_path, "r", newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                rows.append(row)
+
+        if not rows:
+            return jsonify({"success": False, "error": "Empty CSV log"}), 400
+
+        def as_float(value, default=0.0):
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return default
+
+        def as_int(value, default=0):
+            try:
+                return int(float(value))
+            except (TypeError, ValueError):
+                return default
+
+        phase_stats = {}
+        response_counts = {}
+        op_count = len(rows)
+        total_elapsed_s = max(as_float(r.get("elapsed_s", 0.0)) for r in rows)
+        total_bytes = max(as_int(r.get("cumulative_bytes", 0)) for r in rows)
+
+        timeline = []
+        chunk_timings = []
+        status_series = []
+
+        for row in rows:
+            phase = row.get("phase", "UNKNOWN")
+            operation = row.get("operation", "")
+            duration_ms = as_float(row.get("duration_ms", 0))
+            elapsed_s = as_float(row.get("elapsed_s", 0))
+            bytes_transferred = as_int(row.get("bytes_transferred", 0))
+            response_type = row.get("response_type", "") or "NONE"
+            status_pct = row.get("status_pct", "")
+
+            phase_entry = phase_stats.setdefault(phase, {"count": 0, "duration_ms": 0.0, "bytes": 0})
+            phase_entry["count"] += 1
+            phase_entry["duration_ms"] += duration_ms
+            phase_entry["bytes"] += bytes_transferred
+
+            response_counts[response_type] = response_counts.get(response_type, 0) + 1
+
+            timeline.append({
+                "elapsed_s": round(elapsed_s, 3),
+                "phase": phase,
+                "operation": operation,
+                "duration_ms": round(duration_ms, 2),
+                "response_type": response_type,
+            })
+
+            if "chunk" in operation.lower():
+                chunk_timings.append({
+                    "elapsed_s": round(elapsed_s, 3),
+                    "duration_ms": round(duration_ms, 2),
+                    "operation": operation,
+                })
+
+            if status_pct not in ("", None):
+                try:
+                    pct = int(status_pct)
+                    status_series.append({"elapsed_s": round(elapsed_s, 3), "pct": pct})
+                except ValueError:
+                    pass
+
+        throughput_kbps = 0.0
+        if total_elapsed_s > 0:
+            throughput_kbps = round((total_bytes / 1024.0) / total_elapsed_s, 3)
+
+        def percentile(values, pct):
+            if not values:
+                return 0.0
+            sorted_vals = sorted(values)
+            idx = min(len(sorted_vals) - 1, int(round((pct / 100.0) * (len(sorted_vals) - 1))))
+            return float(sorted_vals[idx])
+
+        chunk_durations = [entry["duration_ms"] for entry in chunk_timings]
+        timing_summary = {
+            "chunk_count": len(chunk_durations),
+            "chunk_avg_ms": round((sum(chunk_durations) / len(chunk_durations)), 2) if chunk_durations else 0.0,
+            "chunk_p95_ms": round(percentile(chunk_durations, 95), 2),
+            "chunk_max_ms": round(max(chunk_durations), 2) if chunk_durations else 0.0,
+            "status_samples": len(status_series),
+            "final_status_pct": status_series[-1]["pct"] if status_series else None,
+        }
+
+        # Small timeline payload for UI performance on Pi.
+        timeline_sample = timeline[::max(1, len(timeline) // 400)]
+
+        first = rows[0]
+        report = {
+            "success": True,
+            "schema_version": first.get("schema_version", "1.x"),
+            "run_id": first.get("run_id", ""),
+            "job_id": first.get("job_id", ""),
+            "burn_start": first.get("burn_start", ""),
+            "csv_log": str(csv_path),
+            "summary": {
+                "operations": op_count,
+                "total_elapsed_s": round(total_elapsed_s, 3),
+                "total_bytes": total_bytes,
+                "avg_throughput_kbps": throughput_kbps,
+            },
+            "phase_stats": phase_stats,
+            "response_counts": response_counts,
+            "timing": {
+                "status_series": status_series,
+                "chunk_timings": chunk_timings,
+                "timeline": timeline_sample,
+            },
+            "timing_summary": timing_summary,
+        }
+        return jsonify(report)
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except OSError as e:
+        logger.error(f"Report summary failed: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/job/preview", methods=["POST"])
+def job_preview():
+    """Preview rendered burn jobs using same render path as /api/job/burn."""
+    try:
+        payload = _json_payload()
+        job = payload.get("job", {})
+        burn_jobs = job.get("burn_jobs", {})
+        if not burn_jobs:
+            return jsonify({"success": False, "error": "No burn jobs defined"}), 400
+
+        enabled_jobs = {
+            name: config for name, config in burn_jobs.items()
+            if config.get("enabled", True)
+        }
+        if not enabled_jobs:
+            return jsonify({"success": False, "error": "No enabled burn jobs"}), 400
+
+        previews = []
+        for name, config in enabled_jobs.items():
+            if "render_spec" in config:
+                img = _render_job_image(job, config)
+            elif "image_data" in config:
+                img = _decode_data_url_image(config["image_data"])
+            else:
+                raise ValueError(f"No render_spec or image_data in burn job: {name}")
+
+            center_x, center_y = _resolve_job_center(job, config)
+
+            # Lightweight protocol estimate for debug visibility.
+            bytes_per_line = (img.width + 7) // 8
+            total_data_bytes = bytes_per_line * img.height
+            total_chunks = (total_data_bytes + 1899) // 1900
+            estimated_commands = 1 + 1 + 2 + total_chunks + 2  # framing+header+connects+data+inits
+
+            previews.append({
+                "job": name,
+                "render_mode": config.get("render_spec", {}).get("mode", "image_data"),
+                "preview_image": image_service.image_to_base64(img),
+                "width": img.width,
+                "height": img.height,
+                "center_x": center_x,
+                "center_y": center_y,
+                    "power": safe_int(config.get("power", 1000), f"{name}.power", 0, 1000),
+                    "depth": safe_int(config.get("depth", 100), f"{name}.depth", 1, 255),
+                "estimate": {
+                    "bytes_per_line": bytes_per_line,
+                    "total_data_bytes": total_data_bytes,
+                    "total_chunks": total_chunks,
+                    "estimated_commands": estimated_commands,
+                },
+            })
+
+        warnings = PreviewService.detect_warnings(job)
+        return jsonify({
+            "success": True,
+            "previews": previews,
+            "warnings": warnings,
+        })
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except (RuntimeError, OSError) as e:
+        logger.error(f"Job preview failed: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -1580,19 +2141,13 @@ def job_burn():
     Processes all enabled burn_jobs in sequence.
     """
     try:
-        # Ensure device is connected - always reconnect if transport is None
-        if not device_manager.is_connected() or device_manager.transport is None:
-            logger.info("Device not connected, attempting auto-connect...")
-            success, version = device_manager.connect(port="/dev/ttyUSB0", baudrate=115200, timeout=2.0)
-            if not success:
-                return jsonify({"success": False, "error": "Device not connected. Please verify connection first."}), 400
-            logger.info(f"Auto-connected to K6 {version}")
+        _ensure_device_connected(auto_connect=True)
         
         # Clear cancel flag
         global burn_cancel_event
         burn_cancel_event.clear()
         
-        job_data = request.get_json()
+        job_data = _json_payload()
         job = job_data.get("job", {})
         
         # Extract burn jobs
@@ -1607,65 +2162,66 @@ def job_burn():
         if not enabled_jobs:
             return jsonify({"success": False, "error": "No enabled burn jobs"}), 400
         
+        dry_run_input = job_data.get("dry_run", None)
+        effective_dry_run = get_dry_run() if dry_run_input is None else parse_bool(dry_run_input)
+
         results = []
+        run_id = str(uuid4())
         
         for job_name, job_config in enabled_jobs.items():
-            # Decode base64 image
-            if "image_data" not in job_config:
-                results.append({
-                    "job": job_name,
-                    "success": False,
-                    "error": "No image_data in job config"
-                })
-                continue
-            
-            b64_data = job_config["image_data"]
-            if b64_data.startswith("data:image/png;base64,"):
-                b64_data = b64_data.split(",")[1]
-            
-            import base64
-            img_bytes = base64.b64decode(b64_data)
-            
-            # Save to temp file
-            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            # Save rendered image to temp file
+            timestamp = file_timestamp()
             temp_path = DATA_DIR / f"job_{job_name}_{timestamp}.png"
-            
-            with open(temp_path, 'wb') as f:
-                f.write(img_bytes)
-            
+
             try:
+                # Render from metadata when available; fallback to legacy image_data.
+                if "render_spec" in job_config:
+                    rendered_img = _render_job_image(job, job_config)
+                elif "image_data" in job_config:
+                    rendered_img = _decode_data_url_image(job_config["image_data"])
+                else:
+                    raise ValueError("No render_spec or image_data in job config")
+
+                rendered_img.save(temp_path)
+
                 # Extract parameters
-                power = int(job_config.get("power", 1000))
-                depth = int(job_config.get("depth", 100))
-                center_x = job_config.get("center_x")
-                center_y = job_config.get("center_y")
-                
-                # Create CSV log
-                csv_path = DATA_DIR / f"job_{job_name}_{timestamp}.csv"
+                power = safe_int(job_config.get("power", 1000), f"{job_name}.power", 0, 1000)
+                depth = safe_int(job_config.get("depth", 100), f"{job_name}.depth", 1, 255)
+                center_x, center_y = _resolve_job_center(job, job_config)
                 
                 emit_progress("start", 0, f"Starting job: {job_name}")
-                
-                with ProgressCSVLogger(str(csv_path)) as csv_logger:
-                    result = k6_service.engrave(
-                        str(temp_path),
-                        power=power,
-                        depth=depth,
-                        center_x=center_x,
-                        center_y=center_y,
-                        csv_logger=csv_logger
-                    )
-                
+
+                response, status_code = _run_burn_with_csv(
+                    image_path=str(temp_path),
+                    power=power,
+                    depth=depth,
+                    center_x=center_x,
+                    center_y=center_y,
+                    csv_prefix=f"job_{job_name}",
+                    job_id=job_name,
+                    dry_run_override=effective_dry_run,
+                    setup_message=f"Initializing job {job_name}",
+                    complete_message_template="{total_time:.1f}s",
+                    emit_error=False,
+                )
+
+                success = status_code == 200 and response.get("success", False)
                 results.append({
                     "job": job_name,
-                    "success": result["ok"],
-                    "message": result.get("message", ""),
-                    "total_time": result.get("total_time", 0),
-                    "chunks": result.get("chunks", 0),
-                    "csv_log": str(csv_path)
+                    "success": success,
+                    "message": response.get("message", ""),
+                    "total_time": response.get("total_time", 0),
+                    "chunks": response.get("chunks", 0),
+                    "csv_log": response.get("csv_log"),
+                    "run_id": response.get("run_id", run_id),
+                    "center_x": center_x,
+                    "center_y": center_y,
+                    "render_mode": job_config.get("render_spec", {}).get("mode", "image_data"),
                 })
-                
-                if not result["ok"]:
-                    emit_progress("error", 0, f"{job_name} failed: {result['message']}")
+
+                if not success:
+                    err_msg = response.get("error", response.get("message", "Unknown error"))
+                    emit_progress("error", 0, f"{job_name} failed: {err_msg}")
                     break  # Stop on first failure
                 else:
                     emit_progress("complete", 100, f"{job_name} complete")
@@ -1677,16 +2233,19 @@ def job_burn():
         all_success = all(r["success"] for r in results)
         
         if all_success:
-            return jsonify({"success": True, "results": results})
+            return jsonify({"success": True, "run_id": run_id, "results": results})
         else:
             failed = [r for r in results if not r["success"]]
             return jsonify({
                 "success": False, 
                 "error": f"{len(failed)} job(s) failed",
+                "run_id": run_id,
                 "results": results
             }), 500
             
-    except Exception as e:
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except (RuntimeError, OSError) as e:
         logger.error(f"Job burn failed: {e}")
         emit_progress("error", 0, str(e))
         return jsonify({"success": False, "error": str(e)}), 500
@@ -1703,19 +2262,19 @@ def calibration_burn():  # noqa: C901
         # Re-home the device before starting new burn (in case STOP was pressed)
         try:
             k6_service.home()
-        except Exception as e:
+        except (RuntimeError, OSError) as e:
             logger.warning(f"Pre-burn HOME failed: {e}")
 
-        data = request.get_json()
-        resolution = float(data.get("resolution", 0.05))
+        data = _json_payload()
+        resolution = safe_float(data.get("resolution", K6Constants.RESOLUTION_MM_PER_PX), "resolution", 0.001)
         pattern = data.get("pattern", "center")
-        size_mm = float(data.get("size_mm", 10.0))
-        power = int(data.get("power", 500))
-        depth = int(data.get("depth", 10))
+        size_mm = safe_float(data.get("size_mm", 10.0), "size_mm", 0.1)
+        power = safe_int(data.get("power", 500), "power", 0, 1000)
+        depth = safe_int(data.get("depth", 10), "depth", 1, 255)
 
         # Validate
-        power = max(0, min(1000, power))
-        depth = max(1, min(255, depth))
+        power = _clamp_int(power, 0, 1000)
+        depth = _clamp_int(depth, 1, 255)
 
         def mm_to_px(mm: float) -> int:
             return int(round(mm / resolution))
@@ -1837,13 +2396,6 @@ def calibration_burn():  # noqa: C901
             img.save(tmp.name)
             tmp_path = tmp.name
 
-        # Clear progress queue
-        while not progress_queue.empty():
-            try:
-                progress_queue.get_nowait()
-            except queue.Empty:
-                break
-
         # Emit start event
         emit_progress("start", 0, f"Starting {pattern} pattern burn")
         emit_progress(
@@ -1856,42 +2408,21 @@ def calibration_burn():  # noqa: C901
         )
 
         try:
-            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-            csv_path = (
-                DATA_DIR / f"calibration-{pattern}-{resolution}mm-{timestamp}.csv"
+            response, status_code = _run_burn_with_csv(
+                image_path=tmp_path,
+                power=power,
+                depth=depth,
+                center_x=center_x,
+                center_y=center_y,
+                csv_prefix=f"calibration-{pattern}-{resolution}mm",
+                job_id=f"calibration_{pattern}",
+                setup_message="Image processing complete, starting protocol...",
+                complete_message_template="Burn complete in {total_time:.1f}s",
+                emit_error=True,
             )
-
-            with ProgressCSVLogger(str(csv_path)) as csv_logger:
-                emit_progress(
-                    "setup", 0, "Image processing complete, starting protocol..."
-                )
-                result = k6_service.engrave(
-                    tmp_path,
-                    power=power,
-                    depth=depth,
-                    center_x=center_x,
-                    center_y=center_y,
-                    csv_logger=csv_logger,
-                )
-
-            Path(tmp_path).unlink(missing_ok=True)
-
-            # Check if cancelled
-            if burn_cancel_event.is_set():
-                emit_progress("stopped", 0, "Burn cancelled by user")
-                return jsonify({"success": False, "error": "Cancelled by user"}), 400
-
-            if result["ok"]:
-                emit_progress(
-                    "complete", 100, f"Burn complete in {result['total_time']:.1f}s"
-                )
-                return jsonify(
+            if status_code == 200:
+                response.update(
                     {
-                        "success": True,
-                        "message": result["message"],
-                        "total_time": result["total_time"],
-                        "chunks": result["chunks"],
-                        "csv_log": str(csv_path),
                         "pattern": pattern,
                         "resolution": resolution,
                         "size_mm": size_mm,
@@ -1901,9 +2432,7 @@ def calibration_burn():  # noqa: C901
                         "depth": depth,
                     }
                 )
-            else:
-                emit_progress("error", 0, result["message"])
-                return jsonify({"success": False, "error": result["message"]}), 500
+            return jsonify(response), status_code
 
         finally:
             Path(tmp_path).unlink(missing_ok=True)
@@ -1914,7 +2443,9 @@ def calibration_burn():  # noqa: C901
         if "tmp_path" in locals():
             Path(tmp_path).unlink(missing_ok=True)
         return jsonify({"success": False, "error": "Cancelled by user"}), 400
-    except Exception as e:
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except (RuntimeError, OSError) as e:
         logger.error(f"Calibration burn failed: {e}")
         emit_progress("error", 0, str(e))
         if "tmp_path" in locals():
@@ -1938,7 +2469,7 @@ def preview():
         warnings: list of warning messages
     """
     try:
-        data = request.get_json()
+        data = _json_payload()
         job = data.get("job", {})
         stage = data.get("stage", "layout")
         options = data.get("options", {})
@@ -1960,10 +2491,10 @@ def preview():
             "stage": stage
         })
     
-    except Exception as e:
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except (RuntimeError, OSError) as e:
         logger.error(f"Preview generation failed: {e}")
-        import traceback
-        traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
 

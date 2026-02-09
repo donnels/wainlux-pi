@@ -64,7 +64,20 @@ input[type="file"] { display: block; margin: 10px 0; color: #fff; }
     const previewInfo = document.getElementById('previewInfo');
     
     let currentImageData = null;
+    let imageLoadVersion = 0;
     let sampleImages = [];
+
+    function updateImagePreview(imageData) {
+        previewImage.src = imageData.image_base64;
+        const sizeInfo = `${imageData.width} × ${imageData.height}px`;
+        const originalInfo = imageData.resized
+            ? ` (scaled from ${imageData.original_width} × ${imageData.original_height}px)`
+            : '';
+        const sourceInfo = imageData.source_reference ? ` | source: ${imageData.source_reference}` : '';
+        previewInfo.textContent = `${imageData.original_filename} (${sizeInfo})${originalInfo}${sourceInfo}`;
+        previewSection.style.display = 'block';
+        updateNextButtonText();
+    }
     
     // Load sample images
     async function loadSampleImages() {
@@ -98,37 +111,13 @@ input[type="file"] { display: block; margin: 10px 0; color: #fff; }
     
     // Load and display image preview
     async function loadImagePreview(url, filename) {
+        const loadVersion = ++imageLoadVersion;
         try {
-            const response = await fetch(url);
-            const blob = await response.blob();
-            
-            // Convert to base64
-            const reader = new FileReader();
-            reader.onloadend = function() {
-                const base64data = reader.result;
-                
-                // Get dimensions
-                const img = new Image();
-                img.onload = function() {
-                    currentImageData = {
-                        image_base64: base64data,
-                        original_filename: filename,
-                        source: 'selection',
-                        width: img.width,
-                        height: img.height,
-                        url: url
-                    };
-                    
-                    // Display preview
-                    previewImage.src = base64data;
-                    previewInfo.textContent = `${filename} (${img.width} × ${img.height}px)`;
-                    previewSection.style.display = 'block';
-                    
-                    updateNextButtonText();
-                };
-                img.src = base64data;
-            };
-            reader.readAsDataURL(blob);
+            const prepared = await ingestImageUrl(url, filename, { source: 'selection', sourceReference: url });
+            if (loadVersion !== imageLoadVersion) return;
+            currentImageData = buildUploadStageData(prepared).data;
+            currentImageData.url = url;
+            updateImagePreview(currentImageData);
         } catch (err) {
             console.error('Failed to load image preview:', err);
             showMessage('Failed to load image preview', true);
@@ -137,15 +126,11 @@ input[type="file"] { display: block; margin: 10px 0; color: #fff; }
     
     // Update Next button text based on workflow state
     function updateNextButtonText() {
-        const savedConfig = sessionStorage.getItem('materialConfig');
-        if (savedConfig) {
-            const config = JSON.parse(savedConfig);
-            // Check if material and layout are configured
-            if (config.material && Object.keys(config.material).length > 0) {
-                btnNext.textContent = 'BURN →';
-                btnNext.style.background = '#2a2a2a';
-                return;
-            }
+        const config = getMaterialConfig();
+        if (config && config.material && Object.keys(config.material).length > 0) {
+            btnNext.textContent = 'REVIEW & BURN →';
+            btnNext.style.background = '#2a2a2a';
+            return;
         }
         btnNext.textContent = 'NEXT: MATERIAL & POSITIONING →';
         btnNext.style.background = '';
@@ -163,37 +148,25 @@ input[type="file"] { display: block; margin: 10px 0; color: #fff; }
     imageFile.addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (file) {
-            const reader = new FileReader();
-            reader.onloadend = function() {
-                const base64data = reader.result;
-                
-                const img = new Image();
-                img.onload = function() {
-                    currentImageData = {
-                        image_base64: base64data,
-                        original_filename: file.name,
-                        source: 'upload',
-                        width: img.width,
-                        height: img.height
-                    };
-                    
-                    previewImage.src = base64data;
-                    previewInfo.textContent = `${file.name} (${img.width} × ${img.height}px)`;
-                    previewSection.style.display = 'block';
-                    
-                    updateNextButtonText();
-                };
-                img.src = base64data;
-            };
-            reader.readAsDataURL(file);
+            const loadVersion = ++imageLoadVersion;
+            try {
+                const sourceReference = file.webkitRelativePath || file.name;
+                const prepared = await ingestImageBlob(file, file.name, { source: 'upload', sourceReference });
+                if (loadVersion !== imageLoadVersion) return;
+                currentImageData = buildUploadStageData(prepared).data;
+                updateImagePreview(currentImageData);
+            } catch (err) {
+                if (loadVersion !== imageLoadVersion) return;
+                console.error('Failed to process uploaded image:', err);
+                showMessage(err.message || 'Failed to process uploaded image', true);
+            }
         }
     });
     
     // Status bar functions now in shared api.js
     
     btnVerify.addEventListener('click', async () => {
-        const data = await apiCall('/api/connect');
-        await refreshStatus();  // Refresh to show updated firmware version
+        const data = await verifyConnectionAndRefreshStatus();
         showMessage(`K6 ${data.version || ''} verified`);
     });
     
@@ -217,28 +190,37 @@ input[type="file"] { display: block; margin: 10px 0; color: #fff; }
         };
         
         // Check if material/positioning already configured
-        const savedConfig = sessionStorage.getItem('materialConfig');
-        if (savedConfig) {
-            const config = JSON.parse(savedConfig);
+        const config = getMaterialConfig();
+        if (config) {
+            if (config._meta) {
+                job._meta = { ...config._meta };
+            }
             if (config.material && Object.keys(config.material).length > 0) {
-                // Material configured → proceed to burn
+                // Material configured -> go to burn page
                 job.material = config.material;
                 job.layout = config.layout || {};
                 
                 // Save updated job
-                sessionStorage.setItem('materialConfig', JSON.stringify(job));
+                try {
+                    saveMaterialConfig(job);
+                } catch (err) {
+                    showMessage('Could not save workflow state: ' + err.message, true);
+                    return;
+                }
                 
-                showMessage('Burning with saved material settings...');
-                
-                // TODO: Implement direct burn from main page
-                // For now, redirect to alignment-builder which has burn capability
-                window.location.href = '/alignment-builder';
+                showMessage('Opening burn page with saved material settings...');
+                window.location.href = '/burn';
                 return;
             }
         }
         
         // No material configured → go to alignment-builder
-        sessionStorage.setItem('materialConfig', JSON.stringify(job));
+        try {
+            saveMaterialConfig(job);
+        } catch (err) {
+            showMessage('Could not save workflow state: ' + err.message, true);
+            return;
+        }
         showMessage('Redirecting to material & positioning...');
         setTimeout(() => {
             window.location.href = '/alignment-builder';

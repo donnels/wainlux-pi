@@ -9,7 +9,26 @@ Container for K6 laser control.
 docker compose build
 ----
 
-Takes 15-20 minutes on Pi Zero W.
+Takes a long time on Pi Zero W. Long time is expected due to ARMv6 architecture and limited resources. A long time can be a VERY long time (in times of TikTok expectations of short clips, and attention spans, some might say forever). Mitigation can be to build with buildx and QEMU on a more powerful machine, then push to a registry and pull on the Pi. The 1st Gen Pi Zero is the problem here as support for it is dwindling so there are less pre built wheels available and building these costs the most time.
+
+== Use Prebuilt ARMv6 Image (GHCR)
+
+The GitHub Actions workflow `.github/workflows/build-container-armv6.yml` builds and publishes:
+
+* `ghcr.io/<owner>/<repo>:latest` (main branch)
+* `ghcr.io/<owner>/<repo>:sha-<commit>`
+
+[source,bash]
+----
+# Login once (needs read:packages permission on your token if private)
+echo "$GHCR_TOKEN" | docker login ghcr.io -u <github-username> --password-stdin
+
+# Pull the latest ARMv6 image built by Actions
+docker pull ghcr.io/<owner>/<repo>:latest
+----
+
+To run with compose from a prebuilt image, set `image:` for the service in `compose.yaml`
+to `ghcr.io/<owner>/<repo>:latest` and remove/ignore the `build:` entry.
 
 == Run
 

@@ -10,6 +10,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+from uuid import uuid4
 
 
 class CSVLogger:
@@ -32,19 +33,30 @@ class CSVLogger:
         logger.close()
     """
 
-    def __init__(self, csv_path: str):
+    SCHEMA_VERSION = "2.0"
+
+    def __init__(self, csv_path: str, run_id: Optional[str] = None, job_id: Optional[str] = None):
         """Initialize CSV logger.
 
         Args:
             csv_path: Path to CSV file (will be created/overwritten)
+            run_id: Correlation id shared across one burn run
+            job_id: Optional per-job id when run has multiple jobs
         """
         self.csv_path = Path(csv_path)
         self.csv_file = open(self.csv_path, "w", newline="")
         self.csv_writer = csv.writer(self.csv_file)
+        self.run_id = run_id or str(uuid4())
+        self.job_id = job_id or ""
+        self.op_index = 0
 
         # Write header
         self.csv_writer.writerow(
             [
+                "schema_version",
+                "run_id",
+                "job_id",
+                "op_index",
                 "burn_start",
                 "timestamp",
                 "elapsed_s",
@@ -67,6 +79,24 @@ class CSVLogger:
             "%Y-%m-%d %H:%M:%S"
         )
         self.cumulative_bytes = 0
+
+    @staticmethod
+    def normalize_phase(phase: str) -> str:
+        """Map internal phases into canonical reporting phases."""
+        phase_map = {
+            "connect": "SETUP",
+            "setup": "SETUP",
+            "prepare": "SETUP",
+            "preview": "SETUP",
+            "test": "SETUP",
+            "build": "BUILD",
+            "burn": "DATA",
+            "data": "DATA",
+            "wait": "BURN",
+            "finalize": "BURN",
+            "execute": "EXECUTE",
+        }
+        return phase_map.get((phase or "").lower(), (phase or "OPERATION").upper())
 
     def log_operation(
         self,
@@ -99,13 +129,19 @@ class CSVLogger:
         )
         elapsed_s = time.time() - self.start_time
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+        canonical_phase = self.normalize_phase(phase)
+        self.op_index += 1
 
         self.csv_writer.writerow(
             [
+                self.SCHEMA_VERSION,
+                self.run_id,
+                self.job_id,
+                self.op_index,
                 self.burn_start_str,
                 now_str,
                 f"{elapsed_s:.3f}",
-                phase,
+                canonical_phase,
                 operation,
                 f"{duration_ms:.0f}",
                 bytes_transferred,

@@ -15,7 +15,10 @@ class LogManager {
         if (!this.logBox) return;
         
         const line = document.createElement('div');
-        line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        const ts = (typeof formatLogTimestamp === 'function')
+            ? formatLogTimestamp()
+            : new Date().toISOString();
+        line.textContent = `[${ts}] ${msg}`;
         this.logBox.appendChild(line);
         this.logBox.scrollTop = this.logBox.scrollHeight;
     }

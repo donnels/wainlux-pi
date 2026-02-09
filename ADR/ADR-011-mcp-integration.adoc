@@ -1,0 +1,61 @@
+= ADR-011: MCP Server Integration
+
+== Status
+
+Superseded by link:ADR-012-mcp-http-client.adoc[ADR-012]
+
+== Context
+
+The project needed an MCP interface to support AI-assisted workflows for K6 operations:
+
+* connection/status checks
+* image preparation and QR generation
+* burn execution and diagnostics
+
+The initial direction considered a direct integration model where MCP and Flask shared the same runtime services and hardware state.
+
+== Decision
+
+Introduce MCP as a first-class interface in the architecture, but do not treat this record as the final transport/ownership model.
+
+This ADR captures the product-level decision:
+
+* MCP is part of the supported interfaces (UI, API, MCP)
+* MCP tools should map to the same domain capabilities as the REST API
+* Safety semantics (especially dry-run behavior) must be explicit and consistent across interfaces
+
+The concrete runtime model and hardware ownership rules are defined in ADR-012.
+
+== Consequences
+
+=== Positive
+
+* Enables AI-assisted operation and testing without inventing a parallel domain model.
+* Establishes MCP as an architectural concern rather than an ad-hoc experiment.
+* Makes API parity and safety behavior testable across entry points.
+
+=== Negative
+
+* Adds protocol/transport complexity and another client contract to maintain.
+* Increases the need for clear ownership boundaries and failure isolation.
+
+=== Neutral
+
+* Security and deployment hardening are handled by separate decisions and implementation docs.
+
+== Alternatives Considered
+
+=== No MCP Interface
+
+Rejected. REST/UI alone do not satisfy AI-assisted experimentation and automation goals.
+
+=== MCP as a Temporary Experiment Only
+
+Rejected. The project direction requires MCP as a maintained interface, not a throwaway prototype.
+
+== Related
+
+* link:ADR-003-flask.adoc[ADR-003] - Web/API framework
+* link:ADR-012-mcp-http-client.adoc[ADR-012] - Final MCP runtime architecture
+* link:ADR-019-distributed-architecture.adoc[ADR-019] - Distributed deployment intent
+

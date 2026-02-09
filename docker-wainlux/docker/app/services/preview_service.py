@@ -14,20 +14,9 @@ from pathlib import Path
 import numpy as np
 from typing import Dict, List, Tuple, Optional
 import logging
+from constants import K6Constants
 
 logger = logging.getLogger(__name__)
-
-
-class K6Constants:
-    """K6 hardware constants - single source of truth"""
-    BURN_WIDTH_PX = 1600
-    BURN_HEIGHT_PX = 1520
-    BURN_WIDTH_MM = 80.0
-    BURN_HEIGHT_MM = 76.0
-    RESOLUTION_MM_PX = 0.05
-    CENTER_OFFSET_X = 67  # Hardware offset for centering
-    DEFAULT_CENTER_X = 800
-    DEFAULT_CENTER_Y = 760
 
 
 class PreviewService:
@@ -527,6 +516,7 @@ class PreviewService:
             crop_type = region.get("type")
             amount_mm = region.get("amount_mm", 0)
             direction = "right" if "right" in crop_type else "bottom"
-            warnings.append(f"Material exceeds burn area by {amount_mm:.1f}mm ({direction})")
+            subject = "Image" if str(crop_type).startswith("image_") else "Material"
+            warnings.append(f"{subject} exceeds burn area by {amount_mm:.1f}mm ({direction})")
         
         return warnings

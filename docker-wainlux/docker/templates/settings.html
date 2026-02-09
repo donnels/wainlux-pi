@@ -138,14 +138,11 @@ let dryRun = false;
 // Load current settings
 async function loadSettings() {
     try {
-        const response = await fetch('/api/settings');
-        const data = await response.json();
-        if (data.success) {
-            currentMode = data.operation_mode;
-            dryRun = data.dry_run || false;
-            selectMode(currentMode, false);
-            document.getElementById('dryRunToggle').checked = dryRun;
-        }
+        const settings = getRequestSettings();
+        currentMode = settings.operation_mode;
+        dryRun = settings.dry_run;
+        selectMode(currentMode, false);
+        document.getElementById('dryRunToggle').checked = dryRun;
     } catch (err) {
         showMessage('Failed to load settings: ' + err.message, true);
     }
@@ -171,20 +168,17 @@ function selectMode(mode, showFeedback = true) {
 document.getElementById('btnSave').addEventListener('click', async () => {
     try {
         dryRun = document.getElementById('dryRunToggle').checked;
-        
-        const response = await fetch('/api/settings', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
+        const data = await apiCall('/api/settings', 'POST', {
+            operation_mode: currentMode,
+            dry_run: dryRun
+        });
+        if (data.success) {
+            setRequestSettings({
                 operation_mode: currentMode,
                 dry_run: dryRun
-            })
-        });
-        
-        const data = await response.json();
-        if (data.success) {
+            });
             const dryRunMsg = data.dry_run ? ' (DRY RUN ENABLED)' : '';
-            showMessage(`Settings saved: ${data.operation_mode} mode${dryRunMsg}`, false);
+            showMessage(`Settings saved for this tab: ${data.operation_mode} mode${dryRunMsg}`, false);
         } else {
             showMessage('Save failed: ' + data.error, true);
         }

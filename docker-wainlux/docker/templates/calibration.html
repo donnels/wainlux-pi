@@ -256,6 +256,36 @@ const resultInfo = document.getElementById('resultInfo');
 const status = document.getElementById('status');
 
 let currentEventSource = null;
+
+function cleanupProgressStream() {
+    if (currentEventSource) {
+        currentEventSource.close();
+        currentEventSource = null;
+    }
+}
+window.addEventListener('beforeunload', cleanupProgressStream);
+window.addEventListener('pagehide', cleanupProgressStream);
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+        cleanupProgressStream();
+    }
+});
+
+function readFloatInput(el, name) {
+    const value = Number.parseFloat(el.value);
+    if (!Number.isFinite(value)) {
+        throw new Error(`${name} must be a number`);
+    }
+    return value;
+}
+
+function readIntInput(el, name) {
+    const value = Number.parseInt(el.value, 10);
+    if (!Number.isFinite(value)) {
+        throw new Error(`${name} must be an integer`);
+    }
+    return value;
+}
 let previewActive = false;
 
 // Check connection status (uses shared updateStatusDisplay from base.html)
@@ -288,10 +318,7 @@ btnStop.addEventListener('click', async () => {
         showMessage('Stop failed: ' + err.message, true);
     } finally {
         // Close SSE stream if active
-        if (currentEventSource) {
-            currentEventSource.close();
-            currentEventSource = null;
-        }
+        cleanupProgressStream();
         btnBurn.disabled = false;
         btnStop.disabled = wasDisabled;
     }
@@ -302,9 +329,9 @@ btnPreview.addEventListener('click', async () => {
     try {
         if (!previewActive) {
             // Start preview
-            const resolution = parseFloat(resolutionSelect.value);
+            const resolution = readFloatInput(resolutionSelect, 'resolution');
             const pattern = patternSelect.value;
-            const size_mm = parseFloat(sizeInput.value);
+            const size_mm = readFloatInput(sizeInput, 'size');
             
             // Calculate dimensions based on pattern
             let width_px, height_px;
@@ -355,11 +382,11 @@ btnPreview.addEventListener('click', async () => {
 btnBurnBounds.addEventListener('click', async () => {
     btnBurnBounds.disabled = true;
     try {
-        const resolution = parseFloat(resolutionSelect.value);
+        const resolution = readFloatInput(resolutionSelect, 'resolution');
         const pattern = patternSelect.value;
-        const size_mm = parseFloat(sizeInput.value);
-        const power = parseInt(powerInput.value);
-        const depth = parseInt(depthInput.value);
+        const size_mm = readFloatInput(sizeInput, 'size');
+        const power = readIntInput(powerInput, 'power');
+        const depth = readIntInput(depthInput, 'depth');
         
         // Calculate dimensions based on pattern
         let width_px, height_px;
@@ -389,53 +416,54 @@ btnBurnBounds.addEventListener('click', async () => {
 });
 
 btnBurn.addEventListener('click', async () => {
-    const params = {
-        resolution: parseFloat(resolutionSelect.value),
-        pattern: patternSelect.value,
-        size_mm: parseFloat(sizeInput.value),
-        power: parseInt(powerInput.value),
-        depth: parseInt(depthInput.value)
-    };
-    
     btnBurn.disabled = true;
     btnStop.disabled = false;
     result.className = 'result';
     
-    // Initialize components
-    const progress = new ProgressTracker();
-    const log = new LogManager();
-    
-    progress.show();
-    progress.reset();
-    log.clear();
-    
-    // Connect to SSE for real-time progress
-    currentEventSource = new EventSource('/api/progress/stream');
-    
-    currentEventSource.onmessage = function(event) {
-        const data = JSON.parse(event.data);
-        
-        // Update progress bars
-        progress.handleProgressEvent(data);
-        
-        // Add to log
-        log.add(`[${data.phase}] ${data.message}`);
-        
-        // Close stream on completion or error
-        if (data.phase === 'complete' || data.phase === 'error') {
-            currentEventSource.close();
-            currentEventSource = null;
-        }
-    };
-    
-    currentEventSource.onerror = function() {
-        currentEventSource.close();
-        currentEventSource = null;
-    };
-    
-    showMessage('Burning pattern...');
-    
     try {
+        const params = {
+            resolution: readFloatInput(resolutionSelect, 'resolution'),
+            pattern: patternSelect.value,
+            size_mm: readFloatInput(sizeInput, 'size'),
+            power: readIntInput(powerInput, 'power'),
+            depth: readIntInput(depthInput, 'depth')
+        };
+
+        if (typeof ProgressTracker !== 'function' || typeof LogManager !== 'function') {
+            throw new Error('UI helpers failed to load. Refresh page and retry.');
+        }
+
+        // Initialize components
+        const progress = new ProgressTracker();
+        const log = new LogManager();
+        
+        progress.show();
+        progress.reset();
+        log.clear();
+        
+        // Connect to SSE for real-time progress
+        currentEventSource = new EventSource('/api/progress/stream');
+        
+        currentEventSource.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            
+            // Update progress bars
+            progress.handleProgressEvent(data);
+            
+            // Add to log
+            log.add(`[${data.phase}] ${data.message}`);
+            
+            // Close stream on completion or error
+            if (data.phase === 'complete' || data.phase === 'error') {
+                cleanupProgressStream();
+            }
+        };
+        
+        currentEventSource.onerror = function() {
+            cleanupProgressStream();
+        };
+
+        showMessage('Burning pattern...');
         const data = await apiCall('/api/calibration/burn', 'POST', params);
         
         showMessage('Pattern burned successfully');
@@ -443,10 +471,7 @@ btnBurn.addEventListener('click', async () => {
     } catch (err) {
         showMessage(err.message, true);
     } finally {
-        if (currentEventSource) {
-            currentEventSource.close();
-            currentEventSource = null;
-        }
+        cleanupProgressStream();
         btnBurn.disabled = false;
     }
 });
@@ -474,7 +499,7 @@ let currentY = 800;
 
 async function jog(direction) {
     try {
-        const step_mm = parseFloat(jogStep.value);
+        const step_mm = readFloatInput(jogStep, 'jog step');
         const step_px = Math.round(step_mm * 20);  // 0.05mm/px = 20px/mm
         const disable_limits = disableLimits.checked;
         
@@ -548,8 +573,8 @@ btnMark.addEventListener('click', async () => {
     
     btnMark.disabled = true;
     try {
-        const power = parseInt(markPower.value);
-        const depth = parseInt(markDepth.value);
+        const power = readIntInput(markPower, 'mark power');
+        const depth = readIntInput(markDepth, 'mark depth');
         
         const result = await apiCall('/api/mark', 'POST', {
             x: currentX,
@@ -598,8 +623,8 @@ const testAngle = document.getElementById('testAngle');
 btnTestSpeedPower.addEventListener('click', async () => {
     btnTestSpeedPower.disabled = true;
     try {
-        const speed = parseInt(testSpeed.value);
-        const power = parseInt(testPower.value);
+        const speed = readIntInput(testSpeed, 'speed');
+        const power = readIntInput(testPower, 'power');
         
         const result = await apiCall('/api/calibration/set-speed-power', 'POST', {
             speed,
@@ -617,8 +642,8 @@ btnTestSpeedPower.addEventListener('click', async () => {
 btnTestFocusAngle.addEventListener('click', async () => {
     btnTestFocusAngle.disabled = true;
     try {
-        const focus = parseInt(testFocus.value);
-        const angle = parseInt(testAngle.value);
+        const focus = readIntInput(testFocus, 'focus');
+        const angle = readIntInput(testAngle, 'angle');
         
         const result = await apiCall('/api/calibration/set-focus-angle', 'POST', {
             focus,

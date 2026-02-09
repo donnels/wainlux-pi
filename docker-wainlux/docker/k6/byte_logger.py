@@ -10,7 +10,7 @@ Used for:
 - Troubleshooting failed burns
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -24,6 +24,11 @@ class ByteDumpLogger:
     NO validation, NO filtering - pure data capture.
     """
 
+    @staticmethod
+    def _iso_timestamp() -> str:
+        """UTC ISO-8601 timestamp with millisecond precision."""
+        return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
     def __init__(self, base_path: str):
         """Initialize byte logger.
         
@@ -36,7 +41,7 @@ class ByteDumpLogger:
         self.text_file = open(f"{base_path}.dump.txt", 'w')
         
         # Write header
-        self.text_file.write(f"K6 Serial I/O Dump - {datetime.now().isoformat()}\n")
+        self.text_file.write(f"K6 Serial I/O Dump - {self._iso_timestamp()}\n")
         self.text_file.write("=" * 70 + "\n\n")
         self.text_file.flush()
 
@@ -47,7 +52,7 @@ class ByteDumpLogger:
             data: Bytes sent to device
             description: Optional description (e.g. "FRAMING", "DATA chunk 5/100")
         """
-        timestamp = datetime.now().isoformat()
+        timestamp = self._iso_timestamp()
         
         # Binary dump
         self.binary_file.write(b">>> SEND " + data + b"\n")
@@ -85,7 +90,7 @@ class ByteDumpLogger:
         if not data:
             return
             
-        timestamp = datetime.now().isoformat()
+        timestamp = self._iso_timestamp()
         
         # Binary dump
         self.binary_file.write(b"<<< RECV " + data + b"\n")
@@ -131,7 +136,7 @@ class ByteDumpLogger:
         Args:
             message: Error description
         """
-        timestamp = datetime.now().isoformat()
+        timestamp = self._iso_timestamp()
         self.text_file.write(f"[{timestamp}] ERROR: {message}\n\n")
         self.text_file.flush()
 
@@ -140,7 +145,7 @@ class ByteDumpLogger:
         if self.binary_file:
             self.binary_file.close()
         if self.text_file:
-            self.text_file.write(f"\nLog closed: {datetime.now().isoformat()}\n")
+            self.text_file.write(f"\nLog closed: {self._iso_timestamp()}\n")
             self.text_file.close()
 
     def __enter__(self):

@@ -482,14 +482,16 @@ class WainluxK6:
             phase="setup",
         )
         
-        # Debug: check if there are any pending bytes before DATA
+        # Debug: check if there are any pending bytes before DATA.
+        # Transport API uses set_timeout() + read(size), not read(timeout=...).
         import logging
         logger = logging.getLogger(__name__)
         try:
-            pending = transport.read(timeout=0.1)
+            transport.set_timeout(0.1)
+            pending = transport.read(64)
             if pending:
                 logger.info(f"Pending bytes after CONNECT #2: {pending.hex()}")
-        except:
+        except Exception:
             pass
 
         # Burn payload with chunking + retry (no delay - matches working script)
@@ -672,9 +674,10 @@ class WainluxK6:
             # Send to device
             transport.write(cmd_bytes)
             
-            # Read response
+            # Read response using transport timeout API.
             try:
-                response = transport.read(timeout=1.0)
+                transport.set_timeout(1.0)
+                response = transport.read(64)
                 
                 if byte_logger:
                     byte_logger.log_recv(response)

@@ -230,6 +230,19 @@ let currentState = {
 
 // Live preview rendering (DRY - uses backend PreviewService)
 let previewUpdateTimeout = null;
+function readFloatRequired(value, name) {
+    const parsed = Number.parseFloat(value);
+    if (!Number.isFinite(parsed)) {
+        throw new Error(`${name} must be a number`);
+    }
+    return parsed;
+}
+
+function readFloatOrDefault(value, fallback = 0) {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 async function renderLivePreview() {
     // Debounce preview updates
     if (previewUpdateTimeout) clearTimeout(previewUpdateTimeout);
@@ -285,34 +298,18 @@ async function renderLivePreview() {
 async function loadSettings() {
     console.log('[loadSettings] Starting...');
     try {
-        const [matsResp, shapesResp] = await Promise.all([
-            fetch('/api/materials/list'),
-            fetch('/api/shapes/list')
+        const [matsData, shapesData] = await Promise.all([
+            apiCall('/api/materials/list', 'GET'),
+            apiCall('/api/shapes/list', 'GET')
         ]);
-        
-        console.log('[loadSettings] Responses received');
-        
-        const matsData = await matsResp.json();
-        const shapesData = await shapesResp.json();
         
         console.log('[loadSettings] Materials:', matsData);
         console.log('[loadSettings] Shapes:', shapesData);
-        
-        if (matsData.success) {
-            materials = matsData.materials;
-            console.log('[loadSettings] Loaded', materials.length, 'materials');
-        } else {
-            console.error('[loadSettings] Materials API failed:', matsData.error);
-            showMessage('Failed to load materials: ' + (matsData.error || 'Unknown error'), true);
-        }
-        
-        if (shapesData.success) {
-            shapes = shapesData.shapes;
-            console.log('[loadSettings] Loaded', shapes.length, 'shapes');
-        } else {
-            console.error('[loadSettings] Shapes API failed:', shapesData.error);
-            showMessage('Failed to load shapes: ' + (shapesData.error || 'Unknown error'), true);
-        }
+
+        materials = matsData.materials || [];
+        shapes = shapesData.shapes || [];
+        console.log('[loadSettings] Loaded', materials.length, 'materials');
+        console.log('[loadSettings] Loaded', shapes.length, 'shapes');
         
         renderMaterialPickers();
         renderShapePicker();
@@ -321,53 +318,47 @@ async function loadSettings() {
     } catch (err) {
         console.error('[loadSettings] Failed:', err);
         showMessage('Failed to load materials/shapes: ' + err.message, true);
-        
-        // Show error in pickers
-        document.getElementById('baseMaterialPicker').innerHTML = 
-            '<div style="padding: 20px; color: #f00;">Error loading materials. Check console.</div>';
-        document.getElementById('shapePicker').innerHTML = 
-            '<div style="padding: 20px; color: #f00;">Error loading shapes. Check console.</div>';
-        document.getElementById('objectMaterialPicker').innerHTML = 
-            '<div style="padding: 20px; color: #f00;">Error loading materials. Check console.</div>';
+
+        // Keep page usable even when APIs fail; avoid null-DOM crashes.
+        const baseSelect = document.getElementById('baseMaterialSelect');
+        if (baseSelect) {
+            baseSelect.innerHTML = '<option value="">Error loading materials</option>';
+        }
+        const shapeSelect = document.getElementById('shapeSelect');
+        if (shapeSelect) {
+            shapeSelect.innerHTML = '<option value="">Error loading shapes</option>';
+        }
+        const objectSelect = document.getElementById('objectMaterialSelect');
+        if (objectSelect) {
+            objectSelect.innerHTML = '<option value="">Error loading materials</option>';
+        }
     }
 }
 
 function renderMaterialPickers() {
     console.log('[renderMaterialPickers] Starting with', materials.length, 'materials');
     
+    const populateMaterialSelect = (selectEl, mats, placeholder) => {
+        selectEl.innerHTML = `<option value="">${placeholder}</option>`;
+        mats.forEach((m) => {
+            const opt = document.createElement('option');
+            opt.value = m.id;
+            opt.textContent = `${m.name} (Power:${m.power}, Depth:${m.depth})`;
+            opt.dataset.description = m.description;
+            opt.dataset.power = m.power;
+            opt.dataset.depth = m.depth;
+            opt.dataset.repeat = m.repeat;
+            selectEl.appendChild(opt);
+        });
+    };
+
     // ADR-018: All materials can be used as backing or target
-    const baseMats = materials;
-    const objectMats = materials;
-    
-    // Populate base material dropdown
     const baseSelect = document.getElementById('baseMaterialSelect');
-    if (!baseSelect) return;
-    
-    baseMats.forEach(m => {
-        const opt = document.createElement('option');
-        opt.value = m.id;
-        opt.textContent = `${m.name} (Power:${m.power}, Depth:${m.depth})`;
-        opt.dataset.description = m.description;
-        opt.dataset.power = m.power;
-        opt.dataset.depth = m.depth;
-        opt.dataset.repeat = m.repeat;
-        baseSelect.appendChild(opt);
-    });
-    
-    // Populate object material dropdown
     const objectSelect = document.getElementById('objectMaterialSelect');
-    if (!objectSelect) return;
-    
-    objectMats.forEach(m => {
-        const opt = document.createElement('option');
-        opt.value = m.id;
-        opt.textContent = `${m.name} (Power:${m.power}, Depth:${m.depth})`;
-        opt.dataset.description = m.description;
-        opt.dataset.power = m.power;
-        opt.dataset.depth = m.depth;
-        opt.dataset.repeat = m.repeat;
-        objectSelect.appendChild(opt);
-    });
+    if (!baseSelect || !objectSelect) return;
+
+    populateMaterialSelect(baseSelect, materials, '-- Select base material --');
+    populateMaterialSelect(objectSelect, materials, '-- Select object material --');
     
     // Add change handlers
     baseSelect.addEventListener('change', (e) => {
@@ -587,20 +578,27 @@ document.getElementById('chkManualSize').addEventListener('change', (e) => {
 
 // Manual shape entry
 document.getElementById('btnManualShape').addEventListener('click', () => {
-    const width = parseFloat(document.getElementById('manualWidth').value);
-    const height = parseFloat(document.getElementById('manualHeight').value);
-    
-    if (!width || !height || width <= 0 || height <= 0) {
+    let width;
+    let height;
+    try {
+        width = readFloatRequired(document.getElementById('manualWidth').value, 'width');
+        height = readFloatRequired(document.getElementById('manualHeight').value, 'height');
+    } catch (err) {
+        showMessage(err.message, true);
+        return;
+    }
+
+    if (width <= 0 || height <= 0) {
         showMessage('Invalid dimensions', true);
         return;
     }
     
-    currentJob.material.shape = {
-        shape_id: 'manual',
-        name: `Custom ${width}×${height}mm`,
-        width_mm: width,
-        height_mm: height
-    };
+    if (!currentJob.material.target) {
+        currentJob.material.target = {};
+    }
+    currentJob.material.target.shape = 'manual';
+    currentJob.material.target.width_mm = width;
+    currentJob.material.target.height_mm = height;
     
     checkObjectComplete();
     updateStateDisplay();
@@ -612,13 +610,13 @@ document.querySelectorAll('.jog-button[data-dir]').forEach(btn => {
     btn.addEventListener('click', () => {
         const dir = btn.dataset.dir;
         const target = document.getElementById('jogTarget').value; // Get from selector
-        const step = parseFloat(document.getElementById('jogStep').value) || 1.0;
+        const step = readFloatOrDefault(document.getElementById('jogStep').value, 1.0);
         
         const xInput = target === 'image' ? document.getElementById('imageX') : document.getElementById('objectX');
         const yInput = target === 'image' ? document.getElementById('imageY') : document.getElementById('objectY');
         
-        let x = parseFloat(xInput.value) || 0;
-        let y = parseFloat(yInput.value) || 0;
+        let x = readFloatOrDefault(xInput.value, 0);
+        let y = readFloatOrDefault(yInput.value, 0);
         
         // Update position based on direction
         switch(dir) {
@@ -688,10 +686,10 @@ document.getElementById('imageX').addEventListener('input', updateLayout);
 document.getElementById('imageY').addEventListener('input', updateLayout);
 
 function updateLayout() {
-    const objOffsetX = parseFloat(document.getElementById('objectX').value) || 0;
-    const objOffsetY = parseFloat(document.getElementById('objectY').value) || 0;
-    const imgOffsetX = parseFloat(document.getElementById('imageX').value) || 0;
-    const imgOffsetY = parseFloat(document.getElementById('imageY').value) || 0;
+    const objOffsetX = readFloatOrDefault(document.getElementById('objectX').value, 0);
+    const objOffsetY = readFloatOrDefault(document.getElementById('objectY').value, 0);
+    const imgOffsetX = readFloatOrDefault(document.getElementById('imageX').value, 0);
+    const imgOffsetY = readFloatOrDefault(document.getElementById('imageY').value, 0);
     
     // Object position: offset from burn area center
     // 0,0 offset = center of burn area = 40mm, 38mm absolute
@@ -712,97 +710,6 @@ function updateLayout() {
     };
     
     updateStateDisplay();
-}
-
-// Generate burn jobs for handoff to burn page
-function generateBurnJobs() {
-    const uploadData = currentJob.stages.upload.data;
-    const imageData = uploadData.image_base64 || uploadData.image;
-    
-    currentJob.burn_jobs = {};
-    
-    if (currentJob.material.type === 'object') {
-        // Object mode: Generate THREE burn jobs
-        
-        // 1. Alignment box on backing material
-        if (currentJob.material.shape && currentJob.material.backing) {
-            const shapeWidthPx = Math.round(currentJob.material.shape.width_mm / 0.05);
-            const shapeHeightPx = Math.round(currentJob.material.shape.height_mm / 0.05);
-            const position = currentJob.layout.position || { x: 800, y: 800 };
-            
-            // Generate alignment box image (white canvas with black border)
-            const canvas = document.createElement('canvas');
-            canvas.width = shapeWidthPx;
-            canvas.height = shapeHeightPx;
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = 'white';
-            ctx.fillRect(0, 0, shapeWidthPx, shapeHeightPx);
-            ctx.strokeStyle = 'black';
-            ctx.lineWidth = 3;
-            ctx.strokeRect(2, 2, shapeWidthPx - 4, shapeHeightPx - 4);
-            const alignmentImageData = canvas.toDataURL('image/png');
-            
-            currentJob.burn_jobs.alignment = {
-                name: "Alignment Box (on backing)",
-                description: `Burn alignment frame on backing material to position ${currentJob.material.shape.name}`,
-                enabled: false,
-                image_data: alignmentImageData,
-                power: currentJob.material.backing.power,
-                depth: currentJob.material.backing.depth,
-                center_x: position.x,
-                center_y: position.y,
-                width: shapeWidthPx,
-                height: shapeHeightPx
-            };
-        }
-        
-        // 2. Image on backing material (test burn)
-        if (currentJob.material.backing) {
-            currentJob.burn_jobs.image_on_backing = {
-                name: "Image on Backing (test)",
-                description: "Burn image on backing material for testing",
-                enabled: false,
-                image_data: imageData,
-                power: currentJob.material.backing.power,
-                depth: currentJob.material.backing.depth,
-                center_x: null,  // Auto-center
-                center_y: null,
-                width: uploadData.width,
-                height: uploadData.height
-            };
-        }
-        
-        // 3. Image on object (final burn)
-        if (currentJob.material.power && currentJob.material.depth) {
-            const position = currentJob.layout.position || { x: 800, y: 800 };
-            currentJob.burn_jobs.image_on_object = {
-                name: "Image on Object (final)",
-                description: `Burn image on positioned ${currentJob.material.name || 'object'} with object material settings`,
-                enabled: true,  // Default to final burn enabled
-                image_data: imageData,
-                power: currentJob.material.power,
-                depth: currentJob.material.depth,
-                center_x: position.x,
-                center_y: position.y,
-                width: uploadData.width,
-                height: uploadData.height
-            };
-        }
-    } else {
-        // Base mode: Generate ONE burn job
-        currentJob.burn_jobs.image_on_base = {
-            name: "Image on Base Material",
-            description: "Burn image directly on base material",
-            enabled: true,
-            image_data: imageData,
-            power: currentJob.material.power,
-            depth: currentJob.material.depth,
-            center_x: null,  // Auto-center
-            center_y: null,
-            width: uploadData.width,
-            height: uploadData.height
-        };
-    }
 }
 
 // Save configuration and navigate to burn page
@@ -831,11 +738,18 @@ document.getElementById('btnSave').addEventListener('click', () => {
         }
     }
     
-    // Generate burn jobs based on mode (base vs object)
-    generateBurnJobs();
+    // Burn jobs are generated at burn-time from layout/material metadata.
+    if (currentJob.burn_jobs) {
+        delete currentJob.burn_jobs;
+    }
     
     // Save to sessionStorage for handoff to burn page
-    sessionStorage.setItem('materialConfig', JSON.stringify(currentJob));
+    try {
+        saveMaterialConfig(currentJob);
+    } catch (err) {
+        showMessage('Could not save workflow state: ' + err.message, true);
+        return;
+    }
     showMessage('Configuration saved. Redirecting to burn page...');
     
     // Navigate to burn page
@@ -844,70 +758,41 @@ document.getElementById('btnSave').addEventListener('click', () => {
     }, 500);
 });
 
-// Load default image
-async function loadDefaultImage() {
+// Ensure there is always an upload stage image for preview/layout.
+async function ensureImageLoadedForAlignment() {
     try {
-        const response = await fetch('/api/images/serve/default-image.png');
-        const blob = await response.blob();
-        
-        // Convert to base64
-        const reader = new FileReader();
-        reader.onloadend = function() {
-            const base64data = reader.result;
-            
-            // Get image dimensions
-            const img = new Image();
-            img.onload = function() {
-                currentJob.stages = currentJob.stages || {};
-                currentJob.stages.upload = {
-                    status: 'complete',
-                    data: {
-                        image_path: '/api/images/serve/default-image.png',
-                        image_base64: base64data,
-                        original_filename: 'default-image.png (will be replaced with logo)',
-                        source: 'default',
-                        width: img.width,
-                        height: img.height
-                    }
-                };
-                
-                // Show image state
-                document.getElementById('noImageState').classList.add('hidden');
-                document.getElementById('hasImageState').classList.remove('hidden');
-                document.getElementById('imageName').textContent = 'default-image.png (will be replaced with logo)';
-                
-                updateStateDisplay();
-            };
-            img.src = base64data;
-        };
-        reader.readAsDataURL(blob);
+        const { addedDefault, uploadData } = await ensureJobHasUploadImage(currentJob, {
+            source: 'default',
+            sourceReference: '/api/images/serve/default-image.png',
+        });
+        if (addedDefault) {
+            showMessage('No image in workflow. Loaded default image.');
+        }
+        if (uploadData && uploadData.original_filename) {
+            document.getElementById('noImageState').classList.add('hidden');
+            document.getElementById('hasImageState').classList.remove('hidden');
+            document.getElementById('imageName').textContent = uploadData.original_filename;
+        }
+        updateStateDisplay();
     } catch (err) {
-        console.error('Failed to load default image:', err);
+        console.error('Failed to ensure image:', err);
+        showMessage('Failed to load image for alignment: ' + err.message, true);
     }
 }
 
 // Initialize
-loadSettings();
-updateStateDisplay();
-renderLivePreview(); // Initial preview render
-refreshStatus();
+async function initAlignmentBuilder() {
+    loadSettings();
+    refreshStatus();
 
-// Check if we have an incoming config (from QR page or index)
-const savedConfig = sessionStorage.getItem('materialConfig');
-if (savedConfig) {
-    currentJob = JSON.parse(savedConfig);
-    
-    // If has image, show it
-    if (currentJob.stages && currentJob.stages.upload) {
-        document.getElementById('noImageState').classList.add('hidden');
-        document.getElementById('hasImageState').classList.remove('hidden');
-        document.getElementById('imageName').textContent = 
-            currentJob.stages.upload.data.original_filename || 'Unknown';
+    const savedConfig = getMaterialConfig();
+    if (savedConfig) {
+        currentJob = savedConfig;
     }
-    
-    updateStateDisplay();
-} else {
-    // No saved config, load default image
-    loadDefaultImage();
+
+    await ensureImageLoadedForAlignment();
+    renderLivePreview(); // Initial preview render
 }
+
+initAlignmentBuilder();
 {% endblock %}

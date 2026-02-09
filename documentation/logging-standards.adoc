@@ -1,0 +1,31 @@
+= Logging Standards (K6 Workflow)
+
+== Purpose
+Define one consistent logging model for API, burn driver, MCP, and UI reporting.
+
+== Core Standards
+* Every burn run must have a `run_id` (UUID).
+* Every operation row must have a `job_id` and monotonically increasing `op_index`.
+* CSV schema version is explicit (`schema_version`) and required in each row.
+* Phases are normalized to canonical values:
+`SETUP`, `BUILD`, `DATA`, `BURN`, `EXECUTE`.
+* Timing fields use milliseconds for operation duration (`duration_ms`) and seconds for relative elapsed (`elapsed_s`).
+* Transport-level outcomes use `response_type` (e.g. `ACK`, `STATUS`, `HEARTBEAT`, `ERROR`).
+* Progress values must be numeric percentages in `status_pct` when available.
+
+== Required CSV Columns
+`schema_version, run_id, job_id, op_index, burn_start, timestamp, elapsed_s, phase, operation, duration_ms, bytes_transferred, cumulative_bytes, throughput_kbps, status_pct, state, response_type, retry_count, device_state`
+
+== API Contract
+* `POST /api/reports/summary` accepts `{ "csv_log": "<path>" }`.
+* Response includes:
+** `summary`: operations, elapsed time, bytes, throughput
+** `phase_stats`: grouped counts/durations/bytes by canonical phase
+** `response_counts`: grouped response types
+** `timing`: sampled timeline, chunk timings, status series
+** `timing_summary`: chunk avg/p95/max and final status
+
+== UI Usage
+* Burn UI must render report cards from `/api/reports/summary` for each job result.
+* Report cards are shown for both successful and failed runs (when CSV is present).
+* Burn preview and burn execution should share the same render metadata path to keep behavior DRY.

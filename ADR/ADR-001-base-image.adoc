@@ -2,11 +2,11 @@
 
 == Status
 
-Accepted (Consolidated from ADR-001, ADR-009)
+Accepted (Updated 2026-02-06: Switch to python:3.13-slim)
 
 == Context
 
-Deploy Flask app to Pi Zero W (ARMv6). Handle Python dependencies (Pillow, pyserial, Flask).
+Deploy Flask app to Pi Zero W (ARMv6). Handle Python dependencies (Pillow, pyserial, Flask). Need Python ≥3.10 for MCP server integration.
 
 *Deployment options:*
 * Docker containerization
@@ -18,12 +18,13 @@ Deploy Flask app to Pi Zero W (ARMv6). Handle Python dependencies (Pillow, pyser
 * Alpine Linux
 * Official Raspberry Pi images
 * Balena IoT images
+* Official Python images
 * Debian slim
 * Ubuntu
 
 == Decision
 
-Docker with `balenalib/raspberry-pi:bullseye` base.
+Docker with `python:3.13-slim` base (Debian trixie).
 
 == Rationale
 
@@ -43,17 +44,30 @@ Rejected bare Python: Manual docs. Migration = rewrite.
 
 Rejected .deb: Hardest to maintain. Cross-compilation. Overkill.
 
-=== Why Balena Base?
+=== Why python:3.13-slim?
 
-*ARMv6 support:* Pi Zero W requirement. Alpine dropped ARMv6. Ubuntu doesn't support.
+*ARMv6 support:* Official Python images now support ARMv6 (arm/v5 compatible). Tested on Pi Zero W.
 
-*Size:* 120MB vs 200MB+ official images.
+*Python 3.13:* Matches Pi host version (Raspbian trixie). Enables MCP server (requires ≥3.10).
 
-*Tested:* Balena production-tested for IoT.
+*Size:* 133MB base vs 250MB final (smaller than previous balenalib 376MB).
 
-*Build time:* Pre-built layers save hours.
+*Official:* Maintained by Docker Inc. Better long-term support than IoT-specific images.
 
-*Maintenance:* Active ARMv6 support.
+*Debian trixie:* Latest stable. Modern package versions.
+
+*No custom Python build:* Pre-installed Python 3.13. No compilation overhead.
+
+*Package availability:* Updated Debian packages (libtiff6, libopenblas0-pthread).
+
+=== Previous: balenalib (Deprecated)
+
+Previously used `balenalib/raspberry-pi:bullseye` for ARMv6 support, but:
+
+* Debian 11 (bullseye) = Python 3.9 (too old for MCP)
+* 376MB final image (vs 250MB with python:3.13-slim)
+* IoT-specific tweaks unnecessary for stationary Pi
+* Official Python images now support ARMv6
 
 == Consequences
 
@@ -62,13 +76,15 @@ Rejected .deb: Hardest to maintain. Cross-compilation. Overkill.
 * Migration trivial
 * Dependencies isolated
 * Build reproducible
-* Stable ARMv6 platform
-* Faster builds (120MB)
+* **Smaller image** (250MB vs 376MB)
+* **Python 3.13** (MCP compatible)
+* **Official image** (better support)
+* **Matches Pi host** (both trixie)
 
 .*Negative*
 * Docker adds complexity
 * Slightly slower startup
 * More disk space
-* Balena-specific (less common)
+* Package name changes (trixie vs bullseye)
 
-*Trade-offs accepted:* Portability + reproducibility + ARMv6 support outweigh overhead.
+*Trade-offs accepted:* Modern Python + smaller size + MCP support outweigh package name migration.

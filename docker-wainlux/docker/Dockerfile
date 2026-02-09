@@ -1,39 +1,74 @@
 # Multi-platform Flask app for K6 laser control
 # Pi Zero W (armv6) + Steam Deck/dev (x86_64/amd64)
 # See ADR-001-base-image.adoc for rationale
+# Two-stage build: compile in builder, copy to runtime image
 
-FROM balenalib/raspberry-pi:bullseye
+# ============================================================================
+# STAGE 1: Builder - Compile Python packages
+# ============================================================================
+FROM python:3.13-slim AS builder
 
-# System deps
+# Build dependencies for numpy/Pillow compilation
 RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
+    gcc \
+    g++ \
+    gfortran \
+    cmake \
+    autoconf \
+    automake \
+    libtool \
+    pkg-config \
+    libffi-dev \
+    ninja-build \
+    patchelf \
+    libjpeg62-turbo-dev \
+    libtiff-dev \
+    libopenjp2-7-dev \
+    libfreetype6-dev \
+    liblcms2-dev \
+    libwebp-dev \
+    zlib1g-dev \
+    libgfortran5 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# Install Python packages to /build/venv
+COPY requirements.txt .
+RUN python -m venv /build/venv
+ENV PATH="/build/venv/bin:$PATH"
+ENV PIP_PREFER_BINARY=1
+RUN pip install --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir -r requirements.txt
+
+# ============================================================================
+# STAGE 2: Runtime - Clean image with only runtime deps
+# ============================================================================
+FROM python:3.13-slim
+
+# Runtime dependencies (no build tools)
+RUN apt-get update && apt-get install -y \
     libjpeg62-turbo \
-    libtiff5 \
+    libtiff6 \
     libopenjp2-7 \
     libxcb1 \
     fonts-dejavu-core \
     zlib1g \
     libfreetype6 \
     liblcms2-2 \
-    libwebp6 \
-    libopenblas0 \
-    libatlas3-base \
+    libwebp7 \
+    libgfortran5 \
     udev \
     && rm -rf /var/lib/apt/lists/*
 
-# Create python3.11 symlink for compatibility (actual version is 3.9)
-RUN ln -sf /usr/bin/python3 /usr/bin/python
+# Copy compiled Python packages from builder
+COPY --from=builder /build/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
-# USB rules for Wainlux K6 (CP210x serial) - optional, graceful if missing
+# USB rules for Wainlux K6 (CP210x serial)
 RUN echo 'SUBSYSTEM=="usb", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", MODE="0666"' > /etc/udev/rules.d/99-wainlux.rules || true
 
 WORKDIR /app
-
-# Python deps
-COPY requirements.txt .
-RUN pip3 install --upgrade pip setuptools wheel && \
-    pip3 install --no-cache-dir -r requirements.txt
 
 # Copy k6 library
 COPY k6/ ./k6/
@@ -49,6 +84,8 @@ RUN find /app -type f -name '*.pyc' -delete 2>/dev/null || true
 COPY static/ ./static/
 COPY templates/ ./templates/
 COPY settings/ ./settings/
+COPY start_services.sh ./start_services.sh
+RUN chmod +x /app/start_services.sh
 
 # Prevent Python from writing pyc files
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -57,7 +94,8 @@ ENV PYTHONUNBUFFERED=1
 # Optional: Enable mock device mode (no hardware required)
 ENV K6_MOCK_DEVICE=false
 
-EXPOSE 8080
+# Expose ports: Flask REST API (8080), MCP HTTP/SSE (8081)
+EXPOSE 8080 8081
 
-CMD ["python3", "-m", "app.main"]
-
+# Start Flask API + MCP HTTP server
+CMD ["/app/start_services.sh"]

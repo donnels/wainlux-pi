@@ -1,5 +1,12 @@
 Flask==2.3.2
-Pillow==10.0.0
+Pillow==11.0.0
 pyserial==3.5
-numpy==1.24.3
+# Python 3.13-compatible NumPy; 1.26.x triggers source-build failures on Pi/trixie
+numpy==2.2.2
 qrcode==7.4.2
+# MCP dependencies (Python 3.13 base image)
+mcp>=1.0.0
+uvicorn>=0.27.0
+starlette>=0.36.0
+sse-starlette>=1.8.0
+httpx>=0.27.0  # HTTP client for MCP → Flask API calls

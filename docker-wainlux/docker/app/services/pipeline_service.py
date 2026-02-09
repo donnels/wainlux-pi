@@ -9,13 +9,13 @@ Like Unix pipes: each step reads files, writes files, can be tested alone.
 """
 
 from pathlib import Path
-from datetime import datetime
 from typing import Dict, Optional
 import json
 import numpy as np
 from PIL import Image
 
 from k6.commands import K6CommandBuilder, CommandSequence
+from utils.timestamps import file_timestamp, iso_timestamp
 
 
 class PipelineService:
@@ -103,7 +103,7 @@ class PipelineService:
             packed |= binary[:, bit::8] << (7 - bit)
 
         # Generate timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = file_timestamp()
 
         # Save processed data
         processed_path = output_dir / f"processed_{timestamp}.npy"
@@ -220,7 +220,7 @@ class PipelineService:
         within_limits = len(warnings) == 0
 
         # Generate timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = file_timestamp()
 
         # Serialize commands to binary
         command_path = output_dir / f"commands_{timestamp}.bin"
@@ -230,7 +230,7 @@ class PipelineService:
 
         # Save metadata
         metadata = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": iso_timestamp(),
             "source": {
                 "processed_file": processed_path,
                 "width": width,

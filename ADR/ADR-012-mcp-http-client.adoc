@@ -1,0 +1,68 @@
+= ADR-012: MCP as HTTP Client to Flask API
+
+== Status
+
+Accepted
+
+== Context
+
+MCP and Flask both need to trigger K6 operations, but the hardware link (`/dev/ttyUSB0`) is exclusive and sensitive to contention.
+
+A dual-owner model (MCP and Flask both managing serial/device state) creates:
+
+* serial contention risk
+* duplicated protocol/business logic
+* inconsistent safety behavior across interfaces
+* harder troubleshooting in distributed deployments
+
+The architecture requires one clear hardware owner while still exposing MCP as a network interface.
+
+== Decision
+
+Flask API is the single hardware owner. MCP is implemented as an HTTP client adapter to Flask.
+
+Rules:
+
+* Flask owns connection lifecycle, command execution, and serial locking.
+* MCP tools call Flask endpoints and translate results to MCP responses.
+* MCP does not directly access serial/device manager.
+* Safety controls (for example dry-run) are request-scoped and explicit at API boundaries.
+
+== Consequences
+
+=== Positive
+
+* Eliminates serial ownership ambiguity.
+* Centralizes hardware logic and protocol behavior in one place.
+* Improves DRYness and consistency across UI/API/MCP.
+* Supports distributed operation: MCP client and Flask server can run on different hosts.
+
+=== Negative
+
+* MCP now depends on Flask availability and API contract stability.
+* Adds one network hop and associated failure modes (timeouts/connectivity).
+
+=== Neutral
+
+* Authentication/authorization remains a separate concern and must be addressed independently.
+
+== Alternatives Considered
+
+=== Shared Device Manager Across MCP and Flask
+
+Rejected due to contention and duplicated ownership of hardware state.
+
+=== Direct MCP-to-Serial Access Only
+
+Rejected because it bypasses existing API/domain controls and duplicates core logic.
+
+=== MCP Embedded Inside Flask Request Loop
+
+Rejected as primary model; it weakens interface boundaries and complicates independent operation.
+
+== Related
+
+* link:ADR-011-mcp-integration.adoc[ADR-011] - MCP as supported interface
+* link:ADR-012-pipeline-architecture.adoc[ADR-012-pipeline-architecture] - Execution pipeline model
+* link:ADR-019-distributed-architecture.adoc[ADR-019] - Distributed architecture goals
+

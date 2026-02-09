@@ -229,9 +229,19 @@ btnNext.addEventListener('click', () => {
         material: {},
         layout: {}
     };
+
+    const existingConfig = getMaterialConfig();
+    if (existingConfig && existingConfig._meta) {
+        job._meta = { ...existingConfig._meta };
+    }
     
     // Save to session storage for alignment-builder
-    sessionStorage.setItem('materialConfig', JSON.stringify(job));
+    try {
+        saveMaterialConfig(job);
+    } catch (err) {
+        showMessage('Could not save workflow state: ' + err.message, true);
+        return;
+    }
     
     // Redirect to alignment-builder
     showMessage('Redirecting to material & positioning...');
