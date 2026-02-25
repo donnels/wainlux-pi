@@ -11,7 +11,7 @@ echo
 # Just the essential commands
 ssh $PI_HOST << 'COMMANDS'
 set -e
-cd ~/wainlux-pi/docker-wainlux
+cd ~/wainlux-pi/docker
 echo "[1/3] Stopping old container..."
 docker compose down || true
 

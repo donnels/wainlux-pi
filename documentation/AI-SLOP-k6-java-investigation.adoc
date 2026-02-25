@@ -1,0 +1,125 @@
+:doctype: article
+:toc: macro
+
+= K6 Java App Investigation Notes
+
+toc::[]
+
+== Context
+- Source: vendor Java UI (decompiled with Ghidra, LLM review). Clean-room: describing observed protocol behavior only.
+- Goal: map opcodes, handshakes, and image/text handling to validate our driver.
+
+== Findings (verified)
+	* `fa_song` (general send) clears receive buffers, sets mode=0, sends data via `SerialPortUtil.sendData`, then spawns a thread with timeout; it waits for listener to set a success flag when replies arrive.
+	* `fa_song_fe` / `fa_song_she_zhi` (fast send) set mode=3 (and fh_shu=4), clear buffers, send data, return true without waiting; listener still captures replies into shared buffers.
+	* Receive listener: on DATA_AVAILABLE, reads bytes and branches on mode: mode 0 collects bytes and marks success when any data arrives; mode 3 just streams; separate listener watches for 4-byte patterns `FF FF 00 xx` (updates progress) and `FF FF FF FF` (resets progress) and sets `kai_shi`/`kai_shi2` flags. Device also sends `FF FF FF FE` as the “job accepted” heartbeat after JOB_HEADER. When other data arrives it sets `fan_hui_ma=1` and stores the bytes. No enforced inter-packet sleep in Com.
+	* Wi-Fi `Wang` path mirrors serial: `kaishi` expects `ff ff ff fe`, `xie_shuju`/`xie2` require first reply byte `0x09`; same 0x76c DATA slicing and two's-complement checksum, only timeouts differ (Wi-Fi waits up to ~2 s per DATA chunk).
+	* Text path: dialog renders text into a `BufferedImage`; two rows become one raster, thresholded (red < 10 => 1-bit “on”), padded to byte width, then packed into 0x22 DATA slices. No text opcode; it is pure raster.
+	* Vector path: vector points (Dian) come from black pixels on the vector layer and optional fill mask; each point is four bytes (x lo, x hi, y lo, y hi) appended after raster bytes before slicing. Coordinates are not clipped against the raster buffer.
+	* Fill is 2D: the fill layer is rasterized; black pixels (optionally decimated by density) become point samples. No polygon closure logic—gaps leak.
+	* Job start header (0x23) fields: block count = `(payload_bytes + 0x21 + vector_bytes)/0xffe + 1`, raster size = width/height, constant 0x21 at bytes 10-11, raster power/depth, vector w/h/power/depth/count, total_size = `payload_bytes + 0x21`, center x/y, quality (combo index +1). Two pings (0x0A) precede DATA; two INITs (0x24) follow with 200/500 ms gaps.
+
+== Call Map (PlantUML)
+[plantuml]
+@startuml
+skinparam componentStyle rectangle
+actor User
+component "Swing UI\n(mainJFrame)" as UI
+component "Text Dialog\n(Zi_ti)" as ZT
+component "Vector/Image\nBuilder (Tu_yuan)" as TY
+component "Image Filters\n(Tu_pian)" as TP
+component "Start Packet\n(kai_shi_tuo_ji)" as KS
+component "Serial Path\n(Com.fa_song / fa_song_fe)" as COM
+component "Network Path\n(Wang.xie_shuju / kaishi)" as WANG
+component "SerialPortUtil\n(sendData/read)" as SPU
+component "Device" as DEV
+
+User --> UI : clicks Open/Start/Bounds
+UI --> ZT : open text dialog (optional)
+ZT --> TY : returns text -> raster/vector
+UI --> TY : add shapes/images
+TY --> TP : grayscale / threshold / dither
+UI --> KS : build 0x23 start packet (len 0x26)
+KS --> COM : if serial open
+KS --> WANG : if network mode
+TY --> COM : DATA packets (image chunks)
+TY --> WANG : DATA packets (net)
+COM --> SPU : send bytes
+SPU --> DEV
+DEV --> SPU : ACK 0x09 / status frames
+SPU --> COM : listener dispatch
+COM --> UI : progress FF FF 00 xx; done FF FF FF FF
+WANG --> UI : status relayed when net path
+@enduml
+[/plantuml]
+
+== Interesting / needs follow-up
+- Image data packing: still need the exact chunk size and header fields used when raster data is emitted. Expectation 1900-byte payloads; need to map packing order and padding from the send path.
+- Text rendering: dialog confirmed; blank lines survive. Still need to see how text is rasterized into burn data (not yet traced).
+- Serial transport (`Com`/SerialPortUtil) observed: writes full byte arrays with no pacing; fast-send returns immediately; listener sets success flags on any data and parses status patterns. Need opcode→response mapping in code to finish.
+- Bounding + burn interaction: confirm whether the bounding opcode sets state that changes subsequent ack/timeout behavior.
+
+== Planned verifications
+- Load/decompile serial transport class to extract opcode → length → expected response table and data write method; check for sleeps or chunk limits.
+- Load/decompile text dialog class; inspect how strings map to image buffers and how blank lines are handled.
+- Trace image send path to confirm chunk packing and any checksum/use of two’s-complement helper.
+- Cross-check start packet fields against our Python driver (sizes, centers, power/depth, layer counts) and ensure total-size math matches.
+
+== Limits hit
+- Pulled full MAC jar; Com and Zi_ti inspected via classfile parse. Packer now located in `mainJFrame.tuo_ji2` (see Evidence) – remaining gaps are Wi-Fi variants and firmware side behaviour.
+
+== Evidence trail
+- Packer found in `mainJFrame.tuo_ji2` (serial path):
+	* Builds raster bytes (threshold: red < 10 → 1-bit) with width padded to the next byte; vector dots (if any) appended as little-endian x,y pairs.
+	* Splits the payload into slices of 0x76c data bytes; allocates a 0x770-byte buffer per slice with `[0]=0x22, [1:2]=length, [3..-2]=data, [-1]=checksum via jiao_yan()`; sends with `xie_ru(..., mode=2)` until success.
+	* Remainder slice uses length = data+4 with the same layout/checksum.
+	* Pre-flight: computes job block count as `(payload_bytes + 0x21 + vector_bytes)/0xffe + 1`, calls `kai_shi_tuo_ji(...)`, sleeps `(blocks * 0x28) ms`, then sends 0x0A 00 04 00 twice before DATA. Post-flight: two 0x24 zero payloads with 200/500 ms gaps, then resets Com receive state.
+- Com serial send:
+	* `fa_song` (blocking) sets recv_len=1, mode=0, clears input, zeros success flag, sends bytes, spawns a thread with timeout (likely join/wait ~5000 ms); listener sets `success` and saves the last frame when any reply arrives.
+	* `fa_song_fe` / `fa_song_she_zhi` set recv_len=4, mode=3, clear input, zero success, send bytes, return immediately; listener still records replies.
+	* Listener copies the next `recv_len` bytes. If 4 bytes and prefix `ff ff 00 xx` → sets shared counters and marks success flags; `ff ff ff ff` clears flags; otherwise stores the frame and sets success.
+- All observations above came from Ghidra decompile review (LLM) of the vendor Java UI classes currently loaded in the project.
+
+== WTF / Open Questions
+- We can reproduce on hardware that fully blank DATA packets return `0x08`. Does the vendor app explicitly avoid sending all-zero chunks, or does it shape/chop the raster so those chunks never occur?
+- Is DATA acceptance dependent only on "any non-zero bit in packet", or is there a stronger per-row/per-block minimum density rule?
+- Do very sparse payloads (single-pixel packets) fail because of packet-level policy, run-length policy, or prior state from the header?
+- What exact chunking algorithm does the Java app use for raster data: fixed chunk size, row-aligned chunking, or adaptive chunking?
+- When image content exceeds the burn area, does the vendor path clip at render stage, clip at pack stage, or still pack full image then rely on center offsets?
+- Does the Java app split jobs into non-empty row bands (top border / bottom border) to avoid long blank spans in the middle?
+- Is there any command-sequence difference between "image only" and "bounds + image" that changes device state before first DATA packet?
+- Are there hidden mode flags toggled by preview/framing/bounds that alter DATA validation in firmware?
+- Is checksum exactly two's complement over all bytes except the checksum byte in every path (serial + network), including oversized packets?
+- Do power/depth or quality fields influence DATA acceptance thresholds, or only burn intensity once accepted?
+- Is there any firmware-side line stride assumption (e.g., expected bytes_per_line relationship) that rejects otherwise valid sparse packets?
+- The legacy graph-paper burn works to edges: what is materially different in its packed stream versus current pipeline output (chunk boundaries, byte density, or command timing)?
+
+== Current answers / hypotheses
+- Blank DATA → 0x08: No Java-side guardrails found. Com/Wang send whatever byte[] they’re given. Likely firmware rejects all-zero chunks; vendor avoids some empties only by thresholding (<10 on red) and fixed chunking, not by explicit pruning.
+- Acceptance rule: No density checks in Java. Everything points to firmware heuristics; need a captured vendor stream to see if sparse blocks are ever sent.
+- Sparse payload failures: Java doesn’t gate on content. If single-pixel packets fail, it’s probably firmware policy or a stride mismatch, not sender logic.
+- Chunking algorithm: Found. Serial path chunks raster/vector payload into 0x76c data-byte blocks; each DATA packet is `[0]=0x22, [1:2]=total_length, [3..-2]=data, [-1]=checksum(two’s-complement)`. Remainder is `data_len+4` with the same layout. Job header uses `(payload+0x21+vec_bytes)/0xffe + 1` for block count.
+- Oversize images: Tu_yuan.chuang_jian downsizes the longer edge to ~1600 before processing; no evidence of post-pack clipping. Likely device or pack-stage clipping.
+- Row-band splitting: Not observed. Packing is linear over the byte buffer; no band boundaries beyond the fixed 0x76c slicing.
+- Bounds vs image: Sequence is optional 0x21 then 0x16 then 0x23 + DATA. No extra flags observed in Java for bounds/preview paths; vendor sends two 0x0A pings immediately before DATA and two 0x24 zero packets after.
+- Hidden mode flags: None seen beyond the 0x21 send. Com/Wang do not toggle modes for preview/framing.
+- Checksum: jiao_yan is one-byte two’s-complement over the packet (opcode through last data byte) and stored in the final byte. Used for every DATA slice and other `xie_ru` sends.
+- Power/depth/quality: Java just fills header fields; no sending conditions. Effects are likely device-side only.
+- Line stride expectation: Raster bytes are padded to full bytes-per-row; no row delimiters. Device probably relies on header stride/size to consume 0x76c-aligned blocks.
+- Legacy graph-paper success: Likely because its stream matches device expectations on chunk boundaries/stride or avoids zero-only blocks. Once we diff a captured vendor stream against ours, we can nail this down.
+
+== Current code deltas vs vendor (docker app)
+- Only one INIT is sent after DATA; vendor sends two (200 ms then 500 ms gap). Our pipeline/driver mirrors the single INIT.
+- Block-count/total-size math uses raster bytes only; vendor adds 0x21 overhead and vector bytes into `(payload+0x21+vector_bytes)/0xffe+1`.
+- Vector data is not generated or sent; vendor appends little-endian point pairs (and fill points) after raster bytes before slicing.
+- The pipeline chunks flat raster bytes; matches vendor size (0x76c) but lacks vector bytes and may under-sleep after JOB_HEADER because of smaller byte count.
+
+== REQUIREMENTS: single-job raster + vector (card outline + image)
+- Desired behavior: burn outline (vector points) and image (raster) in one JOB_HEADER + DATA stream, matching vendor mixed mode.
+- Missing pieces in current docker app:
+	* No vector extraction: need an input layer for outline/fill, rasterize to monochrome, collect black pixels as point list (x_lo, x_hi, y_lo, y_hi), optional fill density.
+	* Header fields: set vector_w/vector_h to vector layer bounds, vector_power/vector_depth, vector point_count; total_size and block count must include raster bytes + vector bytes + 0x21 overhead.
+	* Payload packing: append vector point bytes after raster bytes before slicing; slice in 0x76c data-byte chunks with checksum, no per-mode separation.
+	* INIT count: consider sending two INITs post-DATA to match vendor sequence.
+	* Sleep/pacing: post-JOB_HEADER sleep should use total bytes (raster + vector) to keep vendor-derived timing.
+

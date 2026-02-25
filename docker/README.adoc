@@ -1,0 +1,68 @@
+= Docker Containers
+ifdef::flag-book[]
+:imagesdir-saved: {imagesdir}
+:localdir-saved: {localdir}
+:imagesdir: ./images
+:localdir: ./docker
+endif::flag-book[]
+ifndef::flag-book[]
+:toc: right
+:toclevels: 5
+:sectnums:
+:sectnumlevels: 5
+ifdef::github-env[]
+:icons: font
+:tip-caption: :bulb:
+:note-caption: :information_source:
+:important-caption: :heavy_exclamation_mark:
+:caution-caption: :fire:
+:warning-caption: :warning:
+endif::github-env[]
+:imagesdir: ../images
+:localdir: .
+endif::flag-book[]
+
+Three containers support the Wainlux K6 control system.
+
+== Compose Files
+
+`compose.yaml` runs production mode with real K6 hardware. Needs `/dev/ttyUSB0` access on Pi.
+
+[source,bash]
+----
+cd docker
+docker compose up -d
+----
+
+`compose-dev.yaml` runs mock mode without hardware. For testing on Steam Deck or dev machines.
+
+[source,bash]
+----
+cd docker
+docker compose -f compose-dev.yaml up -d
+----
+
+Or use deployment scripts: `scripts/deploy_to_pi.sh` (production), `scripts/deploy_to_steamdeck.sh` (dev), `scripts/quick_deploy.sh` (production).
+
+== Wainlux K6
+
+Flask app drives K6 laser over USB serial. Web UI on `:8080`. Runs on Pi Zero W.
+
+include::docker-wainlux/README.adoc[leveloffset=+2]
+
+== MCP Server
+
+MCP HTTP server wraps Flask API for AI agents. No direct hardware access.
+
+include::docker-mcp/README.adoc[leveloffset=+2]
+
+== Bytefield SVG
+
+Generates protocol diagrams from JSON/EDN specs. Documentation tooling.
+
+include::docker-bytefield/README.adoc[leveloffset=+2]
+
+ifdef::flag-book[]
+:imagesdir: {imagesdir-saved}
+:localdir: {localdir-saved}
+endif::flag-book[]

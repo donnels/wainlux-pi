@@ -5,6 +5,8 @@ No subprocess calls. No legacy script dependencies.
 """
 
 from __future__ import annotations
+import logging
+import time
 from typing import Dict
 
 
@@ -434,8 +436,10 @@ class WainluxK6:
             # Diagnostic: check binary array BEFORE packing
             logger.info(f"Binary array: shape={binary.shape}, unique_values={np.unique(binary)}, sample_top_left_8x8={binary[:8,:8].tolist()}")
 
-        # Protocol sequence: FRAMING → JOB_HEADER → CONNECT x2 → DATA chunks
-        # Matches working k6_burn_image.py script exactly
+        # Protocol sequence observed in vendor firmware (Ghidra analysis):
+        # FRAMING → JOB_HEADER (wait FF FF FF FE) → sleep → CONNECT #1 →
+        # sleep 500ms → CONNECT #2 → sleep 500ms → DATA chunks → INIT x2
+        vector_payload = b""
         protocol.send_cmd_checked(
             transport,
             "FRAMING",
@@ -446,7 +450,7 @@ class WainluxK6:
             phase="setup",
         )
 
-        # JOB_HEADER - device responds with HEARTBEAT not ACK
+        # JOB_HEADER - device responds with FF FF FF FE ("job accepted")
         header = protocol.build_job_header_raster(
             width, height, depth, power, center_x=center_x, center_y=center_y
         )
@@ -462,7 +466,17 @@ class WainluxK6:
             phase="setup",
         )
 
-        # CONNECT x2 before burn
+        # Proportional sleep after JOB_HEADER (observed in vendor: ((bytes//4094)+1) * 40ms).
+        # Device sends FF FF FF FE immediately but needs time to initialise burn buffers.
+        total_payload_bytes = sum(len(line) for line in payload_lines) + len(vector_payload)
+        post_header_sleep = ((total_payload_bytes // 4094) + 1) * 0.040
+        logger.info(
+            f"Post-JOB_HEADER sleep: {post_header_sleep:.3f}s "
+            f"(total_payload_bytes={total_payload_bytes})"
+        )
+        time.sleep(post_header_sleep)
+
+        # CONNECT x2 with 500ms between (observed in vendor firmware)
         protocol.send_cmd_checked(
             transport,
             "CONNECT #1",
@@ -472,6 +486,7 @@ class WainluxK6:
             csv_logger=csv_logger,
             phase="setup",
         )
+        time.sleep(0.5)
         protocol.send_cmd_checked(
             transport,
             "CONNECT #2",
@@ -481,22 +496,15 @@ class WainluxK6:
             csv_logger=csv_logger,
             phase="setup",
         )
-        
-        # Debug: check if there are any pending bytes before DATA.
-        # Transport API uses set_timeout() + read(size), not read(timeout=...).
-        import logging
-        logger = logging.getLogger(__name__)
-        try:
-            transport.set_timeout(0.1)
-            pending = transport.read(64)
-            if pending:
-                logger.info(f"Pending bytes after CONNECT #2: {pending.hex()}")
-        except Exception:
-            pass
+        time.sleep(0.5)
 
         # Burn payload with chunking + retry (no delay - matches working script)
         chunks = protocol.burn_payload(
-            transport, payload_lines, max_retries=3, csv_logger=csv_logger
+            transport,
+            payload_lines,
+            max_retries=3,
+            csv_logger=csv_logger,
+            extra_payload=vector_payload,
         )
 
         # DRY RUN: skip INIT and completion wait (don't start laser)
@@ -516,7 +524,8 @@ class WainluxK6:
                 "message": f"Dry run complete ({chunks} chunks uploaded, laser NOT fired)",
             }
 
-        # INIT x2 after burn - device responds with status frames (FF FF 00 XX)
+        # INIT x2 after burn (vendor-style pacing: 200ms then 500ms).
+        time.sleep(0.2)
         init_cmd = bytes([0x24, 0x00, 0x0B, 0x00] + [0x00] * 7)
         protocol.send_cmd_checked(
             transport,
@@ -527,6 +536,7 @@ class WainluxK6:
             csv_logger=csv_logger,
             phase="finalize",
         )
+        time.sleep(0.5)
         protocol.send_cmd_checked(
             transport,
             "INIT #2",
@@ -539,7 +549,7 @@ class WainluxK6:
 
         # Wait for completion
         result = protocol.wait_for_completion(
-            transport, max_wait_s=600.0, idle_s=90.0, csv_logger=csv_logger
+            transport, max_wait_s=1800.0, idle_s=90.0, csv_logger=csv_logger
         )
 
         if result["status"] == "complete":
@@ -609,53 +619,138 @@ class WainluxK6:
             }
         """
         from pathlib import Path
+        from . import protocol
 
         # Validate file exists
         if not Path(command_path).exists():
             return {
                 "ok": False,
                 "commands_sent": 0,
-                "error": f"Command file not found: {command_path}"
+                "error": f"Command file not found: {command_path}",
+                "device_responses": {"ack_count": 0, "heartbeat_count": 0, "error_count": 1},
             }
 
         # Read command file
-        with open(command_path, 'rb') as f:
+        with open(command_path, "rb") as f:
             command_data = f.read()
 
-        # Parse commands (each has 4-byte header: opcode, reserved, length_le16)
+        if not command_data:
+            return {
+                "ok": False,
+                "commands_sent": 0,
+                "error": f"Command file is empty: {command_path}",
+                "device_responses": {"ack_count": 0, "heartbeat_count": 0, "error_count": 1},
+            }
+
+        # Parse commands.
+        # K6 packet format stores length in bytes[1:3] big-endian:
+        # [opcode][len_msb][len_lsb][...payload...]
         commands = []
         offset = 0
         while offset < len(command_data):
-            if offset + 4 > len(command_data):
-                break
-            
-            length = int.from_bytes(command_data[offset+2:offset+4], 'little')
-            if offset + length > len(command_data):
-                break
-                
-            cmd_bytes = command_data[offset:offset+length]
-            commands.append(cmd_bytes)
-            offset += length
+            if offset + 3 > len(command_data):
+                return {
+                    "ok": False,
+                    "commands_sent": len(commands),
+                    "error": f"Truncated command header at offset {offset}",
+                    "device_responses": {"ack_count": 0, "heartbeat_count": 0, "error_count": 1},
+                }
 
-        # Execute commands
+            length = int.from_bytes(command_data[offset + 1 : offset + 3], "big")
+            if length < 4:
+                return {
+                    "ok": False,
+                    "commands_sent": len(commands),
+                    "error": f"Invalid command length {length} at offset {offset}",
+                    "device_responses": {"ack_count": 0, "heartbeat_count": 0, "error_count": 1},
+                }
+
+            end = offset + length
+            if end > len(command_data):
+                return {
+                    "ok": False,
+                    "commands_sent": len(commands),
+                    "error": (
+                        f"Command overruns file at offset {offset}: "
+                        f"length={length}, file_size={len(command_data)}"
+                    ),
+                    "device_responses": {"ack_count": 0, "heartbeat_count": 0, "error_count": 1},
+                }
+
+            commands.append(command_data[offset:end])
+            offset = end
+
+        if not commands:
+            return {
+                "ok": False,
+                "commands_sent": 0,
+                "error": f"No commands parsed from file: {command_path}",
+                "device_responses": {"ack_count": 0, "heartbeat_count": 0, "error_count": 1},
+            }
+
         response_counts = {"ack_count": 0, "heartbeat_count": 0, "error_count": 0}
-        
+        commands_sent = 0
+        total_data_chunks = sum(1 for cmd in commands if cmd and cmd[0] == 0x22)
+
+        # Precompute total DATA payload bytes for timing (vendor sleeps after JOB_HEADER).
+        total_data_bytes = 0
+        for cmd in commands:
+            if cmd and cmd[0] == 0x22:
+                payload_len = len(cmd) - 4  # strip opcode/len/checksum
+                total_data_bytes += max(payload_len, 0)
+        post_header_sleep = ((total_data_bytes // 4094) + 1) * 0.040
+
+        data_chunk_index = 0
+        connect_index = 0
+        init_index = 0
+        saw_init = False
+
+        def command_meta(opcode: int) -> tuple[str, bool, float, str]:
+            """Return (phase, expect_ack, timeout, description_base)."""
+            if opcode == 0x21:
+                return ("setup", True, 1.0, "FRAMING")
+            if opcode == 0x23:
+                return ("setup", False, 10.0, "JOB_HEADER")
+            if opcode == 0x0A:
+                return ("setup", True, 1.0, "CONNECT")
+            if opcode == 0x22:
+                return ("burn", True, 2.0, "DATA")
+            if opcode == 0x24:
+                return ("finalize", False, 3.0, "INIT")
+            if opcode == 0x17:
+                return ("operation", True, 10.0, "HOME")
+            if opcode == 0x16:
+                return ("operation", True, 1.0, "STOP")
+            return ("operation", True, 2.0, f"OPCODE_{opcode:#04x}")
+
         for i, cmd_bytes in enumerate(commands):
             opcode = cmd_bytes[0]
-            
-            # Determine description
-            opcode_names = {
-                0x21: "FRAMING",
-                0x23: "JOB_HEADER",
-                0x0A: "CONNECT",
-                0x22: "DATA",
-                0x24: "INIT"
-            }
-            desc = opcode_names.get(opcode, f"OPCODE_{opcode:#04x}")
+            phase, expect_ack, timeout, desc_base = command_meta(opcode)
+
             if opcode == 0x22:
-                desc = f"DATA chunk {i}/{len(commands)}"
-            
-            # DRY RUN: skip INIT commands (opcode 0x24)
+                data_chunk_index += 1
+                desc = f"DATA chunk {data_chunk_index}/{total_data_chunks}"
+            elif opcode == 0x0A:
+                connect_index += 1
+                desc = f"CONNECT #{connect_index}"
+            elif opcode == 0x24:
+                init_index += 1
+                desc = f"INIT #{init_index}"
+            else:
+                desc = desc_base
+
+            # Vendor pacing: sleep after JOB_HEADER based on payload size, and 500ms between CONNECTs
+            if opcode == 0x23 and post_header_sleep > 0:
+                logger = logging.getLogger(__name__)
+                logger.info(
+                    f"Post-JOB_HEADER sleep {post_header_sleep:.3f}s (total_data_bytes={total_data_bytes})"
+                )
+                time.sleep(post_header_sleep)
+            if opcode == 0x24 and init_index == 1:
+                # Vendor pacing before first INIT after DATA upload.
+                time.sleep(0.2)
+
+            # DRY RUN: upload/setup still runs, but skip INIT (laser fire).
             if self.dry_run and opcode == 0x24:
                 if csv_logger:
                     csv_logger.log_operation(
@@ -665,49 +760,137 @@ class WainluxK6:
                         state="SKIPPED",
                         device_state="READY",
                     )
-                continue  # Skip this command
-            
-            # Log send
-            if byte_logger:
-                byte_logger.log_send(cmd_bytes, desc)
-            
-            # Send to device
-            transport.write(cmd_bytes)
-            
-            # Read response using transport timeout API.
+                continue
+
             try:
-                transport.set_timeout(1.0)
-                response = transport.read(64)
-                
                 if byte_logger:
-                    byte_logger.log_recv(response)
-                
-                # Count response types
-                if response and len(response) >= 1:
-                    resp_opcode = response[0]
-                    if resp_opcode == 0x09:
-                        response_counts["ack_count"] += 1
-                    elif resp_opcode == 0x04:
-                        response_counts["heartbeat_count"] += 1
-                    elif resp_opcode == 0x08:
-                        response_counts["error_count"] += 1
-                
-            except Exception as e:
-                if byte_logger:
-                    byte_logger.log_error(f"Read timeout on command {i}: {e}")
-            
-            # CSV logging
-            if csv_logger:
-                csv_logger.log_operation(
-                    phase="execute",
-                    operation=desc,
-                    duration_ms=0,
-                    bytes_transferred=len(cmd_bytes),
-                    state="ACTIVE"
+                    byte_logger.log_send(cmd_bytes, desc)
+
+                # Extend timeout for DATA to reduce flakiness on early chunks
+                effective_timeout = timeout
+                if opcode == 0x22:
+                    effective_timeout = max(timeout, 3.0)
+                    logging.getLogger(__name__).info(
+                        f"Sending DATA chunk {data_chunk_index}/{total_data_chunks} len={len(cmd_bytes)} timeout={effective_timeout}s"
+                    )
+
+                rx = protocol.send_cmd_checked(
+                    transport,
+                    desc,
+                    cmd_bytes,
+                    timeout=effective_timeout,
+                    expect_ack=expect_ack,
+                    csv_logger=csv_logger,
+                    phase=phase,
                 )
 
+                if byte_logger:
+                    byte_logger.log_recv(rx)
+
+                hb_count, ack_count, _ = protocol.parse_response_frames(rx)
+                response_counts["ack_count"] += ack_count
+                response_counts["heartbeat_count"] += hb_count
+                commands_sent += 1
+                if opcode == 0x24:
+                    saw_init = True
+
+                if opcode == 0x0A:
+                    time.sleep(0.5)
+                if opcode == 0x24 and init_index == 1:
+                    # Vendor sends second INIT about 500ms later.
+                    time.sleep(0.5)
+
+            except Exception as e:
+                response_counts["error_count"] += 1
+                if byte_logger:
+                    byte_logger.log_error(f"Command {i + 1}/{len(commands)} ({desc}) failed: {e}")
+                return {
+                    "ok": False,
+                    "commands_sent": commands_sent,
+                    "error": f"{desc} failed: {e}",
+                    "device_responses": response_counts,
+                }
+
+        # Dry run does not fire laser or wait for completion.
+        if self.dry_run:
+            return {
+                "ok": True,
+                "commands_sent": commands_sent,
+                "chunks": data_chunk_index,
+                "total_time": 0.0,
+                "message": (
+                    f"Dry run complete ({data_chunk_index} chunks uploaded, laser NOT fired)"
+                ),
+                "device_responses": response_counts,
+            }
+
+        # Non-dry burn must include INIT commands to trigger burn execution.
+        if not saw_init:
+            return {
+                "ok": False,
+                "commands_sent": commands_sent,
+                "error": "No INIT command found in command file; burn was not triggered",
+                "device_responses": response_counts,
+            }
+
+        try:
+            result = protocol.wait_for_completion(
+                transport,
+                max_wait_s=1800.0,
+                idle_s=90.0,
+                csv_logger=csv_logger,
+            )
+        except Exception as e:
+            return {
+                "ok": False,
+                "commands_sent": commands_sent,
+                "chunks": data_chunk_index,
+                "total_time": 0.0,
+                "error": f"Completion wait failed: {e}",
+                "device_responses": response_counts,
+            }
+
+        if result["status"] == "complete":
+            return {
+                "ok": True,
+                "commands_sent": commands_sent,
+                "chunks": data_chunk_index,
+                "total_time": result["total_time"],
+                "message": (
+                    f"Burn complete ({data_chunk_index} chunks, {result['total_time']:.1f}s)"
+                ),
+                "device_responses": response_counts,
+            }
+
+        if result["status"] == "idle_timeout":
+            last_pct = result.get("last_pct", 0)
+            if last_pct and last_pct >= 50:
+                return {
+                    "ok": True,
+                    "commands_sent": commands_sent,
+                    "chunks": data_chunk_index,
+                    "total_time": 0.0,
+                    "message": (
+                        f"Burn complete (idle timeout at {last_pct}%, {data_chunk_index} chunks)"
+                    ),
+                    "device_responses": response_counts,
+                }
+            return {
+                "ok": False,
+                "commands_sent": commands_sent,
+                "chunks": data_chunk_index,
+                "total_time": 0.0,
+                "error": f"Burn incomplete: idle timeout at {last_pct}%",
+                "device_responses": response_counts,
+            }
+
         return {
-            "ok": True,
-            "commands_sent": len(commands),
-            "device_responses": response_counts
+            "ok": False,
+            "commands_sent": commands_sent,
+            "chunks": data_chunk_index,
+            "total_time": 0.0,
+            "error": (
+                f"Burn incomplete: {result['status']} (last {result.get('last_pct', 0)}%)"
+            ),
+            "device_responses": response_counts,
         }

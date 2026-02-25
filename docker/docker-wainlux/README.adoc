@@ -1,11 +1,28 @@
 = Docker Wainlux K6 (build and run)
 
 Container for K6 laser control.
+Compose files live in `docker/` (parent directory), not in this folder.
+
+== Layout
+
+----
+docker-wainlux/
+├── Dockerfile
+├── requirements.txt
+├── app/
+├── k6/
+├── templates/
+├── static/
+├── settings/
+├── images/
+└── data/
+----
 
 == Build
 
 [source,bash]
 ----
+cd ..
 docker compose build
 ----
 
@@ -15,8 +32,13 @@ Takes a long time on Pi Zero W. Long time is expected due to ARMv6 architecture 
 
 The GitHub Actions workflow `.github/workflows/build-container-armv6.yml` builds and publishes:
 
-* `ghcr.io/<owner>/<repo>:latest` (main branch)
-* `ghcr.io/<owner>/<repo>:sha-<commit>`
+* `ghcr.io/<owner>/<repo>:armv6-latest` (main branch)
+* `ghcr.io/<owner>/<repo>:armv6-sha-<commit>`
+
+NOTE: ARMv6 prebuilt image is laser API + driver only.
+MCP is decoupled and runs from `docker-mcp/` as a separate container.
+Build runs import smoke checks for runtime dependencies so broken wheel/ABI combinations
+fail in CI instead of failing at container runtime.
 
 [source,bash]
 ----
@@ -24,16 +46,17 @@ The GitHub Actions workflow `.github/workflows/build-container-armv6.yml` builds
 echo "$GHCR_TOKEN" | docker login ghcr.io -u <github-username> --password-stdin
 
 # Pull the latest ARMv6 image built by Actions
-docker pull ghcr.io/<owner>/<repo>:latest
+docker pull ghcr.io/<owner>/<repo>:armv6-latest
 ----
 
 To run with compose from a prebuilt image, set `image:` for the service in `compose.yaml`
-to `ghcr.io/<owner>/<repo>:latest` and remove/ignore the `build:` entry.
+to `ghcr.io/<owner>/<repo>:armv6-latest` and remove/ignore the `build:` entry.
 
 == Run
 
 [source,bash]
 ----
+cd ..
 docker compose up -d
 ----
 
@@ -44,7 +67,7 @@ Browse: `http://<pi-ip>:8080`
 * *Device*: `/dev/ttyUSB0`
 * *Port*: `8080`
 * *Privileged*: Required for serial
-* *Volume*: `./data`
+* *Volume*: `./docker-wainlux/data` (from `docker/` compose root)
 
 == Testing Modes
 
@@ -55,6 +78,7 @@ Test without K6 connected. Uses simulated transport layer.
 [source,bash]
 ----
 # Run with mock device
+cd ..
 docker compose -f compose-dev.yaml up -d
 ----
 
@@ -96,6 +120,7 @@ Set via Settings page or API: `POST /api/settings {"operation_mode": "verbose"}`
 [source,bash]
 ----
 # View logs
+cd ..
 docker compose logs -f
 
 # Stop

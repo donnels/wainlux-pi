@@ -138,6 +138,7 @@ def build_job_header_custom(
     center_x: int,
     center_y: int,
     quality: int = 1,
+    vector_payload_bytes: int = 0,
 ) -> bytes:
     hdr = bytearray(38)
     hdr[0] = 0x23
@@ -154,8 +155,10 @@ def build_job_header_custom(
         hdr[idx + 2] = (val >> 8) & 0xFF
         hdr[idx + 3] = val & 0xFF
 
-    # Packet count heuristic used by legacy script
-    param1 = (total_size // 4094) + 1
+    # Vendor-style packet count:
+    # (raster_bytes + 0x21 + vector_bytes) // 0xFFE + 1
+    payload_for_count = total_size + 33 + max(vector_payload_bytes, 0)
+    param1 = (payload_for_count // 4094) + 1
     put_u16_be(3, param1)
     hdr[5] = 0x01
 
@@ -166,7 +169,7 @@ def build_job_header_custom(
     put_u16_be(14, raster_depth)
     put_u16_be(16, vector_w)
     put_u16_be(18, vector_h)
-    put_u32_be(20, total_size)
+    put_u32_be(20, total_size + 33)  # observed: vendor adds 33 to pixel_bytes
     put_u16_be(24, vector_power)
     put_u16_be(26, vector_depth)
     put_u32_be(28, point_count)
@@ -224,7 +227,7 @@ def send_cmd(
         csv_logger: Optional CSVLogger instance for logging operation
         phase: Phase name for CSV logging (connect, burn, wait, etc.)
     """
-    t_start = time.time()
+    t_start = time.monotonic()
     # Do not clear input buffer here (tests may queue responses); caller should
     # clear stale buffers when appropriate.
     transport.set_timeout(timeout)
@@ -235,9 +238,9 @@ def send_cmd(
         raise
 
     rx = bytearray()
-    deadline = time.time() + timeout
+    deadline = time.monotonic() + timeout
 
-    while time.time() < deadline:
+    while time.monotonic() < deadline:
         # read one byte
         b = transport.read(1)
         if b:
@@ -263,7 +266,7 @@ def send_cmd(
 
     # Log operation if csv_logger provided
     if csv_logger:
-        duration_ms = (time.time() - t_start) * 1000
+        duration_ms = (time.monotonic() - t_start) * 1000
         hb, ack, response_type = parse_response_frames(rx)
         csv_logger.log_operation(
             phase=phase,
@@ -347,18 +350,21 @@ def wait_for_completion(
     Args:
         csv_logger: Optional CSVLogger instance for logging status updates
     """
-    start = time.time()
-    last_rx = time.time()
+    # Use monotonic clock for timeout math to avoid NTP/RTC wall-clock jumps.
+    start_mono = time.monotonic()
+    last_rx_mono = start_mono
     buf = bytearray()
     last_pct = None
 
     while True:
-        if time.time() - start > max_wait_s:
-            raise K6TimeoutError("Max wait exceeded waiting for completion")
+        if time.monotonic() - start_mono > max_wait_s:
+            raise K6TimeoutError(
+                f"Max wait exceeded waiting for completion (last {last_pct}%)"
+            )
 
         b = transport.read(1)
         if b:
-            last_rx = time.time()
+            last_rx_mono = time.monotonic()
             buf.append(b[0])
             if len(buf) > 16:
                 buf = buf[-16:]
@@ -388,17 +394,21 @@ def wait_for_completion(
                         )
 
                     if pct == 100:
-                        total_time = time.time() - start
+                        total_time = time.monotonic() - start_mono
                         return {"status": "complete", "total_time": total_time}
         else:
-            if time.time() - last_rx > idle_s:
+            if time.monotonic() - last_rx_mono > idle_s:
                 return {"status": "idle_timeout", "last_pct": last_pct}
             # small sleep to avoid busy loop
             time.sleep(0.01)
 
 
 def burn_payload(
-    transport, payload_lines: list[bytes], max_retries: int = 3, csv_logger=None
+    transport,
+    payload_lines: list[bytes],
+    max_retries: int = 3,
+    csv_logger=None,
+    extra_payload: bytes = b"",
 ) -> int:
     """Send payload lines with chunking and retry logic.
 
@@ -416,6 +426,7 @@ def burn_payload(
 
     Strategy:
         - Combine all lines into continuous byte stream
+        - Optionally append extra payload bytes (e.g., vector points)
         - Break into DATA_CHUNK (1900 byte) pieces (NOT line-by-line)
         - Send each chunk with DATA (0x22) packet
         - Retry with exponential backoff on failure
@@ -424,7 +435,7 @@ def burn_payload(
     chunk_count = 0
 
     # Flatten all lines into continuous byte stream (matching working script)
-    all_bytes = b"".join(payload_lines)
+    all_bytes = b"".join(payload_lines) + (extra_payload or b"")
     total_bytes = len(all_bytes)
     
     # Calculate total chunks
@@ -433,6 +444,8 @@ def burn_payload(
     offset = 0
     while offset < total_bytes:
         chunk = all_bytes[offset : offset + DATA_CHUNK]
+        chunk_number = (offset // DATA_CHUNK) + 1
+
         attempt = 0
 
         while attempt < max_retries:

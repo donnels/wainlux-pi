@@ -1,0 +1,30 @@
+services:
+  wainlux-k6-dev:
+    build: ./docker-wainlux
+    container_name: wainlux-k6-dev
+    # Dev mode: no hardware access (uses mock transport)
+    volumes:
+      - ./docker-wainlux/data:/app/data
+      - ./docker-wainlux/images:/app/images
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    environment:
+      - FLASK_ENV=development
+      - PYTHONUNBUFFERED=1
+      # Dev mode: use mock device for testing without hardware
+      - K6_MOCK_DEVICE=true
+
+  wainlux-mcp-dev:
+    build: ./docker-mcp
+    container_name: wainlux-mcp-dev
+    depends_on:
+      - wainlux-k6-dev
+    volumes:
+      - ./docker-wainlux/data:/app/data
+    ports:
+      - "8082:8081"
+    restart: unless-stopped
+    environment:
+      - FLASK_API_BASE=http://wainlux-k6-dev:8080
+      - MCP_PORT=8081

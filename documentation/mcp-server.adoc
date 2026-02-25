@@ -15,17 +15,14 @@ Enable AI assistance in systematic K6 protocol experiments:
 
 ----
 Steam Deck (MCP client) ──HTTP──> Pi (MCP server :8081)
-                                   └─> K6 hardware (/dev/ttyUSB0)
+                                   └─HTTP─> Flask API (:8080)
+                                             └─> K6 hardware (/dev/ttyUSB0)
 ----
 
 See: link:../images/mcp-architecture.plantuml[Architecture Diagram]
 
-Both Flask (port 8080) and MCP (port 8081) share:
-
-* `device_manager` singleton (exclusive serial connection)
-* Services layer (QRService, ImageService, K6Service)
-* CSV logging infrastructure
-* Data directory
+Flask (port 8080) owns serial/device access.
+MCP (port 8081) is an HTTP client adapter to Flask.
 
 == Network Transport
 
@@ -35,16 +32,12 @@ Endpoint: `http://piz-k6:8081/sse`
 
 == Starting MCP Server
 
-Flask runs automatically on container start.
-MCP server starts separately when needed:
+Flask and MCP run as separate services in compose:
 
 [source,bash]
 ----
-# Foreground (recommended for testing)
-docker exec -it wainlux-k6 python app/mcp_server.py
-
-# Background (daemon mode)
-docker exec -d wainlux-k6 python app/mcp_server.py
+docker compose up -d
+docker compose logs -f wainlux-mcp
 ----
 
 == Safety: Dry Run Mode

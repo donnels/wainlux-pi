@@ -239,6 +239,12 @@ def _run_burn_with_csv(
     setup_message: Optional[str] = None,
     complete_message_template: Optional[str] = None,
     emit_error: bool = True,
+    vector_payload: bytes = b"",
+    vector_width: int = 0,
+    vector_height: int = 0,
+    vector_power: int = 0,
+    vector_depth: int = 0,
+    vector_point_count: int = 0,
 ) -> tuple[dict, int]:
     """Execute one burn via pipeline stages (process/build/execute) with CSV logging."""
     timestamp = file_timestamp()
@@ -280,6 +286,12 @@ def _run_burn_with_csv(
             resolved_center_x,
             resolved_center_y,
             DATA_DIR,
+            vector_payload=vector_payload,
+            vector_width=vector_width,
+            vector_height=vector_height,
+            vector_power=vector_power,
+            vector_depth=vector_depth,
+            vector_point_count=vector_point_count,
         )
 
         emit_progress("upload", 70, "Pipeline step 4/4: executing commands")
@@ -759,6 +771,11 @@ def engrave():
     """
     try:
         _ensure_device_connected(auto_connect=True)
+
+        # Re-home before burn so each run starts from a known machine state.
+        emit_progress("setup", 0, "Homing device before burn")
+        if not k6_service.home():
+            logger.warning("Pre-burn HOME failed; continuing with burn attempt")
 
         # Accept both JSON (with temp_path) and FormData (direct upload)
         data = _json_payload()
@@ -1562,6 +1579,13 @@ def qr_preview():
 def qr_burn():
     """Burn WiFi QR code using previously generated image"""
     try:
+        _ensure_device_connected(auto_connect=True)
+
+        # Re-home before QR burn for deterministic start position/state.
+        emit_progress("setup", 0, "Homing device before QR burn")
+        if not k6_service.home():
+            logger.warning("Pre-QR HOME failed; continuing with burn attempt")
+
         # Clear cancel flag
         global burn_cancel_event
         burn_cancel_event.clear()
@@ -1850,6 +1874,54 @@ def _get_layout_pixels(job: dict) -> tuple[float, float, float, float]:
     return material_center_x_px, material_center_y_px, image_offset_x_px, image_offset_y_px
 
 
+def _job_shape_geometry(job: dict, render_spec: dict) -> dict:
+    """Resolve geometry for bounds/combined rendering."""
+    material = job.get("material", {})
+    target = material.get("target", {})
+    target_width_mm = float(target.get("width_mm", 0))
+    target_height_mm = float(target.get("height_mm", 0))
+    if target_width_mm <= 0 or target_height_mm <= 0:
+        raise ValueError("Target object dimensions required for bounds/combined modes")
+
+    shape_width_px = int(round(target_width_mm / K6Constants.RESOLUTION_MM_PER_PX))
+    shape_height_px = int(round(target_height_mm / K6Constants.RESOLUTION_MM_PER_PX))
+    burn_width_px = min(shape_width_px, K6_MAX_WIDTH)
+    burn_height_px = min(shape_height_px, K6_MAX_HEIGHT)
+    border_width = safe_int(render_spec.get("border_width", 3), "border_width", 1, 10)
+
+    # Rectangle centered on burn canvas; overflow is clipped intentionally.
+    obj_x = (burn_width_px - shape_width_px) / 2
+    obj_y = (burn_height_px - shape_height_px) / 2
+    margin = border_width / 2
+    rect = (
+        obj_x + margin,
+        obj_y + margin,
+        obj_x + shape_width_px - border_width,
+        obj_y + shape_height_px - border_width,
+    )
+
+    return {
+        "shape_width_px": shape_width_px,
+        "shape_height_px": shape_height_px,
+        "burn_width_px": burn_width_px,
+        "burn_height_px": burn_height_px,
+        "border_width": border_width,
+        "rect": rect,
+    }
+
+
+def _rasterize_outline_canvas(geometry: dict) -> Image.Image:
+    """Rasterize rectangle outline for bounds/combined paths."""
+    canvas = Image.new("1", (geometry["burn_width_px"], geometry["burn_height_px"]), 1)
+    draw = ImageDraw.Draw(canvas)
+    draw.rectangle(
+        geometry["rect"],
+        outline=0,
+        width=geometry["border_width"],
+    )
+    return canvas
+
+
 def _render_job_image(job: dict, job_config: dict) -> Image.Image:
     """Render a burn image from job metadata (image/bounds/combined)."""
     render_spec = job_config.get("render_spec", {})
@@ -1867,36 +1939,8 @@ def _render_job_image(job: dict, job_config: dict) -> Image.Image:
         # Keep source untouched; driver pipeline normalizes to burn format.
         return source_img
 
-    material = job.get("material", {})
-    target = material.get("target", {})
-    target_width_mm = float(target.get("width_mm", 0))
-    target_height_mm = float(target.get("height_mm", 0))
-    if target_width_mm <= 0 or target_height_mm <= 0:
-        raise ValueError("Target object dimensions required for bounds/combined modes")
-
-    shape_width_px = int(round(target_width_mm / K6Constants.RESOLUTION_MM_PER_PX))
-    shape_height_px = int(round(target_height_mm / K6Constants.RESOLUTION_MM_PER_PX))
-    burn_width_px = min(shape_width_px, K6_MAX_WIDTH)
-    burn_height_px = min(shape_height_px, K6_MAX_HEIGHT)
-    border_width = safe_int(render_spec.get("border_width", 3), "border_width", 1, 10)
-
-    canvas = Image.new("1", (burn_width_px, burn_height_px), 1)
-    draw = ImageDraw.Draw(canvas)
-
-    # Rectangle centered on burn canvas; overflow is clipped intentionally.
-    obj_x = (burn_width_px - shape_width_px) / 2
-    obj_y = (burn_height_px - shape_height_px) / 2
-    margin = border_width / 2
-    draw.rectangle(
-        (
-            obj_x + margin,
-            obj_y + margin,
-            obj_x + shape_width_px - border_width,
-            obj_y + shape_height_px - border_width,
-        ),
-        outline=0,
-        width=border_width,
-    )
+    geometry = _job_shape_geometry(job, render_spec)
+    canvas = _rasterize_outline_canvas(geometry)
 
     if mode == "bounds":
         return canvas
@@ -1904,12 +1948,57 @@ def _render_job_image(job: dict, job_config: dict) -> Image.Image:
     if mode == "combined":
         _, _, image_offset_x_px, image_offset_y_px = _get_layout_pixels(job)
         source_bw = source_img.convert("1")
-        img_x = int(round((burn_width_px / 2) + image_offset_x_px - (source_bw.width / 2)))
-        img_y = int(round((burn_height_px / 2) + image_offset_y_px - (source_bw.height / 2)))
+        img_x = int(round((geometry["burn_width_px"] / 2) + image_offset_x_px - (source_bw.width / 2)))
+        img_y = int(round((geometry["burn_height_px"] / 2) + image_offset_y_px - (source_bw.height / 2)))
         canvas.paste(source_bw, (img_x, img_y))
         return canvas
 
     raise ValueError(f"Unknown render_spec mode: {mode}")
+
+
+def _build_combined_vector_points(job: dict, job_config: dict) -> Optional[dict]:
+    """Build vector point cloud for combined mode outline."""
+    render_spec = job_config.get("render_spec", {})
+    if render_spec.get("mode") != "combined":
+        return None
+    if not parse_bool(render_spec.get("vector_mixed", True)):
+        return None
+
+    import numpy as np
+
+    geometry = _job_shape_geometry(job, render_spec)
+    vector_canvas = _rasterize_outline_canvas(geometry)
+    black = np.array(vector_canvas, dtype=np.uint8) == 0
+    ys, xs = np.where(black)
+    if xs.size == 0:
+        return None
+
+    points = [(int(x), int(y)) for x, y in zip(xs.tolist(), ys.tolist())]
+    return {
+        "points": points,
+        "vector_width": geometry["burn_width_px"],
+        "vector_height": geometry["burn_height_px"],
+    }
+
+
+def _encode_vector_points_for_bbox(
+    points: list[tuple[int, int]],
+    bbox: tuple[int, int, int, int],
+) -> tuple[bytes, int, int, int]:
+    """Encode vector points inside bbox as x_lo,x_hi,y_lo,y_hi records."""
+    x0, y0, x1, y1 = bbox
+    width = (x1 - x0) + 1
+    height = (y1 - y0) + 1
+    out = bytearray()
+    count = 0
+    for px, py in points:
+        if px < x0 or px > x1 or py < y0 or py > y1:
+            continue
+        lx = px - x0
+        ly = py - y0
+        out.extend((lx & 0xFF, (lx >> 8) & 0xFF, ly & 0xFF, (ly >> 8) & 0xFF))
+        count += 1
+    return bytes(out), count, width, height
 
 
 def _resolve_job_center(job: dict, job_config: dict) -> tuple[Optional[int], Optional[int]]:
@@ -1930,6 +2019,103 @@ def _resolve_job_center(job: dict, job_config: dict) -> tuple[Optional[int], Opt
             int(round(material_center_y_px + image_offset_y_px)),
         )
     return None, None
+
+
+def _contiguous_true_ranges(flags: list[bool]) -> list[tuple[int, int]]:
+    """Return inclusive index ranges where flags are True."""
+    ranges: list[tuple[int, int]] = []
+    start: Optional[int] = None
+    for idx, value in enumerate(flags):
+        if value and start is None:
+            start = idx
+        elif not value and start is not None:
+            ranges.append((start, idx - 1))
+            start = None
+    if start is not None:
+        ranges.append((start, len(flags) - 1))
+    return ranges
+
+
+def _build_transmittable_bands(
+    image: Image.Image,
+    center_x: int,
+    center_y: int,
+) -> list[dict]:
+    """Prepare one or more burn bands that avoid all-zero DATA chunks.
+
+    The K6 firmware rejects fully blank DATA chunks with 0x08. If an image has
+    long blank row runs (common with bounds-only or whitespace-heavy content),
+    split into contiguous non-empty row bands and trim each band's columns.
+    Center coordinates are adjusted so each band burns at the original position.
+    """
+    import numpy as np
+
+    gray = np.array(image.convert("L"), dtype=np.uint8)
+    if gray.size == 0:
+        return []
+
+    ink = gray < 128  # black pixels that should burn
+    if not bool(ink.any()):
+        return []
+
+    height, width = ink.shape
+    bytes_per_line = (width + 7) // 8
+    row_has_ink = ink.any(axis=1)
+
+    # Detect longest blank-row run to estimate all-zero chunk risk.
+    max_blank_run = 0
+    current_blank = 0
+    for has_ink in row_has_ink.tolist():
+        if has_ink:
+            max_blank_run = max(max_blank_run, current_blank)
+            current_blank = 0
+        else:
+            current_blank += 1
+    max_blank_run = max(max_blank_run, current_blank)
+
+    # If no all-zero chunk risk, keep a single band (no extra segmentation).
+    if max_blank_run * bytes_per_line < 1900:
+        return [
+            {
+                "image": image,
+                "center_x": center_x,
+                "center_y": center_y,
+                "bbox": (0, 0, width - 1, height - 1),
+            }
+        ]
+
+    bands: list[dict] = []
+    row_ranges = _contiguous_true_ranges(row_has_ink.tolist())
+    for y0, y1 in row_ranges:
+        band_ink = ink[y0 : y1 + 1, :]
+        col_has_ink = band_ink.any(axis=0)
+        col_indices = np.flatnonzero(col_has_ink)
+        if col_indices.size == 0:
+            continue
+
+        x0 = int(col_indices[0])
+        x1 = int(col_indices[-1])
+        band_img = image.crop((x0, y0, x1 + 1, y1 + 1))
+        band_w, band_h = band_img.size
+
+        # Preserve absolute placement by shifting center from original image.
+        band_center_x = int(
+            round(center_x + (x0 + (band_w / 2.0) - (width / 2.0)))
+        )
+        band_center_y = int(
+            round(center_y + (y0 + (band_h / 2.0) - (height / 2.0)))
+        )
+
+        bands.append(
+            {
+                "image": band_img,
+                "center_x": band_center_x,
+                "center_y": band_center_y,
+                "bbox": (x0, y0, x1, y1),
+            }
+        )
+
+    return bands
 
 
 @app.route("/api/reports/summary", methods=["POST"])
@@ -2095,10 +2281,13 @@ def job_preview():
                 raise ValueError(f"No render_spec or image_data in burn job: {name}")
 
             center_x, center_y = _resolve_job_center(job, config)
+            mixed_vector = _build_combined_vector_points(job, config)
+            vector_points = len(mixed_vector["points"]) if mixed_vector else 0
+            vector_bytes = vector_points * 4
 
             # Lightweight protocol estimate for debug visibility.
             bytes_per_line = (img.width + 7) // 8
-            total_data_bytes = bytes_per_line * img.height
+            total_data_bytes = (bytes_per_line * img.height) + vector_bytes
             total_chunks = (total_data_bytes + 1899) // 1900
             estimated_commands = 1 + 1 + 2 + total_chunks + 2  # framing+header+connects+data+inits
 
@@ -2115,6 +2304,8 @@ def job_preview():
                 "estimate": {
                     "bytes_per_line": bytes_per_line,
                     "total_data_bytes": total_data_bytes,
+                    "vector_points": vector_points,
+                    "vector_bytes": vector_bytes,
                     "total_chunks": total_chunks,
                     "estimated_commands": estimated_commands,
                 },
@@ -2142,6 +2333,11 @@ def job_burn():
     """
     try:
         _ensure_device_connected(auto_connect=True)
+
+        # Re-home before queued burn jobs to ensure deterministic start state.
+        emit_progress("setup", 0, "Homing device before burn jobs")
+        if not k6_service.home():
+            logger.warning("Pre-burn HOME failed; continuing with job execution")
         
         # Clear cancel flag
         global burn_cancel_event
@@ -2169,9 +2365,7 @@ def job_burn():
         run_id = str(uuid4())
         
         for job_name, job_config in enabled_jobs.items():
-            # Save rendered image to temp file
             timestamp = file_timestamp()
-            temp_path = DATA_DIR / f"job_{job_name}_{timestamp}.png"
 
             try:
                 # Render from metadata when available; fallback to legacy image_data.
@@ -2182,52 +2376,124 @@ def job_burn():
                 else:
                     raise ValueError("No render_spec or image_data in job config")
 
-                rendered_img.save(temp_path)
-
                 # Extract parameters
                 power = safe_int(job_config.get("power", 1000), f"{job_name}.power", 0, 1000)
                 depth = safe_int(job_config.get("depth", 100), f"{job_name}.depth", 1, 255)
                 center_x, center_y = _resolve_job_center(job, job_config)
-                
+                resolved_center_x = center_x if center_x is not None else (rendered_img.width // 2) + K6_CENTER_X_OFFSET
+                resolved_center_y = center_y if center_y is not None else (rendered_img.height // 2)
+                mixed_vector = _build_combined_vector_points(job, job_config)
+                if mixed_vector:
+                    logger.info(
+                        "Job %s mixed mode enabled: %d outline points",
+                        job_name,
+                        len(mixed_vector["points"]),
+                    )
+
+                bands = _build_transmittable_bands(
+                    rendered_img,
+                    resolved_center_x,
+                    resolved_center_y,
+                )
+                if not bands:
+                    raise ValueError(f"Rendered job {job_name} contains no burnable pixels")
+
                 emit_progress("start", 0, f"Starting job: {job_name}")
 
-                response, status_code = _run_burn_with_csv(
-                    image_path=str(temp_path),
-                    power=power,
-                    depth=depth,
-                    center_x=center_x,
-                    center_y=center_y,
-                    csv_prefix=f"job_{job_name}",
-                    job_id=job_name,
-                    dry_run_override=effective_dry_run,
-                    setup_message=f"Initializing job {job_name}",
-                    complete_message_template="{total_time:.1f}s",
-                    emit_error=False,
-                )
+                total_time = 0.0
+                total_chunks = 0
+                total_vector_points = 0
+                csv_logs: list[str] = []
+                last_error = ""
+                success = True
 
-                success = status_code == 200 and response.get("success", False)
+                if len(bands) > 1:
+                    logger.info(
+                        "Job %s split into %d burn bands to avoid blank DATA chunks",
+                        job_name,
+                        len(bands),
+                    )
+
+                for band_idx, band in enumerate(bands, start=1):
+                    band_temp_path = DATA_DIR / f"job_{job_name}_{timestamp}_b{band_idx}.png"
+                    vector_payload = b""
+                    vector_point_count = 0
+                    vector_width = 0
+                    vector_height = 0
+                    if mixed_vector:
+                        vector_payload, vector_point_count, vector_width, vector_height = _encode_vector_points_for_bbox(
+                            mixed_vector["points"],
+                            band["bbox"],
+                        )
+
+                    try:
+                        band["image"].save(band_temp_path)
+                        response, status_code = _run_burn_with_csv(
+                            image_path=str(band_temp_path),
+                            power=power,
+                            depth=depth,
+                            center_x=band["center_x"],
+                            center_y=band["center_y"],
+                            csv_prefix=f"job_{job_name}_b{band_idx}",
+                            job_id=f"{job_name}_b{band_idx}",
+                            dry_run_override=effective_dry_run,
+                            setup_message=f"Initializing job {job_name} ({band_idx}/{len(bands)})",
+                            complete_message_template=None,
+                            emit_error=False,
+                            vector_payload=vector_payload,
+                            vector_width=vector_width if vector_point_count > 0 else 0,
+                            vector_height=vector_height if vector_point_count > 0 else 0,
+                            vector_power=power if vector_point_count > 0 else 0,
+                            vector_depth=depth if vector_point_count > 0 else 0,
+                            vector_point_count=vector_point_count,
+                        )
+                    finally:
+                        band_temp_path.unlink(missing_ok=True)
+
+                    band_success = status_code == 200 and response.get("success", False)
+                    if response.get("csv_log"):
+                        csv_logs.append(response["csv_log"])
+                    total_time += float(response.get("total_time", 0) or 0)
+                    total_chunks += int(response.get("chunks", 0) or 0)
+                    total_vector_points += vector_point_count
+
+                    if not band_success:
+                        success = False
+                        last_error = response.get("error", response.get("message", "Unknown error"))
+                        break
+
+                message = ""
+                if success:
+                    message = f"{job_name} complete"
+                    if len(bands) > 1:
+                        message += f" ({len(bands)} bands)"
+                else:
+                    message = last_error
+
                 results.append({
                     "job": job_name,
                     "success": success,
-                    "message": response.get("message", ""),
-                    "total_time": response.get("total_time", 0),
-                    "chunks": response.get("chunks", 0),
-                    "csv_log": response.get("csv_log"),
-                    "run_id": response.get("run_id", run_id),
-                    "center_x": center_x,
-                    "center_y": center_y,
+                    "message": message,
+                    "total_time": round(total_time, 3),
+                    "chunks": total_chunks,
+                    "csv_log": csv_logs[0] if csv_logs else None,
+                    "csv_logs": csv_logs,
+                    "run_id": run_id,
+                    "center_x": resolved_center_x,
+                    "center_y": resolved_center_y,
+                    "bands": len(bands),
+                    "vector_points": total_vector_points,
                     "render_mode": job_config.get("render_spec", {}).get("mode", "image_data"),
                 })
 
                 if not success:
-                    err_msg = response.get("error", response.get("message", "Unknown error"))
+                    err_msg = message or "Unknown error"
                     emit_progress("error", 0, f"{job_name} failed: {err_msg}")
                     break  # Stop on first failure
                 else:
                     emit_progress("complete", 100, f"{job_name} complete")
-                    
             finally:
-                temp_path.unlink(missing_ok=True)
+                pass
         
         # Check if all succeeded
         all_success = all(r["success"] for r in results)

@@ -72,7 +72,7 @@ endif::flag-book[]
 * [x] Hardware testing (raster burns with depth=10, power=1000 defaults)
 * [x] Vector-only mode validation on K6
 * [x] Calibrate burn completion timeout: Fixed serial timeout corruption, increased idle timeout to 90s, changed max timeout to 5× estimate with proper exit reason tracking
-* [x] Library refactoring: Extracted protocol into docker-wainlux/docker/k6/ package
+* [x] Library refactoring: Extracted protocol into docker/docker-wainlux/k6/ package
 * [x] Transport abstraction: SerialTransport + MockTransport for testing
 * [x] Exception-based error handling (K6Error, K6TimeoutError, K6DeviceError)
 * [x] Unit test suite: 34 tests covering protocol, driver, CSV logging

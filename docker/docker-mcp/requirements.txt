@@ -1,0 +1,8 @@
+# Keep pydantic + pydantic-core on an ARMv6 wheel-available pair.
+pydantic==2.11.7
+pydantic-core==2.33.2
+mcp>=1.0.0
+uvicorn>=0.27.0
+starlette>=0.36.0
+sse-starlette>=1.8.0
+httpx>=0.27.0  # HTTP client for MCP -> Flask API calls

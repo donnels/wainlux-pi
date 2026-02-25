@@ -22,7 +22,12 @@ Test and utility scripts for K6 protocol.
 
 == Usage
 
+`deploy_to_pi.sh`:: Deploy to Pi Zero W. Syncs code, builds, starts containers.
+`deploy_to_steamdeck.sh`:: Deploy locally on Steam Deck. Mock mode, no hardware.
+`quick_deploy.sh`:: Quick deploy to Pi. Assumes SSH keys configured.
+`test_docs.sh`:: Validate all AsciiDoc files render correctly standalone and as includes.
 `k6_burn_image.py`:: Burn image to K6. Complete protocol sequence. Generates CSV stats automatically.
+`test_raw_data_patterns.py`:: Raw-stage DATA packet probe (blank/full/single-pixel/mixed/oversize patterns).
 `generate_statistics_graphs.py`:: Generate PNG graphs from CSV stats (throughput, timeline, progress).
 `generate_timing_diagram.py`:: Generate PlantUML timing diagrams from CSV stats.
 `generate_qr_wifi.py`:: Generate WiFi QR codes and alignment boxes for credit card sized bamboo blanks.
@@ -30,10 +35,39 @@ Test and utility scripts for K6 protocol.
 
 == Run
 
+=== Deployment
+
+[source,bash]
+----
+# Deploy to Pi Zero W
+PI_HOST=user@pi-ip ./deploy_to_pi.sh
+
+# Quick deploy (assumes SSH configured)
+PI_HOST=user@pi-ip ./quick_deploy.sh
+
+# Deploy locally on Steam Deck (mock mode)
+./deploy_to_steamdeck.sh
+----
+
+=== Documentation Testing
+
+[source,bash]
+----
+# Test all AsciiDoc files for rendering consistency
+./test_docs.sh
+----
+
+Requires podman. Uses asciidoctor/docker-asciidoctor container image.
+
+=== K6 Protocol Testing
+
 [source,bash]
 ----
 # Burn image (generates stat-YY-MM-DD-HH-MM.csv and stat-YY-MM-DD-HH-MM.json automatically)
 ./k6_burn_image.py image.png --power 1000 --depth 10
+
+# Probe raw DATA ACK/error behavior (no full UI/job workflow required)
+./test_raw_data_patterns.py --base-url http://piz-k6:8080
 
 # Replay previous burn with saved config
 ./k6_burn_image.py --config stat-26-01-22-11-35.json

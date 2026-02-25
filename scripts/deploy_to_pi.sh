@@ -5,7 +5,7 @@ set -euo pipefail
 
 PI_HOST="${PI_HOST:-user@pi-ip}"
 PI_DIR="${PI_DIR:-~/wainlux-pi}"
-DOCKER_DIR="docker-wainlux"
+DOCKER_DIR="docker"
 
 echo "=== Wainlux K6 Docker Deployment ==="
 echo "Target: ${PI_HOST}:${PI_DIR}"
@@ -15,6 +15,7 @@ echo
 echo "[1/5] Syncing code to Pi..."
 tar czf /tmp/wainlux-deploy.tar.gz \
   --exclude='.git' \
+  --exclude='backup' \
   --exclude='venv' \
   --exclude='__pycache__' \
   --exclude='*.pyc' \
@@ -28,7 +29,7 @@ ssh "${PI_HOST}" << EOF
   cd ${PI_DIR}
   tar xzf /tmp/wainlux-deploy.tar.gz 2>/dev/null || tar xzf /tmp/wainlux-deploy.tar.gz --warning=no-timestamp
   rm /tmp/wainlux-deploy.tar.gz
-  mkdir -p docker-wainlux/data
+  mkdir -p docker/docker-wainlux/data
   echo "Sync complete"
 EOF
 rm /tmp/wainlux-deploy.tar.gz

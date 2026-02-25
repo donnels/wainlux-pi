@@ -169,8 +169,14 @@ class K6CommandBuilder:
         power: int = 1000,
         center_x: Optional[int] = None,
         center_y: Optional[int] = None,
+        vector_width: int = 0,
+        vector_height: int = 0,
+        vector_payload_bytes: int = 0,
+        vector_power: int = 0,
+        vector_depth: int = 0,
+        vector_point_count: int = 0,
     ) -> K6Command:
-        """Build JOB_HEADER (0x23) for raster-only burn.
+        """Build JOB_HEADER (0x23) for raster or mixed raster+vector burn.
         
         Configures burn parameters and positioning.
         """
@@ -182,7 +188,7 @@ class K6CommandBuilder:
         if center_x is None:
             center_x = (width // 2) + 67
         if center_y is None:
-            center_y = 760  # Center of 1520px work area
+            center_y = height // 2  # image-centered like driver
         
         # Build 38-byte header
         hdr = bytearray(38)
@@ -200,8 +206,9 @@ class K6CommandBuilder:
             hdr[idx + 2] = (val >> 8) & 0xFF
             hdr[idx + 3] = val & 0xFF
         
-        # Packet count heuristic
-        param1 = (total_size // 4094) + 1
+        # Packet count tracks full DATA stream (raster + vendor 0x21 offset + vector).
+        payload_for_count = total_size + 33 + max(vector_payload_bytes, 0)
+        param1 = (payload_for_count // 4094) + 1
         put_u16_be(3, param1)
         hdr[5] = 0x01
         
@@ -210,21 +217,30 @@ class K6CommandBuilder:
         put_u16_be(10, 33)  # Unknown constant
         put_u16_be(12, power)
         put_u16_be(14, depth)
-        put_u16_be(16, 0)  # vector_w
-        put_u16_be(18, 0)  # vector_h
-        put_u32_be(20, total_size)
-        put_u16_be(24, 0)  # vector_power
-        put_u16_be(26, 0)  # vector_depth
-        put_u32_be(28, 0)  # point_count
+        put_u16_be(16, max(0, vector_width))
+        put_u16_be(18, max(0, vector_height))
+        put_u32_be(20, total_size + 33)  # vendor observed adds 33
+        put_u16_be(24, max(0, vector_power))
+        put_u16_be(26, max(0, vector_depth))
+        put_u32_be(28, max(0, vector_point_count))
         put_u16_be(32, center_x)
         put_u16_be(34, center_y)
         hdr[36] = 1  # quality
         hdr[37] = 0x00
         
+        vector_desc = ""
+        if vector_point_count > 0:
+            vector_desc = (
+                f" vec={vector_width}×{vector_height}"
+                f" vpts={vector_point_count}"
+            )
         return K6Command(
             opcode=K6Opcode.JOB_HEADER,
             payload=bytes(hdr),
-            description=f"JOB_HEADER {width}×{height} power={power} depth={depth} @ ({center_x}, {center_y})",
+            description=(
+                f"JOB_HEADER {width}×{height} power={power} depth={depth}"
+                f"{vector_desc} @ ({center_x}, {center_y})"
+            ),
             expect_ack=False,  # Device responds with HEARTBEAT, not ACK
             timeout=10.0,
             phase="setup"
@@ -264,7 +280,7 @@ class K6CommandBuilder:
     def build_init(cls, number: int = 1) -> K6Command:
         """Build INIT (0x24) command.
         
-        Sent 2x after burn. Device responds with status frames (FF FF 00 XX).
+        Sent once after burn (vendor observed). Device responds with status frames (FF FF 00 XX).
         """
         payload = bytes([0x24, 0x00, 0x0B, 0x00] + [0x00] * 7)
         return K6Command(

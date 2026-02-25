@@ -30,7 +30,7 @@ Quick guide to using this repository.
 
 [source,bash]
 ----
-cd docker-wainlux
+cd docker
 docker compose build
 docker compose up -d
 ----
@@ -45,7 +45,7 @@ Test without K6 connected:
 
 [source,bash]
 ----
-cd docker-wainlux
+cd docker
 docker compose -f compose-dev.yaml up -d
 ----
 
@@ -76,11 +76,11 @@ Check title bar for current mode: "Mode: MOCK | DRY-RUN | VERBOSE"
 
 === Read Code
 
-* link:docker-wainlux/docker/app/k6.py[K6 Driver] - Protocol
-* link:docker-wainlux/docker/app/main.py[Flask App] - API
-* link:docker-wainlux/docker/templates/index.html[Web UI] - Interface
+* link:docker/docker-wainlux/k6/driver.py[K6 Driver] - Protocol
+* link:docker/docker-wainlux/app/main.py[Flask App] - API
+* link:docker/docker-wainlux/templates/index.html[Web UI] - Interface
 
-See link:docker-wainlux/docker/README.adoc[App README].
+See link:docker/docker-wainlux/README.adoc[App README].
 
 === Generate Diagrams
 
@@ -145,7 +145,7 @@ cd wainlux-pi
 plantuml images/*.plantuml
 
 # Build container
-cd docker-wainlux && docker compose build
+cd docker && docker compose build
 
 # Run container
 docker compose up -d

@@ -6,7 +6,9 @@ Accepted
 
 == Context
 
-Single Pi Zero W. One Docker container. Need deployment automation.
+Single Pi Zero W. One required Docker container on Pi (laser API + driver).
+MCP may run in a separate container on another host.
+Need deployment automation.
 Others may deploy this. Keep it simple.
 
 Options considered:
@@ -106,6 +108,7 @@ All use standard tools: `ssh`, `scp`, `tar`, `docker`.
 
 == Notes
 
-One Pi. One container. One person. Bash wins.
+One Pi. One required container. One person. Bash wins.
+MCP is optional and decoupled.
 
 IaC for fleets, not singles.

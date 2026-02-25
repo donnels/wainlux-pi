@@ -52,7 +52,7 @@ See <<doing-installation.adoc#,Installation and Setup>> for detailed installatio
 
 [source,bash]
 ----
-cd docker-wainlux
+cd docker
 docker compose build
 docker compose up -d
 ----

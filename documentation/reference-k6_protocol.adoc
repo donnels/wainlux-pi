@@ -129,7 +129,7 @@ image::../images/k6-prot-rx-08-error.svg[K6 Error Response,align="center"]
 .Data chunk timing sequence
 image::data-chunk-timing.png[Data chunk timing showing ACK responses and 100ms pauses]
 
-Each data chunk (opcode `0x23`) requires ACK `0x09` before sending next chunk. 100ms pause after motion commands.
+Each data chunk (opcode `0x22`) requires ACK `0x09` before sending next chunk. 100ms pause after motion commands.
 
 === USB Serial Setup
 
@@ -150,21 +150,12 @@ ser = serial.Serial(
 * Binary protocol (not text-based)
 * Checksum: see <<Checksum Algorithm>>
 
-=== Vector vs Raster
-The first "vector" test of a small circle went well *AND* it's clear that the circle was burnt line by line (raster) and *not* as a vector (continuous line).
+=== Raster and Vector (mixed supported)
 
-The first raster tests also went well and also went line by line.
-
-Vector mode on the K6 does not draw continuous lines.
-It burns line-by-line. Same as raster.
-You send point coordinates. The device converts them to a bitmap. Then it burns the bitmap. Horizontally. Line by line.
-The only difference: data format. Vector sends x,y pairs. Raster sends pixels. Both burn the same way.
-Why use vector? Fewer bytes for simple shapes. That's all.
-Vector on K6 = vector-defined raster.
-
-==== Raster or Vector. Not both.
-Each JOB_HEADER command specifies either raster or vector parameters. Not both.
-The header sets the mode. One mode per job. That's the limit.
+- Burn engine is raster; vectors are sent as point coordinates. Device rasterizes both.
+- Mixed jobs are supported: raster bytes first, then optional vector point pairs (little-endian x,y) appended in the same DATA stream; one JOB_HEADER covers both.
+- Vector fields in the header (vector size/power/depth/count) must be set when points are present; otherwise zeroed for raster-only.
+- Why vector: fewer bytes for sparse outlines or fills with separate power/depth; raster remains better for dense fills/photos.
 
 == Runtime Commands
 
@@ -330,12 +321,14 @@ Notes:
 * Device does NOT stop sending heartbeats - they continue indefinitely
 * First heartbeat arrives ~4.7s after sending JOB_HEADER
 * Proceed to next command after receiving first heartbeat
-* Parameters include width, height, position, and speed/power settings.
+* Parameters include width, height, position, speed/power, vector metadata, and payload size.
 * All multi-byte fields are *big-endian* (MSB first).
 * Raster width/height are raw pixel dimensions (no scaling applied).
-* Raster depth default = `10` (not `1`).
+* Block count (bytes 3-4) observed as `(payload_bytes + 0x21 + vector_bytes) / 0xFFE + 1`.
+* Total size (bytes 20-23) observed as `payload_bytes + 0x21` (add vector bytes when present).
+* Vector fields (w/h/power/depth/count) are set when point data is present; zeroed for raster-only jobs.
 * Center offsets use +67 formula (see <<Job Header Parameters>>).
-* Work area observed: 80x80mm, resolution 0.075 mm/pixel ⇒ max ≈ `1067 x 1067` px.
+* Work area observed: 80x80mm, resolution 0.05 mm/pixel ⇒ max 1600 x 1600px.
 
 See <<Job Header Parameters>> for complete byte-level mapping.
 
@@ -349,9 +342,9 @@ image::../images/k6-prot-tx-22-data.svg[K6 Job Data,align="center"]
 //include::../images/k6-prot-tx-22-data.edn[]
 //----
 
-Chunk size: 1900 bytes of payload.
+Chunk size: 0x76c (1900) bytes of payload.
 
-Packet layout (per chunk):
+Packet layout (per chunk) (raster bytes, then optional vector point bytes when present):
 
 * `byte[0] = 0x22`
 * `byte[1] = length >> 8`
@@ -363,14 +356,24 @@ Observed retry behavior: chunk is retransmitted if ACK not received.
 
 [WARNING]
 ====
-**Device rejects raster data with excessive blank lines (error 0x08).**
+**Device rejects fully blank DATA chunks (error 0x08).**
 
 Test results (28-Jan-2026):
 
 * Sending 1600x1600 image with 1400+ blank lines at top → device returns error 0x08
 * Sending only non-blank region (e.g., 1600x210 for bottom content) → success
 
-**Workaround:** Crop images to only the region with content before sending. Use center_y coordinate in JOB_HEADER to position at bottom/top as needed.
+Raw protocol check (22-Feb-2026, firmware `v9.4.1`):
+
+* All-zero DATA payload (`0x22`, len `0x004c`, 72 bytes all `00`) -> response `0x08` (error)
+* Same packet with one non-zero byte in payload (example first byte `FF`) -> response `0x09` (ACK)
+* In repeated tests, blank DATA could return multiple error bytes (`08 08 08 08`)
+
+**Workaround:** Ensure no transmitted DATA chunk is entirely zero.
+
+* Crop/trim white margins before packing (top/bottom/left/right)
+* Preflight packed bytes and detect `all(chunk_byte == 0)` per transmitted chunk
+* Reposition using JOB_HEADER center (`center_x`, `center_y`) after cropping
 
 * For bottom positioning: `center_y = 1600 - (height / 2)`
 * For center positioning: `center_y = 800` (middle of 1600px work area)
@@ -394,7 +397,7 @@ image::../images/k6-prot-tx-24-init.svg[K6 Init Command,align="center"]
 //include::../images/k6-prot-tx-24-init.edn[]
 //----
 
-11-byte packet, sent twice after job data:
+11-byte packet. Observed sequence: sent twice after job data with ~200 ms then ~500 ms spacing:
 
 * `byte[0] = 0x24`
 * `byte[1] = 0x00`

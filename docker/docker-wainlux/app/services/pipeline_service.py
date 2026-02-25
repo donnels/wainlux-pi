@@ -13,9 +13,12 @@ from typing import Dict, Optional
 import json
 import numpy as np
 from PIL import Image
+import logging
 
 from k6.commands import K6CommandBuilder, CommandSequence
 from utils.timestamps import file_timestamp, iso_timestamp
+
+logger = logging.getLogger(__name__)
 
 
 class PipelineService:
@@ -73,16 +76,17 @@ class PipelineService:
         # Convert to NumPy for fast processing
         pixels = np.array(img, dtype=np.uint8)
 
-        # Threshold: 0=burn (black), 1=skip (white)
-        binary = (pixels >= threshold).astype(np.uint8)
+        # Threshold: 1=burn (black), 0=skip (white)
+        # Must match driver/protocol path where DATA bit=1 means laser ON.
+        binary = (pixels < threshold).astype(np.uint8)
         
-        # Invert if requested (swap 0↔1)
+        # Invert if requested (swap burn/skip)
         if invert:
             binary = 1 - binary
 
         # Count pixels
-        black_pixels = int(np.sum(binary == 0))
-        white_pixels = int(np.sum(binary == 1))
+        black_pixels = int(np.sum(binary == 1))
+        white_pixels = int(np.sum(binary == 0))
 
         # Pad width to 8px boundary for bit packing
         original_width = width
@@ -92,7 +96,7 @@ class PipelineService:
                 binary,
                 ((0, 0), (0, pad_width)),
                 mode="constant",
-                constant_values=1  # white (skip)
+                constant_values=0  # white (skip)
             )
             width = binary.shape[1]
 
@@ -109,14 +113,27 @@ class PipelineService:
         processed_path = output_dir / f"processed_{timestamp}.npy"
         np.save(processed_path, packed)
 
-        # Generate preview (1-bit visualization)
-        preview_img = Image.fromarray((binary * 255).astype(np.uint8), mode="L")
+        # Generate preview (1-bit visualization): burn bits as black pixels.
+        preview_img = Image.fromarray(((1 - binary) * 255).astype(np.uint8), mode="L")
         preview_path = output_dir / f"processed_{timestamp}.png"
         preview_img.save(preview_path)
 
         # Stats
         total_pixels = black_pixels + white_pixels
         burn_pct = (black_pixels / total_pixels * 100) if total_pixels > 0 else 0
+        logger.info(
+            "Pipeline process_image: %s | %dx%d -> padded_w=%d | "
+            "threshold=%d invert=%s | black_pixels=%d white_pixels=%d burn_pct=%.2f | polarity=black->burn",
+            input_path,
+            original_width,
+            height,
+            width,
+            threshold,
+            invert,
+            black_pixels,
+            white_pixels,
+            burn_pct,
+        )
 
         return {
             "processed_path": str(processed_path),
@@ -141,7 +158,13 @@ class PipelineService:
         depth: int,
         center_x: int,
         center_y: int,
-        output_dir: Path
+        output_dir: Path,
+        vector_payload: bytes = b"",
+        vector_width: int = 0,
+        vector_height: int = 0,
+        vector_power: int = 0,
+        vector_depth: int = 0,
+        vector_point_count: int = 0,
     ) -> Dict:
         """Build command sequence from processed data (Step 3).
 
@@ -156,6 +179,12 @@ class PipelineService:
             center_x: Center X position (pixels)
             center_y: Center Y position (pixels)
             output_dir: Directory for output files
+            vector_payload: Optional packed vector point bytes (x_lo, x_hi, y_lo, y_hi)
+            vector_width: Vector layer width in pixels
+            vector_height: Vector layer height in pixels
+            vector_power: Vector burn power 0-1000
+            vector_depth: Vector burn depth 1-255
+            vector_point_count: Number of vector points in payload
 
         Returns:
             {
@@ -174,6 +203,11 @@ class PipelineService:
         # Validate parameters
         power = max(0, min(1000, power))
         depth = max(1, min(255, depth))
+        vector_power = max(0, min(1000, vector_power))
+        vector_depth = max(0, min(255, vector_depth))
+        vector_payload = vector_payload or b""
+        if vector_point_count <= 0 and vector_payload:
+            vector_point_count = len(vector_payload) // 4
 
         # Load processed data
         if not Path(processed_path).exists():
@@ -190,21 +224,32 @@ class PipelineService:
         seq.add(K6CommandBuilder.build_framing())
         seq.add(K6CommandBuilder.build_job_header(
             width=width, height=height, depth=depth, power=power,
-            center_x=center_x, center_y=center_y
+            center_x=center_x, center_y=center_y,
+            vector_width=vector_width,
+            vector_height=vector_height,
+            vector_payload_bytes=len(vector_payload),
+            vector_power=vector_power,
+            vector_depth=vector_depth,
+            vector_point_count=vector_point_count,
         ))
         seq.add(K6CommandBuilder.build_connect(1))
         seq.add(K6CommandBuilder.build_connect(2))
 
         # Data chunks
-        for line_num in range(height):
-            line_data = packed[line_num].tobytes()
-            seq.add(K6CommandBuilder.build_data_packet(line_data, line_num))
+        # Match driver/protocol burn path: flatten packed bytes and send as
+        # 1900-byte DATA chunks (not one packet per raster line).
+        all_bytes = packed.tobytes() + vector_payload
+        chunk_size = K6CommandBuilder.DATA_CHUNK
+        total_chunks = (len(all_bytes) + chunk_size - 1) // chunk_size
+        for chunk_idx in range(total_chunks):
+            start = chunk_idx * chunk_size
+            end = start + chunk_size
+            chunk = all_bytes[start:end]
+            seq.add(K6CommandBuilder.build_data_packet(chunk, chunk_idx + 1))
 
-        # Finalization
+        # Finalization: INIT x2 (vendor-style post-DATA sequence)
         seq.add(K6CommandBuilder.build_init(1))
         seq.add(K6CommandBuilder.build_init(2))
-        seq.add(K6CommandBuilder.build_connect(1))
-        seq.add(K6CommandBuilder.build_connect(2))
 
         # Get stats
         sequence_stats = seq.stats
@@ -240,7 +285,14 @@ class PipelineService:
                 "power": power,
                 "depth": depth,
                 "center_x": center_x,
-                "center_y": center_y
+                "center_y": center_y,
+                "vector_enabled": bool(vector_payload),
+                "vector_width": vector_width,
+                "vector_height": vector_height,
+                "vector_power": vector_power,
+                "vector_depth": vector_depth,
+                "vector_point_count": vector_point_count,
+                "vector_payload_bytes": len(vector_payload),
             },
             "sequence": sequence_stats,
             "bounds": bounds,

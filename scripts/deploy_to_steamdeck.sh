@@ -6,8 +6,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BASE_ENGINE="${DOCKER_CMD:-podman}"
-DOCKER_DIR="${PROJECT_ROOT}/docker-wainlux"
-COMPOSE_FILE="${DOCKER_DIR}/compose-dev.yaml"
+COMPOSE_DIR="${PROJECT_ROOT}/docker"
+COMPOSE_FILE="${COMPOSE_DIR}/compose-dev.yaml"
+COMPOSE_PROD_FILE="${COMPOSE_DIR}/compose.yaml"
 
 HOST_SPAWN=""
 if [ -n "${FLATPAK_ID:-}" ] || [ -f "/.flatpak-info" ]; then
@@ -55,6 +56,131 @@ compose() {
   fi
 }
 
+port_in_use() {
+  port="$1"
+  if host_exec ss -ltnH >/dev/null 2>&1; then
+    host_exec ss -ltnH | awk -v p=":${port}" '$4 ~ p"$" {found=1} END {exit !found}'
+    return $?
+  fi
+  if host_exec sh -lc "command -v lsof >/dev/null 2>&1"; then
+    host_exec lsof -nP -iTCP:"${port}" -sTCP:LISTEN >/dev/null 2>&1
+    return $?
+  fi
+  return 1
+}
+
+port_pids() {
+  port="$1"
+  pids=""
+  if host_exec ss -ltnpH >/dev/null 2>&1; then
+    pids="$(host_exec ss -ltnpH | awk -v p=":${port}" '
+      $4 ~ p"$" {
+        while (match($0, /pid=[0-9]+/)) {
+          print substr($0, RSTART + 4, RLENGTH - 4)
+          $0 = substr($0, RSTART + RLENGTH)
+        }
+      }' | sort -u)"
+  fi
+  if [ -z "${pids}" ] && host_exec sh -lc "command -v fuser >/dev/null 2>&1"; then
+    pids="$(host_exec fuser "${port}/tcp" 2>/dev/null | tr ' ' '\n' | awk '/^[0-9]+$/')"
+  fi
+  [ -n "${pids}" ] && echo "${pids}"
+}
+
+kill_port_pids() {
+  port="$1"
+  pids="$(port_pids "${port}" || true)"
+  [ -z "${pids}" ] && return 0
+  for pid in ${pids}; do
+    host_exec kill -TERM "${pid}" >/dev/null 2>&1 || true
+  done
+  sleep 1
+  if port_in_use "${port}"; then
+    for pid in ${pids}; do
+      host_exec kill -KILL "${pid}" >/dev/null 2>&1 || true
+    done
+  fi
+}
+
+looks_like_container_port_helper() {
+  port="$1"
+  pids="$(port_pids "${port}" || true)"
+  [ -z "${pids}" ] && return 1
+  for pid in ${pids}; do
+    line="$(host_exec ps -p "${pid}" -o comm= -o args= 2>/dev/null || true)"
+    echo "${line}" | grep -Eqi 'rootlessport|podman|conmon|slirp4netns' && return 0
+  done
+  return 1
+}
+
+cleanup_wainlux_on_port() {
+  port="$1"
+  runtime=""
+  if host_exec podman ps --format '{{.ID}}' >/dev/null 2>&1; then
+    runtime="podman"
+  elif host_exec docker ps --format '{{.ID}}' >/dev/null 2>&1; then
+    runtime="docker"
+  fi
+  [ -z "${runtime}" ] && return 0
+
+  ids="$(host_exec "${runtime}" ps -a --format '{{.ID}} {{.Names}} {{.Image}} {{.Ports}}' | awk -v p=":${port}->" 'index($0, p) {line=tolower($0); if (line ~ /wainlux|k6|mcp|docker_wainlux/) print $1}')"
+  [ -z "${ids}" ] && return 0
+
+  echo "  Found Wainlux container(s) on :${port}; removing..."
+  for id in ${ids}; do
+    host_exec "${runtime}" rm -f "${id}" >/dev/null 2>&1 || true
+  done
+}
+
+looks_like_wainlux_service() {
+  port="$1"
+  host_exec sh -lc "command -v curl >/dev/null 2>&1" || return 1
+
+  if [ "${port}" = "8080" ]; then
+    host_exec curl -sS --max-time 2 "http://127.0.0.1:${port}/api/status" 2>/dev/null | grep -Eqi 'connected|mock|k6|wainlux'
+    return $?
+  fi
+
+  if [ "${port}" = "8081" ]; then
+    code="$(host_exec curl -sS --max-time 2 -o /dev/null -w '%{http_code}' "http://127.0.0.1:${port}/mcp" 2>/dev/null || true)"
+    case "${code}" in
+      200|400|401|403|404|405) return 0 ;;
+    esac
+    host_exec curl -sS --max-time 2 "http://127.0.0.1:${port}/" 2>/dev/null | grep -Eqi 'mcp|k6|wainlux'
+    return $?
+  fi
+
+  return 1
+}
+
+ensure_port_available() {
+  port="$1"
+  if ! port_in_use "${port}"; then
+    return 0
+  fi
+
+  echo "  Port ${port} is in use; checking for Wainlux containers..."
+  cleanup_wainlux_on_port "${port}"
+  if ! port_in_use "${port}"; then
+    return 0
+  fi
+
+  if looks_like_wainlux_service "${port}"; then
+    echo "  Port ${port} serves Wainlux content; terminating listener..."
+    kill_port_pids "${port}"
+  fi
+
+  if port_in_use "${port}" && looks_like_container_port_helper "${port}"; then
+    echo "  Port ${port} is held by container port helper; terminating stale listener..."
+    kill_port_pids "${port}"
+  fi
+
+  if port_in_use "${port}"; then
+    echo "ERROR: Port ${port} is still in use by a non-Wainlux service. Free it, then retry." >&2
+    exit 1
+  fi
+}
+
 echo "=== Wainlux K6 Steam Deck (Local Mock) ==="
 echo "Root: ${PROJECT_ROOT}"
 echo "Compose: ${COMPOSE_FILE}"
@@ -70,7 +196,7 @@ if [ ! -f "${COMPOSE_FILE}" ]; then
   exit 1
 fi
 
-echo "[1/5] System check (Docker/Podman)..."
+echo "[1/6] System check (Docker/Podman)..."
 if [ "${COMPOSE_MODE}" = "engine" ]; then
   host_exec "${COMPOSE_ENGINE}" --version
 else
@@ -79,27 +205,33 @@ else
 fi
 
 echo
-echo "[2/5] Preparing data directory..."
-mkdir -p "${DOCKER_DIR}/data"
+echo "[2/6] Preparing data directory..."
+mkdir -p "${COMPOSE_DIR}/docker-wainlux/data"
 
 echo
-echo "[3/5] Stopping previous stack..."
+echo "[3/6] Stopping previous stack..."
 (
-  cd "${DOCKER_DIR}"
+  cd "${COMPOSE_DIR}"
   compose -f "${COMPOSE_FILE}" down --remove-orphans || true
+  compose -f "${COMPOSE_PROD_FILE}" down --remove-orphans || true
 )
 
 echo
-echo "[4/5] Building image in mock mode (compose-dev)..."
+echo "[4/6] Ensuring required ports are available..."
+ensure_port_available 8080
+ensure_port_available 8082
+
+echo
+echo "[5/6] Building image in mock mode (compose-dev)..."
 (
-  cd "${DOCKER_DIR}"
+  cd "${COMPOSE_DIR}"
   compose -f "${COMPOSE_FILE}" build
 )
 
 echo
-echo "[5/5] Starting service and checking logs..."
+echo "[6/6] Starting service and checking logs..."
 (
-  cd "${DOCKER_DIR}"
+  cd "${COMPOSE_DIR}"
   compose -f "${COMPOSE_FILE}" up -d
   sleep 2
   compose -f "${COMPOSE_FILE}" ps
@@ -124,6 +256,6 @@ if [ "${COMPOSE_MODE}" = "engine" ]; then
 else
   COMPOSE_HINT="${COMPOSE_BIN}"
 fi
-echo "To view logs: cd ${DOCKER_DIR} && ${COMPOSE_HINT} -f ${COMPOSE_FILE} logs -f"
-echo "To stop:      cd ${DOCKER_DIR} && ${COMPOSE_HINT} -f ${COMPOSE_FILE} down"
+echo "To view logs: cd ${COMPOSE_DIR} && ${COMPOSE_HINT} -f ${COMPOSE_FILE} logs -f"
+echo "To stop:      cd ${COMPOSE_DIR} && ${COMPOSE_HINT} -f ${COMPOSE_FILE} down"
 echo

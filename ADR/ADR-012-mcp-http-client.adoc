@@ -2,7 +2,7 @@
 
 == Status
 
-Accepted
+Accepted (Updated 2026-02-13: MCP runtime decoupled from Pi)
 
 == Context
 
@@ -17,6 +17,8 @@ A dual-owner model (MCP and Flask both managing serial/device state) creates:
 
 The architecture requires one clear hardware owner while still exposing MCP as a network interface.
 
+Pi Zero W is too old for reliable builds of modern MCP Python dependencies. This is a deployment constraint, not a protocol constraint.
+
 == Decision
 
 Flask API is the single hardware owner. MCP is implemented as an HTTP client adapter to Flask.
@@ -27,6 +29,9 @@ Rules:
 * MCP tools call Flask endpoints and translate results to MCP responses.
 * MCP does not directly access serial/device manager.
 * Safety controls (for example dry-run) are request-scoped and explicit at API boundaries.
+* MCP runs in its own container on a modern 64-bit host by default.
+* Pi runs Flask API + K6 driver container only.
+* Running MCP on Pi is optional and not part of the default deployment.
 
 == Consequences
 
@@ -36,11 +41,14 @@ Rules:
 * Centralizes hardware logic and protocol behavior in one place.
 * Improves DRYness and consistency across UI/API/MCP.
 * Supports distributed operation: MCP client and Flask server can run on different hosts.
+* MCP and laser API can be upgraded independently.
+* ARMv6 dependency failures in MCP no longer block laser deployment.
 
 === Negative
 
 * MCP now depends on Flask availability and API contract stability.
 * Adds one network hop and associated failure modes (timeouts/connectivity).
+* Default Pi deployment no longer includes on-box MCP service.
 
 === Neutral
 
@@ -65,4 +73,3 @@ Rejected as primary model; it weakens interface boundaries and complicates indep
 * link:ADR-011-mcp-integration.adoc[ADR-011] - MCP as supported interface
 * link:ADR-012-pipeline-architecture.adoc[ADR-012-pipeline-architecture] - Execution pipeline model
 * link:ADR-019-distributed-architecture.adoc[ADR-019] - Distributed architecture goals
-

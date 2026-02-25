@@ -1,0 +1,30 @@
+= Wainlux K6 MCP Container
+
+Standalone MCP server container for K6 laser workflows.
+
+== Purpose
+
+Run MCP separately from the Flask/K6 runtime.
+
+* MCP HTTP/SSE server on `:8081`
+* Calls Flask API via `FLASK_API_BASE` (default `http://wainlux-k6:8080`)
+* No direct serial/device access
+
+== Files
+
+----
+docker-mcp/
+├── Dockerfile
+├── requirements.txt
+└── app/
+    └── mcp_server.py
+----
+
+== Run
+
+Use compose from `docker-wainlux/`:
+
+[source,bash]
+----
+docker compose up -d
+----

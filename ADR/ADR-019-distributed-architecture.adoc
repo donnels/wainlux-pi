@@ -1,17 +1,22 @@
 = ADR-019: Distributed Architecture Capability
-:revdate: 2026-02-05
+:revdate: 2026-02-13
 
 == Status
 
-ACCEPTED (foundation ready, not implemented)
+ACCEPTED (partly implemented)
 
 == Context
 
-Pi Zero W (512MB RAM, ARMv6 CPU) runs monolithic Flask app. NumPy image processing takes 5-10s for 1600×1600px. May need to split UI from K6 driver later.
+Pi Zero W (512MB RAM, ARMv6 CPU) runs Flask + K6 driver.
+MCP dependency stack is hard to build reliably on this hardware.
+UI split may still be needed later.
 
 == Decision
 
-Design job structure for optional distribution. Base64 image embedding (no filesystem dependencies).
+Design and run in distributed mode where needed.
+Base64 image embedding stays (no filesystem dependencies).
+MCP runs outside Pi in its own container on modern 64-bit hosts.
+Pi is API + driver by default.
 
 == Rationale
 
@@ -23,6 +28,8 @@ Design job structure for optional distribution. Base64 image embedding (no files
 
 *Migration path:* Add `/api/engrave/from-job` endpoint when required. Accept complete job JSON with embedded base64. No data model changes.
 
+*MCP decoupling:* Keep MCP off Pi now. Keep it containerized. Bring it back to Pi only with better hardware.
+
 == Consequences
 
 === Positive
@@ -30,17 +37,18 @@ Design job structure for optional distribution. Base64 image embedding (no files
 * Portable jobs (base64 embedded)
 * Future-proof (can split without breaking)
 * Reproducible (no missing files)
+* MCP remains available without blocking Pi builds
 
 === Negative
 
 * Larger payloads (~33% base64 overhead)
 * Two-step upload still required (prepare → engrave)
+* Extra service/container to operate when MCP is used
 
 === Neutral
 
-* Monolith sufficient currently
-* Distributed deployment available if Pi performance inadequate
-* Review trigger: >30s processing time on Pi Zero W
+* Frontend split is still an option, not current work
+* Review trigger remains: >30s processing time on Pi Zero W
 
 == References
 

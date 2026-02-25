@@ -6,7 +6,7 @@
 # ============================================================================
 # STAGE 1: Builder - Compile Python packages
 # ============================================================================
-FROM python:3.13-slim AS builder
+FROM python:3.11-slim AS builder
 
 # Build dependencies for numpy/Pillow compilation
 RUN apt-get update && apt-get install -y \
@@ -29,22 +29,26 @@ RUN apt-get update && apt-get install -y \
     libwebp-dev \
     zlib1g-dev \
     libgfortran5 \
+    rustc \
+    cargo \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 
 # Install Python packages to /build/venv
-COPY requirements.txt .
+COPY requirements.txt ./
 RUN python -m venv /build/venv
 ENV PATH="/build/venv/bin:$PATH"
 ENV PIP_PREFER_BINARY=1
-RUN pip install --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir -r requirements.txt
+# Use PyPI as canonical source in build stage; avoids occasional third-party hash drift.
+ENV PIP_INDEX_URL=https://pypi.org/simple
+RUN pip install --no-cache-dir -r requirements.txt
+RUN python -c "import numpy; print('numpy ok', numpy.__version__)"
 
 # ============================================================================
 # STAGE 2: Runtime - Clean image with only runtime deps
 # ============================================================================
-FROM python:3.13-slim
+FROM python:3.11-slim
 
 # Runtime dependencies (no build tools)
 RUN apt-get update && apt-get install -y \
@@ -84,8 +88,6 @@ RUN find /app -type f -name '*.pyc' -delete 2>/dev/null || true
 COPY static/ ./static/
 COPY templates/ ./templates/
 COPY settings/ ./settings/
-COPY start_services.sh ./start_services.sh
-RUN chmod +x /app/start_services.sh
 
 # Prevent Python from writing pyc files
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -94,8 +96,8 @@ ENV PYTHONUNBUFFERED=1
 # Optional: Enable mock device mode (no hardware required)
 ENV K6_MOCK_DEVICE=false
 
-# Expose ports: Flask REST API (8080), MCP HTTP/SSE (8081)
-EXPOSE 8080 8081
+# Expose Flask REST API
+EXPOSE 8080
 
-# Start Flask API + MCP HTTP server
-CMD ["/app/start_services.sh"]
+# Start Flask API
+CMD ["python3", "app/main.py"]

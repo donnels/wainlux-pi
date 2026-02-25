@@ -2,11 +2,12 @@
 
 == Status
 
-Accepted (Updated 2026-02-06: Switch to python:3.13-slim)
+Accepted (Updated 2026-02-13: Switch to python:3.11-slim for Pi runtime)
 
 == Context
 
-Deploy Flask app to Pi Zero W (ARMv6). Handle Python dependencies (Pillow, pyserial, Flask). Need Python ≥3.10 for MCP server integration.
+Deploy laser API and driver on Pi Zero W (ARMv6). Handle Python dependencies (Pillow, pyserial, Flask, NumPy).
+MCP is now deployed as a separate container on modern 64-bit hosts by default.
 
 *Deployment options:*
 * Docker containerization
@@ -24,7 +25,7 @@ Deploy Flask app to Pi Zero W (ARMv6). Handle Python dependencies (Pillow, pyser
 
 == Decision
 
-Docker with `python:3.13-slim` base (Debian trixie).
+Docker with `python:3.11-slim` base (Debian trixie).
 
 == Rationale
 
@@ -44,11 +45,11 @@ Rejected bare Python: Manual docs. Migration = rewrite.
 
 Rejected .deb: Hardest to maintain. Cross-compilation. Overkill.
 
-=== Why python:3.13-slim?
+=== Why python:3.11-slim?
 
 *ARMv6 support:* Official Python images now support ARMv6 (arm/v5 compatible). Tested on Pi Zero W.
 
-*Python 3.13:* Matches Pi host version (Raspbian trixie). Enables MCP server (requires ≥3.10).
+*Python 3.11:* Better ARMv6 wheel compatibility for core runtime dependencies.
 
 *Size:* 133MB base vs 250MB final (smaller than previous balenalib 376MB).
 
@@ -56,9 +57,9 @@ Rejected .deb: Hardest to maintain. Cross-compilation. Overkill.
 
 *Debian trixie:* Latest stable. Modern package versions.
 
-*No custom Python build:* Pre-installed Python 3.13. No compilation overhead.
+*No custom Python build:* Pre-installed Python 3.11.
 
-*Package availability:* Updated Debian packages (libtiff6, libopenblas0-pthread).
+*MCP decoupled:* Pi image no longer forced to carry newest MCP dependency chain.
 
 === Previous: balenalib (Deprecated)
 
@@ -77,9 +78,9 @@ Previously used `balenalib/raspberry-pi:bullseye` for ARMv6 support, but:
 * Dependencies isolated
 * Build reproducible
 * **Smaller image** (250MB vs 376MB)
-* **Python 3.13** (MCP compatible)
+* **Python 3.11** (stable runtime on Pi ARMv6)
 * **Official image** (better support)
-* **Matches Pi host** (both trixie)
+* **MCP decoupled** (separate container, separate lifecycle)
 
 .*Negative*
 * Docker adds complexity
@@ -87,4 +88,4 @@ Previously used `balenalib/raspberry-pi:bullseye` for ARMv6 support, but:
 * More disk space
 * Package name changes (trixie vs bullseye)
 
-*Trade-offs accepted:* Modern Python + smaller size + MCP support outweigh package name migration.
+*Trade-offs accepted:* Stable Pi runtime and clean separation of concerns outweigh host-version parity.

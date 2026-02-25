@@ -620,16 +620,19 @@ def _legacy_tool_result_to_payload(result: list[TextContent | ImageContent | Emb
 if mcp_http is not None:
     @mcp_http.tool()
     async def k6_verify_connection() -> Dict[str, Any]:
+        """Connect to the K6 device through Flask and return firmware/version status."""
         return _legacy_tool_result_to_payload(await tool_verify_connection())
 
 
     @mcp_http.tool()
     async def k6_get_status() -> Dict[str, Any]:
+        """Return current K6 status including connection, mode flags, and firmware version."""
         return _legacy_tool_result_to_payload(await tool_get_status())
 
 
     @mcp_http.tool()
     async def k6_load_image(image_name: str = "default-image.png", image_base64: str = "") -> Dict[str, Any]:
+        """Load a burn image from samples or provided base64 data and return normalized payload."""
         return _legacy_tool_result_to_payload(
             await tool_load_image({"image_name": image_name, "image_base64": image_base64})
         )
@@ -643,6 +646,7 @@ if mcp_http is not None:
         description: str = "",
         show_password: bool = False,
     ) -> Dict[str, Any]:
+        """Generate a WiFi QR image (base64 + metadata) for preview or burn workflows."""
         return _legacy_tool_result_to_payload(
             await tool_generate_qr(
                 {
@@ -666,6 +670,7 @@ if mcp_http is not None:
         center_y: Optional[int] = None,
         dry_run: bool = True,
     ) -> Dict[str, Any]:
+        """Execute a burn job through Flask with optional dry-run and center overrides."""
         return _legacy_tool_result_to_payload(
             await tool_burn_job(
                 {
@@ -683,11 +688,13 @@ if mcp_http is not None:
 
     @mcp_http.tool()
     async def k6_list_samples() -> Dict[str, Any]:
+        """List sample images available in the Flask image library."""
         return _legacy_tool_result_to_payload(await tool_list_samples())
 
 
     @mcp_http.tool()
     async def k6_set_dry_run(enabled: bool = True) -> Dict[str, Any]:
+        """Enable or disable dry-run mode in Flask settings."""
         return _legacy_tool_result_to_payload(await tool_set_dry_run({"enabled": enabled}))
 
 
@@ -700,6 +707,7 @@ if mcp_http is not None:
         settle_ms: int = 120,
         save_logs: bool = True,
     ) -> Dict[str, Any]:
+        """Send raw hex protocol bytes to K6 and return raw response diagnostics."""
         return _legacy_tool_result_to_payload(
             await tool_raw_send(
                 {
