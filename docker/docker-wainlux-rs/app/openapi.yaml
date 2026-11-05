@@ -156,6 +156,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/State'
+    delete:
+      operationId: clearIdleState
+      summary: Clear idle in-memory Pi state
+      description: Clears review, plan, outcome, and idle device handles; refuses while running. Retains the redacted run log and records the clear event.
+      responses:
+        '200':
+          description: State cleared; audit log retained
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [cleared, run_log_retained]
+                properties:
+                  cleared: {type: boolean, const: true}
+                  run_log_retained: {type: boolean, const: true}
+        '409':
+          $ref: '#/components/responses/Problem'
   /api/attempt/preview:
     get:
       operationId: getAttemptPreview

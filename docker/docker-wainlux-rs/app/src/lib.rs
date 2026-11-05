@@ -2,15 +2,7 @@
 //! Standalone laser service. Web UI and HTTP API. One machine, one job at a time.
 //! Every attempt is logged: goal first, then what the software saw, then the operator's verdict.
 //!
-//! GET  /api/machine          the machine: reach, settings, abilities
-//! GET  /api/materials        materials with their settings for this machine
-//! POST /api/jobs/preview     a job's stages and goals, nothing runs
-//! POST /api/plan             fix one goal: {step, params, material} or {job, stage}
-//! POST /api/run              run the planned attempt
-//! GET  /api/state            progress, then what the software saw
-//! POST /api/verdict          operator: {status: ok|deviation|skipped, comment}
-//! POST /api/stop             stop now, even mid-burn
-//! GET  /api/log              every attempt and verdict
+//! Complete method/path inventory: app/openapi.yaml and the API guide in README.adoc.
 
 pub mod job;
 pub mod assets;
@@ -221,6 +213,7 @@ fn handle(app: &Arc<App>, mut req: Request) {
         }
         (Method::Get, "/api/steps") => (200, steps(&app.info)),
         (Method::Get, "/api/state") => (200, state(app)),
+        (Method::Delete, "/api/state") => clear_state(app),
         (Method::Get, "/api/attempt/preview") => active_preview(app),
         (Method::Get, "/api/log") => (200, json!(read_log(app))),
         (Method::Get, "/api/pending-verdicts") => (200, json!(pending_verdicts(app))),
@@ -276,6 +269,21 @@ fn steps(i: &Info) -> Value {
 fn state(app: &App) -> Value {
     let s = app.state.lock().unwrap();
     json!({"attempt": s.attempt, "running": s.running, "progress": s.progress.map(progress_json), "band_timings": s.band_timings.iter().copied().map(progress_json).collect::<Vec<_>>(), "outcome": s.outcome, "mode": mode(app), "review_id":s.review.as_ref().map(|review| &review.id), "accepted_stages":s.review.as_ref().map(|review| &review.accepted)})
+}
+
+fn clear_state(app: &App) -> (u16, Value) {
+    let mut state = app.state.lock().unwrap();
+    if state.running {
+        return (409, json!({"error":"cannot clear Pi state while an attempt is running"}));
+    }
+    let attempt_id = state.attempt.as_ref().and_then(|attempt| attempt["id"].as_str()).map(str::to_owned);
+    *state = State::default();
+    *app.machine.lock().unwrap() = None;
+    *app.stopper.lock().unwrap() = None;
+    app.cancel_requested.store(false, Ordering::SeqCst);
+    drop(state);
+    log(app, json!({"event":"clear","attempt_id":attempt_id,"at":now()}));
+    (200, json!({"cleared":true,"run_log_retained":true}))
 }
 
 fn progress_json(progress: Progress) -> Value {
@@ -860,5 +868,8 @@ fn read_log(app: &App) -> Vec<Value> {
 
 fn pending_verdicts(app: &App) -> Vec<Value> {
     let entries = read_log(app);
-    entries.iter().filter(|entry| entry["event"] == "ran" && !entries.iter().any(|verdict| verdict["event"] == "verdict" && verdict["id"] == entry["attempt"]["id"])).cloned().collect()
+    entries.iter().filter(|entry| entry["event"] == "ran" && !entries.iter().any(|record| {
+        (record["event"] == "verdict" && record["id"] == entry["attempt"]["id"])
+            || (record["event"] == "clear" && record["attempt_id"] == entry["attempt"]["id"])
+    })).cloned().collect()
 }

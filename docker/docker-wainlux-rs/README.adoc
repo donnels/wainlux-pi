@@ -7,17 +7,31 @@ Standalone Pi Zero service. HTTP clients submit content; the operator reviews ex
 `GET /api` serves this contract. The browser and external clients use the same endpoints.
 `GET /openapi.yaml` serves the OpenAPI 3.1 contract. `GET /docs` serves bundled Swagger UI 5.34.1; Try It Out is enabled for GET only. License notices are in `app/assets/swagger-ui/`.
 
-== Discover
+== Routes
 
-[cols="1,3",options="header"]
+This inventory is extracted from the current `app/src/lib.rs` dispatcher. `GET /openapi.yaml` is the machine-readable contract.
+
+[cols="1,2,4",options="header"]
 |===
-| Request | Response
-| `GET /api/machine` | Reach, resolution, settings and capabilities.
-| `GET /api/materials` | Material/card definitions and resolved machine settings.
-| `GET /openapi.yaml` | OpenAPI 3.1 schema for Swagger-compatible clients; no UI bundle is included.
-| `GET /api/templates` | Complete field, element, side and edit/reveal policy definitions.
-| `GET /api/assets` | Reusable public assets. Initially the prepared 1-bit tiger.
-| `GET /api/assets/tiger.png` | Public tiger pixels, prepared from the repository's existing example.
+| Method | Path | Purpose
+| GET | `/` | Embedded operator UI
+| GET | `/api` | This API guide
+| GET | `/openapi.yaml` | OpenAPI contract
+| GET | `/docs`, `/docs/` | Bundled Swagger UI
+| GET | `/docs/swagger-ui.css`, `/docs/swagger-ui-bundle.js` | Swagger UI assets
+| GET | `/docs/favicon-16x16.png`, `/docs/favicon-32x32.png` | Swagger UI icons
+| GET | `/assets/vsr-logo.png` | Operator UI logo
+| GET | `/api/machine`, `/api/mode`, `/api/materials` | Machine profile, mode, and material settings
+| GET | `/api/templates`, `/api/assets`, `/api/assets/tiger.png` | Templates and prepared assets
+| GET | `/api/steps` | Supported test-ladder steps
+| GET, DELETE | `/api/state` | Read state; DELETE clears idle RAM state but retains the run log
+| GET | `/api/attempt/preview` | Exact active-stage preview
+| GET | `/api/log`, `/api/pending-verdicts` | Redacted audit events and outstanding verdicts
+| POST | `/api/jobs/preview`, `/api/tests/preview` | Preview a card job or test pattern; no run
+| GET, POST, DELETE | `/api/jobs/review` | Read, submit, or discard a review
+| POST | `/api/jobs/form`, `/api/cards/import` | Edit a template review or import card data
+| POST | `/api/mode` | Change real/simulator mode while idle
+| POST | `/api/plan`, `/api/run`, `/api/verdict`, `/api/stop` | Plan, run, judge, or request stop
 |===
 
 == Submit and Review
@@ -94,6 +108,12 @@ The K6's temporary completion policy assumes completion after 90 seconds without
 This is a trusted-LAN service, not a public authenticated API. Producer/operator role separation and session leases remain open.
 Non-revealable fields are omitted from operator source projections, but visible raster/QR pixels can disclose their contents.
 Reviews and acceptance are RAM-only; restart loses them. Do not write payloads into URLs, logs or template defaults.
+
+== Clear Pi and Account State
+
+The operator UI's top-level **Sign out / Clear Pi** control calls `DELETE /api/state`. It clears the in-memory review, planned attempt, progress, and pending outcome, drops idle device handles, and refuses while a run is active. The redacted `runs.jsonl` audit log is retained; a clear event is appended. Clearing is not a laser command and does not prove or change physical machine state.
+
+Authentication is not implemented; this remains a trusted-LAN service, so the current control is a state-reset convenience, not a secure logout. Login is deferred. When authentication is added, this control is intended to become **Sign in**; an unauthenticated client should see only a login prompt and no machine controls or data. That access boundary is also deferred and is not enforced today.
 
 == Tests
 

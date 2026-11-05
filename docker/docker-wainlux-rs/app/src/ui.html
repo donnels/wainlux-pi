@@ -36,6 +36,7 @@
   .brand-copy { min-width:0; flex:1 1 260px; }
   .brand-name { color:var(--muted); font-size:12px; line-height:1.4; margin:0 0 4px; overflow-wrap:anywhere; }
   .theme-control { margin:0; }
+  #clear-pi { padding:8px 10px; font-size:13px; color:var(--ink); background:transparent; border-color:var(--line); }
   h1 { margin:0; font-size:24px; } h2 { font-size:18px; margin:0 0 16px; }
   #reach { margin:4px 0 0; font-size:13px; }
   .spacer { flex:1; } main { max-width:1400px; margin:auto; padding:20px 24px; }
@@ -97,6 +98,7 @@
   <div class="brand-copy"><p class="brand-name">Virtual Space &amp; Global Communications Research</p><h1 id="model">Laser</h1><p id="reach"></p></div>
   <label class="theme-control">Theme <select id="theme" onchange="setTheme(this.value)"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
   <label style="margin:0">Mode <select id="mode" disabled><option value="simulator">Simulator</option><option value="real">Real laser</option></select></label>
+  <button id="clear-pi" type="button" onclick="clearPi()" title="Clear idle Pi state and sign out">Sign out / Clear Pi</button>
   <button id="stop" onclick="requestStop()">STOP</button>
 </header>
 <main>
@@ -288,6 +290,7 @@ function controls() {
   $("preview-card").disabled = working || frozen || active || !activeTemplate;
   $("edit-card").disabled = working || active;
   $("mode").disabled = working || frozen || active;
+  $("clear-pi").disabled = working || Boolean(state?.running);
   $("mode").value = modeInfo.mode || "simulator";
   $("mode").options[1].disabled = !modeInfo.real_available;
   $("burn-guide").textContent = modeInfo.real ? "Burn markings" : "Simulate markings";
@@ -454,6 +457,29 @@ function burnCard() { return action(async () => {
   await startStage("content");
 }); }
 function guideDeviation() { const note = prompt("Describe the guide deviation."); if (note?.trim()) { $("comment").value = note; verdict("deviation"); } }
+async function clearPi() {
+  return action(async () => {
+    if (!confirm("Sign out and clear the Pi's idle state? This discards the current review, plan and pending outcome. The redacted run log is kept. No laser command is sent.")) return;
+    await api("/api/state", undefined, "DELETE");
+    for (const item of secretFields) item.field.value = "";
+    secretFields.length = 0;
+    prepared = null; phase = null; ownedAttempt = null; frozen = false; stopped = false; acceptedGuide = false;
+    loadedReviewId = null; displayedAttempt = null; activeTemplate = null; selectedSide = "front";
+    changedFields.clear(); contentVisible = false; markingsVisible = true;
+    $("template").value = ""; $("template-fields").replaceChildren();
+    $("card-file").value = ""; $("card-placed").checked = false;
+    $("profiles").textContent = ""; $("include-guide").checked = true; $("side-control").hidden = true;
+    $("card-scene").replaceChildren(); $("output-stages").replaceChildren();
+    $("laser-output").hidden = true; $("card-goal").hidden = true;
+    $("comment").value = ""; $("text").value = ""; $("size_mm").value = 20;
+    $("x_mm").value = 0; $("y_mm").value = 0; $("step").selectedIndex = 0;
+    for (const setting of settings) $("set-" + setting.key).value = setting.default;
+    setLayerVisible("content", false); setLayerVisible("guide", true);
+    tab("cards");
+    await poll(); await refreshLog();
+    message("Pi state cleared. Redacted run history retained.");
+  });
+}
 function requestStop() { return action(async () => {
   stopped = true; acceptedGuide = false;
   const result = await api("/api/stop", {});

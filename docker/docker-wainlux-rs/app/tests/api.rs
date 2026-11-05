@@ -98,7 +98,48 @@ fn openapi_document_is_served_by_the_rust_api() {
     let document = response.into_string().unwrap();
     assert!(document.starts_with("openapi: 3.1.0"));
     assert!(document.contains("/api/jobs/preview:"));
+    assert!(document.contains("/api/state:") && document.contains("operationId: clearIdleState"));
     assert!(document.contains("/api/stop:"));
+}
+
+#[test]
+fn clear_state_resets_idle_review_and_plan_but_retains_audit_log() {
+    let (addr, log) = start();
+    let (code, _) = call(addr, "POST", "/api/jobs/review", Some(json!({"job":wifi_job()})));
+    assert_eq!(code, 200);
+    call(addr, "POST", "/api/plan", Some(json!({"step":"talk"})));
+    let (code, verdict) = call(addr, "POST", "/api/verdict", Some(json!({"status":"skipped","comment":"reset test"})));
+    assert_eq!(code, 200, "{verdict}");
+    let (_, planned) = call(addr, "POST", "/api/plan", Some(json!({"step":"talk"})));
+
+    let (code, cleared) = call(addr, "DELETE", "/api/state", None);
+    assert_eq!(code, 200, "{cleared}");
+    assert_eq!(cleared["cleared"], true);
+    assert_eq!(cleared["run_log_retained"], true);
+    let (_, state) = call(addr, "GET", "/api/state", None);
+    assert_eq!(state["attempt"], Value::Null);
+    assert_eq!(state["review_id"], Value::Null);
+    assert_eq!(state["outcome"], Value::Null);
+    assert_eq!(state["running"], false);
+    assert_eq!(call(addr, "GET", "/api/jobs/review", None).0, 404);
+    let (_, entries) = call(addr, "GET", "/api/log", None);
+    assert_eq!(entries.as_array().unwrap().len(), 2);
+    assert_eq!(entries[0]["event"], "verdict");
+    assert_eq!(entries[1]["event"], "clear");
+    assert_eq!(entries[1]["attempt_id"], planned["id"]);
+    assert_eq!(call(addr, "GET", "/api/pending-verdicts", None).1, json!([]));
+    assert!(std::path::Path::new(&log).exists());
+}
+
+#[test]
+fn clear_state_refuses_while_a_simulated_run_is_active() {
+    let (addr, _) = start();
+    assert_eq!(call(addr, "POST", "/api/plan", Some(json!({"step":"frame","params":{"x_mm":0.0,"y_mm":0.0,"size_mm":10.0}}))).0, 200);
+    assert_eq!(call(addr, "POST", "/api/run", None).0, 202);
+    let (code, problem) = call(addr, "DELETE", "/api/state", None);
+    assert_eq!(code, 409);
+    assert!(problem["error"].as_str().unwrap().contains("while an attempt is running"));
+    assert_eq!(call(addr, "GET", "/api/state", None).1["running"], true);
 }
 
 #[test]

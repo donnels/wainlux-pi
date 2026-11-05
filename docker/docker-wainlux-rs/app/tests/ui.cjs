@@ -54,7 +54,14 @@ async function open(backend) {
           ]; break;
           case "/api/templates": value = templates; break;
           case "/api/log": value = []; break;
-          case "/api/state": value = backend.state; break;
+          case "/api/state":
+            if (options?.method === "DELETE") {
+              backend.clearCalls = (backend.clearCalls || 0) + 1;
+              backend.review = null;
+              backend.state = {...backend.state,attempt:null,running:false,outcome:null,progress:null,review_id:null,accepted_stages:null};
+              value = {cleared:true,run_log_retained:true};
+            } else value = backend.state;
+            break;
           case "/api/jobs/review":
             if (options?.method === "DELETE") { backend.review = null; backend.state.review_id = null; value = {discarded:true}; }
             else value = backend.review;
@@ -291,6 +298,18 @@ async function main() {
   assert.equal(githubDoc.getElementById("card-side").value,"back","previewing the edited login URL keeps the back selected");
   assert.equal(githubDoc.querySelector(".output-stage h3").textContent,"Back content");
   githubPage.window.close();
+  const clearBackend = {state:{attempt:null,running:false,outcome:null,progress:null,mode,review_id:"clear-review"}};
+  clearBackend.review = {review_id:"clear-review",template:templates[0],fields:{ssid:{provided:true,value:"Synthetic network"},password:{provided:true,value:"synthetic password"},title:{provided:false,value:""}},job:{template:"wifi-login",piece:"bamboo-ntag215-light",backing:"backing-first",placement:"left",guide:true,items:[],values:{}},layout,display:privateDisplay,stages:[stage("guide"),stage("content")]};
+  const clearPage = await open(clearBackend); const clearDoc = clearPage.window.document;
+  assert.equal(clearDoc.getElementById("clear-pi").textContent,"Sign out / Clear Pi");
+  assert.equal(clearDoc.getElementById("field-password").value,"synthetic password");
+  await clearPage.window.clearPi();
+  assert.equal(clearBackend.clearCalls,1);
+  assert.equal(clearBackend.review,null);
+  assert.equal(clearBackend.state.review_id,null);
+  assert.equal(clearDoc.getElementById("field-password"),null,"clear removes private review fields from the browser");
+  assert(clearDoc.getElementById("status").textContent.includes("run history retained"));
+  clearPage.window.close();
   console.log("UI checks passed: VSR logo, Light/Dark/System, saved preference, private fields, preview layers and refresh recovery.");
 }
 
