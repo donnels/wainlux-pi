@@ -1,0 +1,90 @@
+id = "github-recovery"
+name = "GitHub recovery codes"
+legacy_items = []
+
+fields = [
+  { id="font-face", label="Text font", type="select", default="sans-bold", options=["sans-bold","mono"], editable=true, revealable=true, masked=false },
+  { id="recovery-payload", label="Recovery payload from mfa-backup or phone", type="multiline", default="", editable=true, revealable=true, masked=true },
+  { id="recovery-x", label="Recovery QR X mm", type="number", default=19.725, step=0.05, editable=true, revealable=true, masked=false },
+  { id="recovery-y", label="Recovery QR Y mm", type="number", default=6.5, step=0.05, editable=true, revealable=true, masked=false },
+  { id="recovery-size", label="Recovery QR side mm", type="number", default=46.0, min=1.0, step=0.5, editable=true, revealable=true, masked=false },
+  { id="include-use-checklist", label="Add 16 manual-use checkboxes beside recovery QR", type="checkbox", default=false, editable=true, revealable=true, masked=false },
+  { id="check-count", label="Checklist box count", type="number", default=16, min=1.0, max=32.0, step=1.0, editable=true, revealable=true, masked=false },
+  { id="check-columns", label="Checklist columns", type="number", default=2, min=1.0, max=4.0, step=1.0, editable=true, revealable=true, masked=false },
+  { id="check-box-mm", label="Checklist box side mm", type="number", default=3.5, min=2.0, max=10.0, step=0.25, editable=true, revealable=true, masked=false },
+  { id="check-gap-mm", label="Checklist box gap mm", type="number", default=0.8, min=0.2, max=3.0, step=0.1, editable=true, revealable=true, masked=false },
+  { id="check-line-mm", label="Checklist outline width mm", type="number", default=0.35, min=0.15, max=1.0, step=0.05, editable=true, revealable=true, masked=false },
+  { id="check-x", label="Checklist X mm", type="number", default=67.725, step=0.05, editable=true, revealable=true, masked=false },
+  { id="check-y", label="Checklist Y mm", type="number", default=10.06, step=0.05, editable=true, revealable=true, masked=false },
+  { id="include-front-context", label="Print small front context caption", type="checkbox", default=true, editable=true, revealable=true, masked=false },
+  { id="front-context", label="Front context (not recovery data)", type="text", default="GitHub MFA recovery codes", editable=true, revealable=true, masked=false },
+  { id="front-context-x", label="Front context X mm", type="number", default=7.95, step=0.05, editable=true, revealable=true, masked=false },
+  { id="front-context-y", label="Front context Y mm", type="number", default=1.75, step=0.05, editable=true, revealable=true, masked=false },
+  { id="front-context-width", label="Front context width mm", type="number", default=69.55, min=1.0, step=0.5, editable=true, revealable=true, masked=false },
+  { id="front-context-height", label="Front context height mm", type="number", default=4.0, min=1.0, step=0.5, editable=true, revealable=true, masked=false },
+  { id="front-context-font", label="Front context font mm", type="number", default=2.5, min=0.5, step=0.25, editable=true, revealable=true, masked=false },
+  { id="include-back-context", label="Print back-side purpose caption", type="checkbox", default=true, editable=true, revealable=true, masked=false },
+  { id="back-context", label="Back context (not recovery data)", type="text", default="GitHub login to use these codes", editable=true, revealable=true, masked=false },
+  { id="back-context-x", label="Back context X mm", type="number", default=7.95, step=0.05, editable=true, revealable=true, masked=false },
+  { id="back-context-y", label="Back context Y mm", type="number", default=1.75, step=0.05, editable=true, revealable=true, masked=false },
+  { id="back-context-width", label="Back context width mm", type="number", default=69.55, min=1.0, step=0.5, editable=true, revealable=true, masked=false },
+  { id="back-context-height", label="Back context height mm", type="number", default=4.0, min=1.0, step=0.5, editable=true, revealable=true, masked=false },
+  { id="back-context-font", label="Back context font mm", type="number", default=2.5, min=0.5, step=0.25, editable=true, revealable=true, masked=false },
+  { id="include-login", label="Login URL QR on back", type="checkbox", default=true, editable=true, revealable=true, masked=false },
+  { id="login-url", label="Login URL", type="text", default="https://github.com/login", editable=true, revealable=true, masked=true },
+  { id="login-x", label="Back QR X mm", type="number", default=7.95, step=0.05, editable=true, revealable=true, masked=false },
+  { id="login-y", label="Back QR Y mm", type="number", default=8.86, step=0.05, editable=true, revealable=true, masked=false },
+  { id="login-size", label="Back QR side mm", type="number", default=36.0, min=1.0, step=0.5, editable=true, revealable=true, masked=false },
+  { id="include-url-text", label="Print login URL as small back caption", type="checkbox", default=false, editable=true, revealable=true, masked=false },
+  { id="url-text", label="Human-readable login URL", type="text", default="https://github.com/login", editable=true, revealable=true, masked=true },
+  { id="url-text-x", label="URL caption X mm", type="number", default=7.95, step=0.05, editable=true, revealable=true, masked=false },
+  { id="url-text-y", label="URL caption Y mm", type="number", default=5.75, step=0.05, editable=true, revealable=true, masked=false },
+  { id="url-text-width", label="URL caption width mm", type="number", default=69.55, min=1.0, step=0.5, editable=true, revealable=true, masked=false },
+  { id="url-text-height", label="URL caption height mm", type="number", default=2.5, min=1.0, step=0.5, editable=true, revealable=true, masked=false },
+  { id="url-text-font", label="URL caption font mm", type="number", default=2.0, min=0.5, step=0.25, editable=true, revealable=true, masked=false },
+]
+
+[[elements]]
+id = "recovery-qr"
+side = "front"
+kind = "qr"
+bindings = { "content.text"="recovery-payload", x_mm="recovery-x", y_mm="recovery-y", size_mm="recovery-size" }
+
+[[elements]]
+id = "front-context"
+side = "front"
+kind = "text"
+enabled_by = "include-front-context"
+bindings = { "content.text"="front-context", "content.font_size_mm"="front-context-font", "content.font"="font-face", x_mm="front-context-x", y_mm="front-context-y", width_mm="front-context-width", height_mm="front-context-height" }
+
+[[elements]]
+id = "use-checklist"
+side = "front"
+kind = "checkboxes"
+enabled_by = "include-use-checklist"
+bindings = { "content.count"="check-count", "content.columns"="check-columns", "content.box_mm"="check-box-mm", "content.gap_mm"="check-gap-mm", "content.line_mm"="check-line-mm", x_mm="check-x", y_mm="check-y" }
+
+[[elements]]
+id = "back-context"
+side = "back"
+kind = "text"
+enabled_by = "include-back-context"
+bindings = { "content.text"="back-context", "content.font_size_mm"="back-context-font", "content.font"="font-face", x_mm="back-context-x", y_mm="back-context-y", width_mm="back-context-width", height_mm="back-context-height" }
+
+[[elements]]
+id = "login-qr"
+side = "back"
+kind = "qr"
+enabled_by = "include-login"
+bindings = { "content.text"="login-url", x_mm="login-x", y_mm="login-y", size_mm="login-size" }
+
+[[elements]]
+id = "login-url-text"
+side = "back"
+kind = "text"
+enabled_by = "include-url-text"
+bindings = { "content.text"="url-text", "content.font_size_mm"="url-text-font", "content.font"="font-face", x_mm="url-text-x", y_mm="url-text-y", width_mm="url-text-width", height_mm="url-text-height" }
+
+[display]
+card_content_visible = false
+markings_visible = true

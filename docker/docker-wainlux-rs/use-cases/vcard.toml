@@ -1,0 +1,48 @@
+id = "vcard"
+name = "Contact / vCard"
+legacy_items = []
+
+fields = [
+  { id="contact", label="vCard data or CV URL", type="multiline", default="", editable=true, revealable=true, masked=true },
+  { id="contact-x", label="Contact QR X mm", type="number", default=7.95, step=0.05, editable=true, revealable=true, masked=false },
+  { id="contact-y", label="Contact QR Y mm", type="number", default=8.86, step=0.05, editable=true, revealable=true, masked=false },
+  { id="contact-size", label="Contact QR side mm", type="number", default=36.0, min=1.0, step=0.5, editable=true, revealable=true, masked=false },
+  { id="include-label", label="Print contact label", type="checkbox", default=false, editable=true, revealable=true, masked=false },
+  { id="label", label="Contact label", type="multiline", default="", editable=true, revealable=true, masked=true },
+  { id="label-x", label="Contact label X mm", type="number", default=45.95, step=0.05, editable=true, revealable=true, masked=false },
+  { id="label-y", label="Contact label Y mm", type="number", default=16.0, step=0.05, editable=true, revealable=true, masked=false },
+  { id="label-width", label="Contact label width mm", type="number", default=31.55, min=1.0, step=0.5, editable=true, revealable=true, masked=false },
+  { id="label-height", label="Contact label height mm", type="number", default=18.0, min=1.0, step=0.5, editable=true, revealable=true, masked=false },
+  { id="label-font", label="Contact label font mm", type="number", default=4.0, min=0.5, step=0.25, editable=true, revealable=true, masked=false },
+  { id="font-face", label="Text font", type="select", default="sans-bold", options=["sans-bold","mono"], editable=true, revealable=true, masked=false },
+  { id="include-logo", label="Logo on back", type="checkbox", default=false, editable=true, revealable=true, masked=false },
+  { id="logo", label="Prepared public logo", type="select", default="tiger", options=["tiger"], editable=true, revealable=true, masked=false },
+  { id="logo-x", label="Back logo X mm", type="number", default=19.225, step=0.05, editable=true, revealable=true, masked=false },
+  { id="logo-y", label="Back logo Y mm", type="number", default=5.0, step=0.05, editable=true, revealable=true, masked=false },
+  { id="logo-width", label="Back logo width mm", type="number", default=47.0, min=1.0, step=0.5, editable=true, revealable=true, masked=false },
+  { id="logo-height", label="Back logo height mm", type="number", default=43.0, min=1.0, step=0.5, editable=true, revealable=true, masked=false },
+]
+
+[[elements]]
+id = "contact-qr"
+side = "front"
+kind = "qr"
+bindings = { "content.text"="contact", x_mm="contact-x", y_mm="contact-y", size_mm="contact-size" }
+
+[[elements]]
+id = "contact-label"
+side = "front"
+kind = "text"
+enabled_by = "include-label"
+bindings = { "content.text"="label", "content.font_size_mm"="label-font", "content.font"="font-face", x_mm="label-x", y_mm="label-y", width_mm="label-width", height_mm="label-height" }
+
+[[elements]]
+id = "logo-back"
+side = "back"
+kind = "image"
+enabled_by = "include-logo"
+bindings = { "content.asset_id"="logo", x_mm="logo-x", y_mm="logo-y", width_mm="logo-width", height_mm="logo-height" }
+
+[display]
+card_content_visible = false
+markings_visible = true

@@ -1,50 +1,41 @@
 = Requirements
 
-Functional (FR) and Non-Functional (NFR) requirements.
+Only requirements backed by current Rust behavior or an explicit safety boundary remain. Superseded Flask requirements and unimplemented proposals were removed; numbering gaps are intentional.
 
-Short. Clear. Rebuildable.
+== Functional
 
-== Structure
+ifdef::single-page[]
+Historical physical evidence is in <<hardware-observations>>.
+* <<fr-001-burn-raster-image,FR-001: Reviewed raster execution>>
+* <<fr-002-generate-wifi-qr,FR-002: WiFi QR composition>>
+* <<fr-003-progress-and-timing,FR-003: Progress and timing>>
+* <<fr-007-emergency-stop,FR-007: Stop and cancellation>>
+* <<fr-009-calibration-patterns,FR-009: Test ladder>>
+* <<fr-011-placement,FR-011: Material placement>>
+* <<fr-013,FR-013: Simulator testing>>
+* <<fr-015-laser-test-ladder,FR-015: Operator test verdicts>>
+* <<fr-016-qr-cards,FR-016: Card review workflow>>
+endif::single-page[]
+ifndef::single-page[]
+Historical physical evidence is in link:../hardware-observations.adoc[Hardware Observations].
+* link:FR-001-burn-raster-image.adoc[FR-001: Reviewed raster execution]
+* link:FR-002-generate-wifi-qr.adoc[FR-002: WiFi QR composition]
+* link:FR-003-progress-and-timing.adoc[FR-003: Progress and timing]
+* link:FR-007-emergency-stop.adoc[FR-007: Stop and cancellation]
+* link:FR-009-calibration-patterns.adoc[FR-009: Test ladder]
+* link:FR-011-placement.adoc[FR-011: Material placement]
+* link:FR-013.adoc[FR-013: Simulator testing]
+* link:FR-015-laser-test-ladder.adoc[FR-015: Operator test verdicts]
+* link:FR-016-qr-cards.adoc[FR-016: Card review workflow]
+endif::single-page[]
 
-* `FR-###-name.adoc` - Functional requirements
-* `NFR-###-name.adoc` - Non-functional requirements
+== Non-Functional
 
-Each requirement has:
-
-* *Description* - 1-2 sentences, what is needed
-* *Acceptance criteria* - bullets, testable conditions
-* *Status* - proposed | accepted | implemented
-* *Related ADRs* - decisions that implement this requirement
-
-== TOGAF Compliance
-
-Requirements traceability:
-
-* FR/NFR → ADR (decision implements requirement)
-* ADR → Code (implementation follows decision)
-* Code → Test (validation proves acceptance)
-
-Iterative: Requirements evolve. Add new FR/NFR as features emerge. No waterfall.
-
-== Current Requirements
-
-=== Functional
-
-* link:FR-001-burn-raster-image.adoc[FR-001: Burn raster image]
-* link:FR-002-generate-wifi-qr.adoc[FR-002: Generate WiFi QR code]
-* link:FR-003-pipeline-visibility.adoc[FR-003: Pipeline visibility & progress]
-* link:FR-004-dry-run-mode.adoc[FR-004: Dry run without laser]
-* link:FR-005-connection-management.adoc[FR-005: Device connection management]
-* link:FR-006-positioning-control.adoc[FR-006: Laser head positioning]
-* link:FR-007-emergency-stop.adoc[FR-007: Emergency stop]
-* link:FR-009-calibration-patterns.adoc[FR-009: Test pattern generation]
-* link:FR-011.adoc[FR-011: Material alignment system]
-* link:FR-013.adoc[FR-013: Hardware-independent testing]
-
-=== Non-Functional
-
-* link:NFR-001-pi-zero-performance.adoc[NFR-001: Pi Zero W performance]
-* link:NFR-002-no-material-waste.adoc[NFR-002: No material waste in testing]
-* link:NFR-003-protocol-debuggability.adoc[NFR-003: Protocol debuggability]
-* link:NFR-004-session-management.adoc[NFR-004: Per-browser session state]
-* link:NFR-005-csv-logging.adoc[NFR-005: CSV operation logging]
+ifdef::single-page[]
+* <<nfr-002-no-material-waste,NFR-002: Hardware-free test isolation>>
+* <<nfr-005-run-history,NFR-005: Redacted run history>>
+endif::single-page[]
+ifndef::single-page[]
+* link:NFR-002-no-material-waste.adoc[NFR-002: Hardware-free test isolation]
+* link:NFR-005-run-history.adoc[NFR-005: Redacted run history]
+endif::single-page[]

@@ -1,0 +1,65 @@
+id = "wifi-login"
+name = "WiFi login"
+legacy_items = ["wifi", "title"]
+
+fields = [
+	{ id="ssid", label="SSID", type="text", default="", editable=true, revealable=true, masked=true },
+	{ id="password", label="Password (QR only)", type="text", default="", editable=true, revealable=true, masked=true },
+	{ id="security", label="Security", type="select", default="WPA2", options=["WPA2","WPA3","WPA","WEP","nopass"], editable=true, revealable=true, masked=false },
+	{ id="hidden", label="Hidden network", type="checkbox", default=false, editable=true, revealable=true, masked=false },
+	{ id="qr-x", label="QR X mm", type="number", default=7.95, step=0.05, editable=true, revealable=true, masked=false },
+	{ id="qr-y", label="QR Y mm", type="number", default=8.86, step=0.05, editable=true, revealable=true, masked=false },
+	{ id="qr-side", label="QR side mm", type="number", default=36.0, min=1.0, step=0.5, editable=true, revealable=true, masked=false },
+	{ id="font-face", label="Text font", type="select", default="sans-bold", options=["sans-bold","mono"], editable=true, revealable=true, masked=false },
+	{ id="include-title", label="Print title / label", type="checkbox", default=true, editable=true, revealable=true, masked=false },
+	{ id="title", label="Title / label", type="multiline", default="", editable=true, revealable=true, masked=true },
+	{ id="title-x", label="Title X mm", type="number", default=45.95, step=0.05, editable=true, revealable=true, masked=false },
+	{ id="title-y", label="Title Y mm", type="number", default=16.0, step=0.05, editable=true, revealable=true, masked=false },
+	{ id="title-width", label="Title width mm", type="number", default=31.55, min=1.0, step=0.5, editable=true, revealable=true, masked=false },
+	{ id="title-height", label="Title height mm", type="number", default=18.0, min=1.0, step=0.5, editable=true, revealable=true, masked=false },
+	{ id="font-size", label="Title font size mm", type="number", default=4.25, min=0.5, step=0.25, editable=true, revealable=true, masked=false },
+	{ id="include-note", label="Print location / note", type="checkbox", default=false, editable=true, revealable=true, masked=false },
+	{ id="note", label="Location / note", type="multiline", default="", editable=true, revealable=true, masked=true },
+	{ id="note-x", label="Note X mm", type="number", default=45.95, step=0.05, editable=true, revealable=true, masked=false },
+	{ id="note-y", label="Note Y mm", type="number", default=37.0, step=0.05, editable=true, revealable=true, masked=false },
+	{ id="note-width", label="Note width mm", type="number", default=31.55, min=1.0, step=0.5, editable=true, revealable=true, masked=false },
+	{ id="note-height", label="Note height mm", type="number", default=8.0, min=1.0, step=0.5, editable=true, revealable=true, masked=false },
+	{ id="note-font", label="Note font size mm", type="number", default=3.5, min=0.5, step=0.25, editable=true, revealable=true, masked=false },
+	{ id="include-ssid", label="Print SSID", type="checkbox", default=false, editable=true, revealable=true, masked=false },
+	{ id="ssid-x", label="SSID X mm", type="number", default=7.95, step=0.05, editable=true, revealable=true, masked=false },
+	{ id="ssid-y", label="SSID Y mm", type="number", default=47.0, step=0.05, editable=true, revealable=true, masked=false },
+	{ id="ssid-width", label="SSID width mm", type="number", default=69.55, min=1.0, step=0.5, editable=true, revealable=true, masked=false },
+	{ id="ssid-height", label="SSID height mm", type="number", default=5.0, min=1.0, step=0.5, editable=true, revealable=true, masked=false },
+	{ id="ssid-font", label="SSID font size mm", type="number", default=3.5, min=0.5, step=0.25, editable=true, revealable=true, masked=false },
+]
+
+[[elements]]
+id = "wifi"
+side = "front"
+kind = "wifi"
+bindings = { "content.ssid"="ssid", "content.password"="password", "content.security"="security", "content.hidden"="hidden", x_mm="qr-x", y_mm="qr-y", size_mm="qr-side" }
+
+[[elements]]
+id = "title"
+side = "front"
+kind = "text"
+enabled_by = "include-title"
+bindings = { "content.text"="title", "content.font_size_mm"="font-size", "content.font"="font-face", x_mm="title-x", y_mm="title-y", width_mm="title-width", height_mm="title-height" }
+
+[[elements]]
+id = "note"
+side = "front"
+kind = "text"
+enabled_by = "include-note"
+bindings = { "content.text"="note", "content.font_size_mm"="note-font", "content.font"="font-face", x_mm="note-x", y_mm="note-y", width_mm="note-width", height_mm="note-height" }
+
+[[elements]]
+id = "ssid-label"
+side = "front"
+kind = "text"
+enabled_by = "include-ssid"
+bindings = { "content.text"="ssid", "content.font_size_mm"="ssid-font", "content.font"="font-face", x_mm="ssid-x", y_mm="ssid-y", width_mm="ssid-width", height_mm="ssid-height" }
+
+[display]
+card_content_visible = false
+markings_visible = true

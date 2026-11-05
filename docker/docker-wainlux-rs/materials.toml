@@ -1,0 +1,26 @@
+# Materials. One [[material]] per entry. Sizes in mm, width x height as it lies on the bed.
+# role: "piece" is what we etch, "backing" is what lies under it and takes the guide.
+# [material.settings."<machine model>"] holds that machine's burn settings for this material.
+# Keys must match the machine's settings (GET /api/machine). Missing keys use the machine's defaults.
+
+[[material]]
+id = "bamboo-ntag215-light"
+name = "Bamboo NFC card, light, NXP NTAG215"
+role = "piece"
+size_mm = [85.45, 53.72]
+note = "Chinese ready-made card with the NFC inlay fitted. Size measured. Hard: full power, the K6 is too weak to cut deep."
+
+[material.settings."Wainlux K6"]
+power = 1000
+depth = 10
+
+[[material]]
+id = "backing-first"
+name = "Backing board (first QR etch)"
+role = "backing"
+size_mm = [80.0, 75.0]
+note = "Planning placeholder aligned to the current K6 working reach; physical board not measured. QR at power 500, depth 10 scanned on it."
+
+[material.settings."Wainlux K6"]
+power = 500
+depth = 10

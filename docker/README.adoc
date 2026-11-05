@@ -2,7 +2,7 @@
 ifdef::flag-book[]
 :imagesdir-saved: {imagesdir}
 :localdir-saved: {localdir}
-:imagesdir: ./images
+:imagesdir: ./documentation/images
 :localdir: ./docker
 endif::flag-book[]
 ifndef::flag-book[]
@@ -18,43 +18,28 @@ ifdef::github-env[]
 :caution-caption: :fire:
 :warning-caption: :warning:
 endif::github-env[]
-:imagesdir: ../images
+:imagesdir: ../documentation/images
 :localdir: .
 endif::flag-book[]
 
-Three containers support the Wainlux K6 control system.
+Container definitions for the Rust laser service and supporting tools live here.
 
 == Compose Files
 
-`compose.yaml` runs production mode with real K6 hardware. Needs `/dev/ttyUSB0` access on Pi.
+The current K6 service and its Pi deployment compose file are in `docker/docker-wainlux-rs/`.
 
+.Start the preloaded Rust service on the Pi
 [source,bash]
 ----
-cd docker
+cd docker/docker-wainlux-rs
 docker compose up -d
 ----
 
-`compose-dev.yaml` runs mock mode without hardware. For testing on Steam Deck or dev machines.
+The image is cross-built and loaded on the Pi; compose does not build it. The service uses `/dev/ttyUSB0` and port `8081`.
 
-[source,bash]
-----
-cd docker
-docker compose -f compose-dev.yaml up -d
-----
+== MCP Client Draft
 
-Or use deployment scripts: `scripts/deploy_to_pi.sh` (production), `scripts/deploy_to_steamdeck.sh` (dev), `scripts/quick_deploy.sh` (production).
-
-== Wainlux K6
-
-Flask app drives K6 laser over USB serial. Web UI on `:8080`. Runs on Pi Zero W.
-
-include::docker-wainlux/README.adoc[leveloffset=+2]
-
-== MCP Server
-
-MCP HTTP server wraps Flask API for AI agents. No direct hardware access.
-
-include::docker-mcp/README.adoc[leveloffset=+2]
+`docker/docker-mcp/` contains a separate Streamable HTTP MCP service, assumed to run on the Pi Zero host for now. It exposes discovery and preview only; it cannot start or stop laser work. See its README before deployment.
 
 == Bytefield SVG
 

@@ -1,0 +1,17 @@
+= FR-015: Operator Test Verdicts
+
+== Status
+Implemented for planned test steps and card stages.
+
+== Requirement
+Record the goal before a run, the software outcome after it, and an independent operator verdict. Preserve the original goal when an observation differs.
+
+== Acceptance
+
+* A plan fixes the test goal before the machine runs.
+* `POST /api/run` executes only the planned attempt.
+* `POST /api/verdict` records `ok`, `deviation` or `skipped`; deviation and skipped require a comment.
+* `ok` requires an outcome. A software outcome alone is not a physical verdict.
+* Later reviewed card stages require acceptance of earlier stages; a back stage also requires explicit placement confirmation.
+
+Use the simulator for automated contract tests. Real-device checks require an attended operator and a recorded physical observation.

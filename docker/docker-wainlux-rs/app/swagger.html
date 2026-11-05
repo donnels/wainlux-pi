@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wainlux K6 API</title>
+  <link rel="icon" type="image/png" href="/docs/favicon-32x32.png" sizes="32x32">
+  <link rel="icon" type="image/png" href="/docs/favicon-16x16.png" sizes="16x16">
+  <link rel="stylesheet" href="/docs/swagger-ui.css">
+</head>
+<body>
+  <header>
+    <h1>Wainlux K6 API</h1>
+    <p>Unauthenticated trusted-LAN service. Try It Out is limited to GET requests; use the operator UI for physical actions.</p>
+  </header>
+  <div id="swagger-ui"></div>
+  <script src="/docs/swagger-ui-bundle.js"></script>
+  <script>
+    window.onload = () => {
+      SwaggerUIBundle({
+        url: "/openapi.yaml",
+        dom_id: "#swagger-ui",
+        deepLinking: true,
+        displayRequestDuration: true,
+        supportedSubmitMethods: ["get"],
+        presets: [SwaggerUIBundle.presets.apis],
+        layout: "BaseLayout"
+      });
+    };
+  </script>
+</body>
+</html>

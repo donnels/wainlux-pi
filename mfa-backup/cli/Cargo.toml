@@ -1,0 +1,12 @@
+[package]
+name = "mfa-backup"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+qrcode = { version = "0.14", default-features = false, features = ["svg", "image"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
+printpdf = { version = "0.7", default-features = false }
+textwrap = { version = "0.16", default-features = false, features = ["unicode-width"] }
+ttf-parser = "0.19"

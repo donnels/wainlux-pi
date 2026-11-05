@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1420" height="860" viewBox="0 0 1420 860" font-family="sans-serif" font-size="15">
+<!-- Copyright (c) 2026 Sean Donnellan -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#aaf"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#000"/>
+    </marker>
+  </defs>
+  <rect width="1420" height="860" fill="url(#bg)"/>
+  <text x="35" y="35" font-size="22" font-weight="bold">9b: four vertical positioning tests on the stock base</text>
+  <text x="35" y="62">Same settings and square size. A/B/C were one session; D was a later follow-up. Backing stayed fixed.</text>
+
+  <g fill="#fff" fill-opacity="0.6" stroke="#000">
+    <rect x="35" y="82" width="310" height="35" rx="4"/><rect x="420" y="82" width="310" height="35" rx="4"/>
+    <rect x="805" y="82" width="555" height="35" rx="4"/>
+  </g>
+  <g text-anchor="middle" font-weight="bold">
+    <text x="190" y="105">A/B/C session: HOME before each job</text>
+    <text x="575" y="105">D follow-up: HOME, then job</text>
+    <text x="1082" y="105">Inspect only after motion stops</text>
+  </g>
+  <g stroke="#000" marker-end="url(#arrow)">
+    <path d="M350 99h60"/><path d="M735 99h60"/>
+  </g>
+
+  <rect x="45" y="172" width="850" height="530" fill="#fff" fill-opacity="0.35" stroke="#777" stroke-dasharray="5 5"/>
+  <text x="60" y="193" font-size="13">Stock base, shown schematically; no card fitted</text>
+  <g text-anchor="middle" font-weight="bold">
+    <text x="140" y="149">A: gap, 77.45 mm</text>
+    <text x="355" y="149">B: continuous, 77.45 mm</text>
+    <text x="565" y="149">C: gap, 75 mm</text>
+    <text x="780" y="149">D: continuous, 75 mm</text>
+  </g>
+  <g text-anchor="middle" font-size="13">
+    <text x="140" y="167">X=10 mm</text><text x="355" y="167">X=20 mm</text><text x="565" y="167">X=30 mm</text><text x="780" y="167">X=40 mm</text>
+  </g>
+
+  <g fill="none" stroke="#000" stroke-width="2">
+    <path d="M134 212V384.2M134 504.2V676.7"/>
+    <path d="M349 212V676.7"/>
+    <path d="M559 212V384.2M559 504.2V662"/>
+    <path d="M774 212V662"/>
+  </g>
+  <g fill="#000">
+    <rect x="134" y="212" width="12" height="12"/><rect x="134" y="372.2" width="12" height="12"/>
+    <rect x="134" y="504.2" width="12" height="12"/><rect x="134" y="664.7" width="12" height="12"/>
+    <rect x="349" y="212" width="12" height="12"/><rect x="349" y="372.2" width="12" height="12"/>
+    <rect x="349" y="504.2" width="12" height="12"/><rect x="349" y="664.7" width="12" height="12"/>
+    <rect x="559" y="212" width="12" height="12"/><rect x="559" y="372.2" width="12" height="12"/>
+    <rect x="559" y="504.2" width="12" height="12"/><rect x="559" y="650" width="12" height="12"/>
+    <rect x="774" y="212" width="12" height="12"/><rect x="774" y="372.2" width="12" height="12"/>
+    <rect x="774" y="504.2" width="12" height="12"/><rect x="774" y="650" width="12" height="12"/>
+  </g>
+  <g fill="none" stroke="#555" stroke-width="0.8" marker-start="url(#arrow)" marker-end="url(#arrow)">
+    <path d="M96 212V676.7M311 212V676.7M521 212V662"/>
+    <path d="M166 212V384.2M224 372.2V516.2M166 504.2V676.7"/>
+    <path d="M381 212V384.2M439 372.2V516.2M381 504.2V676.7"/>
+    <path d="M591 212V384.2M649 372.2V516.2M591 504.2V662"/>
+    <path d="M112 384.2V504.2M327 384.2V504.2M537 384.2V504.2"/>
+    <path d="M736 212V662M806 212V384.2M864 372.2V516.2M806 504.2V662M752 384.2V504.2"/>
+  </g>
+  <g fill="none" stroke="#777" stroke-width="0.6" stroke-dasharray="2 3">
+    <path d="M146 212H171M146 384.2H171M146 504.2H171M146 676.7H171M146 372.2H229M146 516.2H229"/>
+    <path d="M361 212H386M361 384.2H386M361 504.2H386M361 676.7H386M361 372.2H444M361 516.2H444"/>
+    <path d="M571 212H596M571 384.2H596M571 504.2H596M571 662H596M571 372.2H654M571 516.2H654"/>
+    <path d="M108 384.2H134M108 504.2H134M323 384.2H349M323 504.2H349M533 384.2H559M533 504.2H559"/>
+    <path d="M786 212H811M786 384.2H811M786 504.2H811M786 662H811M786 372.2H869M786 516.2H869M748 384.2H774M748 504.2H774"/>
+  </g>
+  <g font-size="13" text-anchor="middle">
+    <text x="84" y="444" transform="rotate(-90 84 444)">77.45 mm overall</text>
+    <text x="299" y="444" transform="rotate(-90 299 444)">77.45 mm overall</text>
+    <text x="509" y="437" transform="rotate(-90 509 437)">75 mm overall</text>
+    <text x="127" y="444.2" transform="rotate(-90 127 444.2)">20 mm inner</text>
+    <text x="342" y="444.2" transform="rotate(-90 342 444.2)">20 mm inner</text>
+    <text x="552" y="444.2" transform="rotate(-90 552 444.2)">20 mm inner</text>
+    <text x="724" y="437" transform="rotate(-90 724 437)">75 mm overall</text>
+    <text x="767" y="444.2" transform="rotate(-90 767 444.2)">20 mm inner</text>
+  </g>
+  <g font-size="13">
+    <text x="178" y="300">28.70</text><text x="212" y="448" text-anchor="end">24 outer</text><text x="178" y="592">28.75</text>
+    <text x="393" y="300">28.70</text><text x="427" y="448" text-anchor="end">24 outer</text><text x="393" y="592">28.75</text>
+    <text x="603" y="300">28.70</text><text x="637" y="448" text-anchor="end">24 outer</text><text x="603" y="583">26.30</text>
+    <text x="818" y="300">28.70</text><text x="852" y="448" text-anchor="end">24 outer</text><text x="818" y="583">26.30</text>
+  </g>
+
+  <text x="1040" y="215" font-size="18" font-weight="bold">What changes?</text>
+  <text x="1040" y="247">A vs B: gap / continuous at 77.45 mm.</text>
+  <text x="1040" y="273">C vs D: gap / continuous at 75 mm.</text>
+  <text x="1040" y="313">A vs C and B vs D: requested height.</text>
+  <text x="1040" y="339">Inner edges align: Y=28.70-48.70 mm.</text>
+  <text x="1040" y="379">B and D keep every row nonblank.</text>
+  <text x="1040" y="405">C and D are shorter below the gap.</text>
+  <text x="1040" y="445">All squares: 2 x 2 mm.</text>
+  <text x="1040" y="471">Lines: one commanded column.</text>
+  <text x="1040" y="511">Measure far outer square edges.</text>
+  <text x="1040" y="537">Compare total heights and spans,</text>
+  <text x="1040" y="563">then bottom-square compression.</text>
+  <text x="1040" y="603">A/B: Deviation at the bottom.</text>
+  <text x="1040" y="629">C/D: OK, approximately 75 mm.</text>
+  <text x="1040" y="669">No left-to-right perimeter test.</text>
+
+  <text x="35" y="739" font-weight="bold">Recorded duration: A 223 s, B 242 s, C 219 s; later D follow-up 237 s. Status stalled near 99%.</text>
+  <text x="35" y="769">A/B: Deviation at bottom markers. C/D: OK at approximately 75 mm; gap and continuous pairs matched.</text>
+  <text x="35" y="799">Sean selected 75 mm as normal Y working reach. This did not measure the mechanical hard stop.</text>
+  <text x="35" y="829">Pattern geometry is the request, not a photograph. No inspection or repositioning occurred within A/B/C.</text>
+</svg>

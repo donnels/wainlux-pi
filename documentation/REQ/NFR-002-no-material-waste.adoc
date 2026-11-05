@@ -1,41 +1,15 @@
-= NFR-002: No Material Waste in Testing
+= NFR-002: Hardware-Free Test Isolation
 
 == Status
+Implemented for simulator-backed automated tests. No real-device dry-run exists.
 
-Implemented
+== Requirement
+Automated software tests must be able to exercise the API and composition path without connecting to or moving a laser.
 
-== Description
+== Acceptance
 
-Test workflows must not waste engraving material or time.
+* Workspace and HTTP contract tests use the simulator and synthetic payloads.
+* Simulator mode does not open `/dev/ttyUSB0` or send machine commands.
+* A simulator result is never presented as physical acceptance.
 
-== Acceptance Criteria
-
-* Dry run mode uploads data without firing laser
-* Preview mode (BOUNDS 0x20) shows positioning without burn
-* Pipeline stages testable without device
-* Command replay without re-processing
-* Unit tests without hardware
-
-== Rationale
-
-* Material costs money
-* Test burns waste time (~50 min per 1600x1600)
-* Early testing before production runs
-* Safe calibration and pattern testing
-
-== Implementation
-
-* Dry run toggle (FR-004)
-* BOUNDS command for positioning
-* Pipeline architecture (FR-003)
-* Mock transport for unit tests
-
-== Related ADRs
-
-* ADR-012: Pipeline architecture
-
-== Measurements
-
-* Full burn (1600x1600): ~5 minutes + material
-* Dry run (1600x1600): ~30 seconds, no material
-* BOUNDS preview: <1 second, no material
+A preview is not a real-device no-burn mode. Real mode can burn material and requires operator supervision.

@@ -1,0 +1,632 @@
+<!doctype html>
+<!-- Copyright (c) 2026 Sean Donnellan -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="author" content="Sean Donnellan">
+<title>Laser | VSR</title>
+<script>
+(() => {
+  const key = "laser_theme", allowed = ["system", "light", "dark"];
+  const media = matchMedia("(prefers-color-scheme: dark)");
+  let preference = "system";
+  try { const saved = localStorage.getItem(key); if (allowed.includes(saved)) preference = saved; } catch {}
+  window.setTheme = (value, remember = true) => {
+    preference = allowed.includes(value) ? value : "system";
+    document.documentElement.dataset.themePreference = preference;
+    document.documentElement.dataset.theme = preference === "system" ? (media.matches ? "dark" : "light") : preference;
+    const picker = document.getElementById("theme");
+    if (picker) picker.value = preference;
+    if (remember) { try { localStorage.setItem(key, preference); } catch {} }
+  };
+  media.addEventListener("change", () => { if (preference === "system") setTheme("system", false); });
+  document.addEventListener("DOMContentLoaded", () => setTheme(preference, false));
+  setTheme(preference, false);
+})();
+</script>
+<style>
+  :root { color-scheme:light; --ink:#172633; --paper:#f8f9fc; --wash:#eeeeff; --panel:#fff; --line:#91a3b1; --accent:#8b1e2d; --on-accent:#fff; --danger:#ac2632; --muted:#566978; --focus:#b76c00; --canvas:#fff; --card:#e9d9b8; --card-line:#a29377; --reach-line:#87968e; --burn-ink:#000; --guide-ink:#196c53; }
+  :root[data-theme=dark] { color-scheme:dark; --ink:#edf4fa; --paper:#101820; --wash:#22224a; --panel:#17232e; --line:#718394; --accent:#dc7180; --on-accent:#101820; --danger:#f3a5ab; --muted:#b7c5d0; --focus:#f2c66d; --canvas:#0d141b; --card:#293532; --card-line:#87968e; --reach-line:#9aacb7; --burn-ink:#eee; --guide-ink:#2aba8e; }
+  * { box-sizing:border-box; letter-spacing:0; }
+  html { min-height:100%; background:var(--paper); }
+  body { margin:0; min-height:100vh; color:var(--ink); background:linear-gradient(145deg,var(--paper) 0 38%,var(--wash) 100%); font:15px 'DejaVu Sans',sans-serif; }
+  header { display:flex; flex-wrap:wrap; align-items:center; gap:16px; padding:16px 24px; border-bottom:3px solid var(--accent); background:var(--panel); }
+  .brand-logo { width:80px; height:52px; object-fit:contain; flex:0 0 auto; border-radius:3px; }
+  .brand-copy { min-width:0; flex:1 1 260px; }
+  .brand-name { color:var(--muted); font-size:12px; line-height:1.4; margin:0 0 4px; overflow-wrap:anywhere; }
+  .theme-control { margin:0; }
+  h1 { margin:0; font-size:24px; } h2 { font-size:18px; margin:0 0 16px; }
+  #reach { margin:4px 0 0; font-size:13px; }
+  .spacer { flex:1; } main { max-width:1400px; margin:auto; padding:20px 24px; }
+  button,input,select,textarea { font:inherit; border:1px solid var(--line); border-radius:3px; padding:8px; min-width:0; color:inherit; background:var(--panel); }
+  button { cursor:pointer; padding:10px 16px; font-weight:bold; }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  button.primary { background:var(--accent); color:var(--on-accent); border-color:var(--accent); }
+  #stop { background:#ac2632; color:white; border-color:#ac2632; font-size:17px; }
+  button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible { outline:3px solid var(--focus); outline-offset:3px; }
+  label { display:block; margin:0 0 12px; font-size:13px; }
+  label>input:not([type=checkbox]),label>select,label>textarea { display:block; width:100%; margin-top:5px; }
+  input[type=checkbox] { width:18px; height:18px; vertical-align:middle; accent-color:var(--accent); }
+  textarea { resize:vertical; } fieldset { border:0; padding:0; margin:0; min-width:0; }
+  .secret-field { display:grid; grid-template-columns:minmax(0,1fr) 64px; align-items:start; gap:6px; margin-top:5px; }
+  .secret-field>input,.secret-field>textarea { width:100%; margin:0; }
+  .secret-field>button { width:64px; padding:8px 4px; }
+  .secret-field.multiline>input,.secret-field.multiline>textarea { height:84px; }
+  #template-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 12px; }
+  #template-fields>label { grid-column:span 2; }
+  #template-fields>label[data-control=number] { grid-column:auto; }
+  .preview-tools { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:10px; min-height:40px; }
+  #laser-output { margin:18px 0; padding:16px 0; border-top:1px solid var(--line); }
+  .output-stage { margin:12px 0 20px; }
+  .output-stage h3 { margin:0 0 8px; font-size:15px; }
+  .output-image { display:block; width:100%; max-height:320px; object-fit:contain; image-rendering:pixelated; background:white; border:1px solid var(--line); }
+  .output-hidden { color:var(--muted); font-size:13px; }
+  :root[data-preview-polarity=light] .output-image { filter:invert(1); }
+  .tabs { display:flex; gap:0; border-bottom:1px solid var(--line); margin-bottom:20px; }
+  .tabs button { background:none; border:0; border-radius:0; border-bottom:3px solid transparent; }
+  .tabs button[aria-selected=true] { border-bottom-color:var(--accent); color:var(--accent); }
+  .workspace { display:grid; grid-template-columns:310px minmax(0,1fr); gap:28px; }
+  .row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+  .actions { display:flex; gap:10px; flex-wrap:wrap; margin:16px 0; }
+  .meta { color:var(--muted); font-size:12px; overflow-wrap:anywhere; }
+  #cards { --burn-ink:#000; --guide-ink:#000; --card:#eee5d2; }
+  #card-scene { --canvas:#fff; --card:#eee5d2; --card-line:#958369; --reach-line:#687b88; --muted:#536574; display:block; width:100%; height:480px; background:var(--canvas); border:1px solid var(--line); }
+  :root[data-preview-polarity=light] #cards { --burn-ink:#fff; --guide-ink:#fff; --card:#26312d; }
+  :root[data-preview-polarity=light] #card-scene { --canvas:#151a1e; --card:#26312d; --card-line:#9aacb7; --reach-line:#9aacb7; --muted:#b7c5d0; }
+  :root[data-preview-polarity=light] image[data-preview-layer] { filter:invert(1); }
+  .legend { display:flex; flex-wrap:wrap; gap:16px; font-size:12px; margin:12px 0; }
+  .legend span::before { content:''; display:inline-block; width:10px; height:10px; margin-right:6px; background:var(--swatch); }
+  #status { padding:12px 0; min-height:46px; border-bottom:1px solid var(--line); margin-bottom:20px; overflow-wrap:anywhere; }
+  #status[data-error=true] { color:var(--danger); } progress { width:100%; accent-color:var(--accent); }
+  .goal { border-left:3px solid var(--accent); background:var(--panel); padding:12px; margin:12px 0; overflow-wrap:anywhere; }
+  #setup { max-width:540px; } #setup input { max-width:100%; }
+  #test-preview { min-width:0; padding-top:16px; border-top:1px solid var(--line); }
+  #test-pattern-image { display:block; width:100%; max-height:460px; object-fit:contain; background:#fff; border:1px solid var(--line); }
+  #test-preview-note { max-width:70ch; color:var(--muted); font-size:13px; }
+  #planned,#running,#judge,#placement-check { margin:20px 0; padding:16px 0; border-top:1px solid var(--line); }
+  pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; }
+  footer { margin-top:28px; padding:12px 0; border-top:1px solid var(--line); color:var(--muted); font-size:12px; }
+  details { margin-top:28px; } .hidden,[hidden] { display:none !important; }
+  @media(max-width:760px) { header { padding:12px 16px; gap:12px; } main { padding:16px; } .workspace { grid-template-columns:minmax(0,1fr); } #card-scene { height:360px; } .spacer { display:none; } }
+</style>
+</head>
+<body>
+<header>
+  <img class="brand-logo" src="/assets/vsr-logo.png" width="80" height="52" alt="VSR">
+  <div class="brand-copy"><p class="brand-name">Virtual Space &amp; Global Communications Research</p><h1 id="model">Laser</h1><p id="reach"></p></div>
+  <label class="theme-control">Theme <select id="theme" onchange="setTheme(this.value)"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+  <label style="margin:0">Mode <select id="mode" disabled><option value="simulator">Simulator</option><option value="real">Real laser</option></select></label>
+  <button id="stop" onclick="requestStop()">STOP</button>
+</header>
+<main>
+<div id="status" role="status" aria-live="polite">Connecting...</div>
+<nav class="tabs" role="tablist" aria-label="Workspace">
+  <button id="tab-cards" role="tab" aria-selected="true" aria-controls="cards" onclick="tab('cards')">Cards</button>
+  <button id="tab-tests" role="tab" aria-selected="false" aria-controls="tests" onclick="tab('tests')">Tests</button>
+</nav>
+<section id="cards" role="tabpanel" aria-labelledby="tab-cards">
+  <div class="workspace">
+    <div>
+      <fieldset id="card-inputs" disabled>
+        <label>Use case <select id="template"><option value="">Select type</option></select></label>
+        <div id="template-fields"></div>
+        <h2>Laser Setup</h2>
+        <label>Card file <input id="card-file" type="file" accept=".toml,.json"></label>
+        <div class="row"><label>Material <select id="piece"></select></label><label>Backing <select id="backing"></select></label></div>
+        <label>Placement <select id="placement"><option value="left">Left</option><option value="centred">Centred</option></select></label>
+        <label><input id="include-guide" type="checkbox" checked> Include position markings</label>
+      </fieldset>
+      <div class="actions"><button id="edit-card" onclick="editCard()" disabled>Edit layout</button></div>
+      <div class="meta" id="profiles"></div>
+    </div>
+    <div>
+      <div class="preview-tools"><button id="show-card" type="button" aria-pressed="false" onclick="setLayerVisible('content', !contentVisible)" disabled>Show card content</button><button id="show-markings" type="button" aria-pressed="true" onclick="setLayerVisible('guide', !markingsVisible)" disabled>Hide markings</button><label style="margin:0">Preview polarity<select id="preview-polarity" onchange="setPreviewPolarity(this.value)"><option value="dark">Dark marks on light</option><option value="light">Light marks on dark</option></select></label></div>
+      <label id="side-control" hidden>Card side<select id="card-side" onchange="selectCardSide(this.value)"><option value="front">Front</option><option value="back">Back</option></select></label>
+      <svg id="card-scene" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Card and burn preview" viewBox="-5 -5 100 85"></svg>
+      <div class="legend"><span style="--swatch:var(--card)">Card</span><span style="--swatch:var(--reach-line)">Reach</span><span style="--swatch:var(--guide-ink)">Markings</span><span style="--swatch:var(--burn-ink)">Content</span><span style="--swatch:#367abe">Item boxes</span></div>
+      <div id="card-goal" class="goal" hidden></div>
+      <div class="actions"><button id="preview-card" onclick="prepareCard()" disabled>Preview laser output</button><button id="burn-guide" class="primary" onclick="burnGuide()" disabled>Simulate markings</button><button id="burn-card" class="primary" onclick="burnCard()" disabled>Simulate card</button></div>
+      <section id="laser-output" hidden aria-label="Laser output raster"><h2>Laser Output</h2><div id="output-stages"></div></section>
+      <section id="placement-check" hidden>
+        <h2 id="placement-heading">Markings Reported Done</h2>
+        <label><input id="card-placed" type="checkbox"> <span id="placement-label">Guide matches; card is placed</span></label>
+        <button onclick="guideDeviation()">Deviation</button>
+      </section>
+    </div>
+  </div>
+</section>
+<section id="tests" role="tabpanel" aria-labelledby="tab-tests" hidden>
+<div class="workspace test-workspace">
+  <section id="setup">
+    <label>Step <select id="step"></select></label>
+    <label>Text <input id="text" type="password" data-secret="test text" autocomplete="off" spellcheck="false" size="40"></label>
+    <label>Size mm <input id="size_mm" type="number" step="0.5"></label>
+    <label>X mm <input id="x_mm" type="number" step="0.5"> Y mm <input id="y_mm" type="number" step="0.5"></label>
+    <div id="settings"></div>
+    <button onclick="plan()">Set goal</button>
+  </section>
+  <section id="test-preview" aria-live="polite">
+    <h2>Expected pattern</h2>
+    <div id="test-preview-goal" class="goal">Select a test to preview its goal and pattern.</div>
+    <img id="test-pattern-image" alt="Expected test pattern preview" hidden>
+    <p id="test-pattern-empty" class="meta" hidden>This step has no raster pattern; use the stated goal to observe its result.</p>
+    <p id="test-preview-note">The image is the requested/schematic pattern, not a camera image or burn result. QR previews visibly encode the supplied test text; use synthetic data.</p>
+  </section>
+</div>
+</section>
+
+<section id="planned" class="hidden">
+  <div>Goal:</div>
+  <div class="goal" id="goal"></div>
+  <button onclick="run()">Do it</button>
+  <button onclick="skip()">Skipped</button>
+</section>
+
+<section id="running" class="hidden">
+  <p>Running... <span id="pct"></span></p>
+</section>
+
+<section id="judge" class="hidden">
+  <div>Software saw:</div>
+  <div class="goal" id="saw"></div>
+  <details id="band-timing-details" hidden><summary>Band timing</summary><pre id="band-timing"></pre></details>
+  <p>Did the observation match the expected result?</p>
+  <label>Observation<textarea id="comment" data-secret="observation" hidden rows="3" cols="40" autocomplete="off" spellcheck="false" placeholder="How? What did you see?"></textarea></label>
+  <button onclick="verdict('ok')">OK</button>
+  <button onclick="verdict('deviation')">Deviation</button>
+</section>
+
+<details><summary>Run Log</summary><pre id="log"></pre></details>
+<footer>Copyright (c) 2026 Sean Donnellan</footer>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const fields = ["text", "size_mm", "x_mm", "y_mm"];
+let settings = [];
+let machine, materials = [], state = null, prepared = null, phase = null, ownedAttempt = null;
+let frozen = false, working = false, stopped = false, acceptedGuide = false;
+let modeInfo = {real:false, real_available:false};
+let templates = [], contentVisible = false, markingsVisible = true, displayedAttempt = null, loadedReviewId = null;
+let displayPolicy = {card_content_visible:false,markings_visible:true};
+let activeTemplate = null;
+let selectedSide = "front";
+const changedFields = new Set();
+let testPreviewTimer = null, testPreviewGeneration = 0;
+const secretFields = [];
+function setPreviewPolarity(value) {
+  const polarity = value === "light" ? "light" : "dark";
+  document.documentElement.dataset.previewPolarity = polarity;
+  $("preview-polarity").value = polarity;
+}
+function installSecretFields(root = document) {
+  for (const field of root.querySelectorAll("[data-secret]:not([data-secret-ready])")) {
+    field.dataset.secretReady = "true";
+    const multiline = field.tagName === "TEXTAREA";
+    const holder = document.createElement("span");
+    holder.className = "secret-field" + (multiline ? " multiline" : "");
+    field.replaceWith(holder); holder.append(field);
+    const mask = multiline ? document.createElement("input") : null;
+    if (mask) {
+      Object.assign(mask, {type:"password", readOnly:true, autocomplete:"off", tabIndex:-1});
+      mask.setAttribute("aria-label", field.dataset.secret + " hidden"); holder.append(mask);
+    }
+    const button = document.createElement("button");
+    button.type = "button"; button.setAttribute("aria-controls", field.id); holder.append(button);
+    const item = {field,mask,button,revealed:false};
+    button.addEventListener("click", event => { event.preventDefault(); if (field.definition?.revealable !== false) item.revealed = !item.revealed; updateSecret(item); });
+    field.addEventListener("input", () => { if (mask) mask.value = field.value ? "hidden" : ""; });
+    secretFields.push(item); updateSecret(item);
+  }
+}
+function updateSecret(item) {
+  if (item.field.definition?.revealable === false) item.revealed = false;
+  const {field,mask,button,revealed} = item;
+  if (mask) { field.hidden = !revealed; mask.hidden = revealed; mask.value = field.value || field.dataset.provided === "true" ? "hidden" : ""; }
+  else field.type = revealed ? "text" : "password";
+  button.hidden = field.definition?.revealable === false;
+  button.textContent = revealed ? "Hide" : "Show";
+  button.setAttribute("aria-pressed", String(revealed));
+  button.setAttribute("aria-label", `${revealed ? "Hide" : "Show"} ${field.dataset.secret}`);
+  button.title = button.getAttribute("aria-label");
+}
+function hideSecrets() { for (const item of secretFields) { item.revealed = false; updateSecret(item); } }
+function applyDisplay(policy) {
+  displayPolicy = policy;
+  for (const item of secretFields) { item.revealed = item.field.definition ? item.field.definition.revealable && !item.field.definition.masked : false; updateSecret(item); }
+  setLayerVisible("content", policy.card_content_visible);
+  setLayerVisible("guide", policy.markings_visible);
+}
+function setLayerVisible(kind, visible) {
+  if (kind === "content") contentVisible = visible; else markingsVisible = visible;
+  const layers = document.querySelectorAll(`[data-preview-layer="${kind}"]`);
+  for (const layer of layers) layer.style.display = visible ? "" : "none";
+  for (const notice of document.querySelectorAll(`[data-hidden-layer="${kind}"]`)) notice.hidden = visible;
+  const button = $(kind === "content" ? "show-card" : "show-markings");
+  button.disabled = layers.length === 0;
+  button.textContent = `${visible ? "Hide" : "Show"} ${kind === "content" ? "card content" : "markings"}`;
+  button.setAttribute("aria-pressed", String(visible));
+}
+function message(text, error = false) { $("status").textContent = text; $("status").dataset.error = error; }
+function progressText(progress) {
+  if (progress == null) return "Preparing the burn; no device progress received yet.";
+  if (typeof progress === "number") return `${progress}%`;
+  const band = progress.band == null ? "Burn" : `Band ${progress.band} of ${progress.bands}, raster rows ${progress.row_start + 1}-${progress.row_end}`;
+  const timing = progress.transfer_ms == null ? "" : ` Data transfer ${seconds(progress.transfer_ms)}, setup ${seconds(progress.setup_ms)}, laser wait ${seconds(progress.wait_ms)} so far.`;
+  if (progress.phase === "starting") return `${band}: uploading this raster section.${progress.previous_assumed ? " Previous band was assumed complete after 90 seconds without a response." : ""}`;
+  if (progress.phase === "assumed_complete") return `${band}: assumed complete after 90 seconds without a response; moving to the next band if present.${timing}`;
+  if (progress.phase === "reported_complete") return `${band}: device reported 100% for this band.${timing}`;
+  if (progress.percent == null) return `${band}: waiting for the laser's next status response. This is a band within the current stage, not a finished job.${timing}`;
+  return `${band}: ${progress.percent}% of this band only, not the whole card. Waiting for the next laser response; 90 seconds of silence is temporarily assumed complete.${timing}`;
+}
+function seconds(milliseconds) { return `${(milliseconds / 1000).toFixed(1)}s`; }
+function bandTimingText(events) {
+  return events.map(event => `Band ${event.band}/${event.bands} (rows ${event.row_start + 1}-${event.row_end}): transfer ${seconds(event.transfer_ms)}, setup ${seconds(event.setup_ms)}, laser wait ${seconds(event.wait_ms)}; ${event.phase === "assumed_complete" ? "completion assumed" : "device reported complete"}.`).join("\n");
+}
+async function api(url, body, method) {
+  const response = await fetch(url, {method:method || (body === undefined ? "GET" : "POST"),headers:{"Content-Type":"application/json"},...(body === undefined ? {} : {body:JSON.stringify(body)})});
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+  return result;
+}
+async function action(work) {
+  if (working) return;
+  working = true; controls();
+  try { await work(); } catch (error) { message(error.message, true); }
+  finally { working = false; controls(); }
+}
+function tab(name) {
+  for (const id of ["cards","tests"]) { $(id).hidden = id !== name; $("tab-" + id).setAttribute("aria-selected", id === name); }
+}
+function controls() {
+  const active = Boolean(state?.attempt || state?.running);
+  const guideReady = phase === "guide" && ownedAttempt === state?.attempt?.id && state?.outcome?.ok && !state?.running && !stopped;
+  const reuseGuide = prepared && !prepared.preview.stages.some(stage => stage.name === "guide") && !active && !frozen;
+  $("card-inputs").disabled = false;
+  for (const field of $("card-inputs").querySelectorAll("input,select,textarea")) field.disabled = working || frozen || active || (field.definition && !field.definition.editable);
+  $("card-file").disabled ||= !activeTemplate;
+  $("preview-card").disabled = working || frozen || active || !activeTemplate;
+  $("edit-card").disabled = working || active;
+  $("mode").disabled = working || frozen || active;
+  $("mode").value = modeInfo.mode || "simulator";
+  $("mode").options[1].disabled = !modeInfo.real_available;
+  $("burn-guide").textContent = modeInfo.real ? "Burn markings" : "Simulate markings";
+  $("burn-card").textContent = (modeInfo.real ? "Burn " : "Simulate ") + ($("side-control").hidden ? "card" : selectedSide);
+  $("burn-guide").disabled = working || active || frozen || !prepared || !prepared.preview.stages.some(stage => stage.name === "guide");
+  $("burn-card").disabled = working || stopped || !prepared || !(guideReady || acceptedGuide || reuseGuide) || !$("card-placed").checked;
+  $("placement-check").hidden = !(guideReady || acceptedGuide || reuseGuide);
+  $("placement-heading").textContent = reuseGuide ? "Card Placement" : "Markings Reported Done";
+  const index = prepared?.preview.stages.findIndex(stage => stage.name !== "guide" && (stage.side || "front") === selectedSide) ?? -1;
+  const priorAccepted = index >= 0 && prepared.preview.stages.slice(0,index).every((stage,stageIndex) => stage.name === "guide" && guideReady || (prepared.preview.accepted_stages || []).includes(stageIndex));
+  if (index < 0 || !priorAccepted) $("burn-card").disabled = true;
+  $("placement-label").textContent = selectedSide === "back" ? "Front inspected; card flipped and back placed in the same guide" : "Guide matches; front is placed";
+  $("card-side").disabled = working || Boolean(state?.running);
+  if (guideReady) $("judge").classList.add("hidden");
+}
+function renderTemplate(template, projection = null) {
+  activeTemplate = template; changedFields.clear(); $("template").value = template.id;
+  $("template-fields").replaceChildren();
+  secretFields.splice(0, secretFields.length, ...secretFields.filter(item => document.contains(item.field)));
+  for (const definition of template.fields) {
+    const label = document.createElement("label"); label.textContent = definition.label; label.dataset.control = definition.type;
+    const field = document.createElement(definition.type === "multiline" ? "textarea" : definition.type === "select" ? "select" : "input");
+    field.id = "field-" + definition.id; field.dataset.fieldId = definition.id; field.definition = definition;
+    if (definition.type === "select") for (const option of definition.options) field.add(new Option(String(option), String(option)));
+    else if (definition.type !== "multiline") field.type = definition.type === "checkbox" ? "checkbox" : definition.type === "number" ? "number" : "text";
+    field.autocomplete = "off"; field.spellcheck = false;
+    for (const key of ["min","max","step"]) if (definition[key] != null) field[key] = definition[key];
+    const supplied = projection?.[definition.id];
+    const value = projection ? supplied?.value : definition.default;
+    if (definition.type === "checkbox") field.checked = value === true;
+    else field.value = value ?? "";
+    field.dataset.provided = String(Boolean(supplied?.provided));
+    if (definition.masked) { field.dataset.secret = definition.label; if (definition.type === "multiline") field.hidden = true; }
+    if (value == null && supplied?.provided) field.placeholder = "Restricted";
+    label.append(field); $("template-fields").append(label);
+  }
+  installSecretFields($("template-fields")); applyDisplay(template.display);
+  const sides = [...new Set(template.elements.map(element => element.side || "front"))];
+  $("side-control").hidden = !sides.includes("back");
+  showSideFields();
+}
+
+function showSideFields() {
+  if (!activeTemplate) return;
+  for (const field of $("template-fields").querySelectorAll("[data-field-id]")) {
+    const sides = activeTemplate.elements.filter(element => element.enabled_by === field.dataset.fieldId || Object.values(element.bindings || {}).includes(field.dataset.fieldId)).map(element => element.side || "front");
+    field.closest("label").hidden = sides.length > 0 && !sides.includes(selectedSide);
+  }
+}
+function selectCardSide(side) {
+  selectedSide = side === "back" ? "back" : "front"; $("card-side").value = selectedSide;
+  $("card-placed").checked = false; showSideFields();
+  if (prepared) { showOutput(prepared.preview); drawPreview(prepared.job,prepared.preview); }
+  controls();
+}
+function svgNode(tag, attributes) {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [key,value] of Object.entries(attributes)) node.setAttribute(key, value);
+  return node;
+}
+function drawPreview(job, preview) {
+  const scene = $("card-scene"), {piece,etch,reach_mm:reach} = preview.layout;
+  scene.replaceChildren();
+  scene.setAttribute("viewBox", `-5 -5 ${Math.max(reach[0],piece.x+piece.w)+10} ${Math.max(reach[1],piece.y+piece.h)+10}`);
+  scene.append(svgNode("rect",{x:piece.x,y:piece.y,width:piece.w,height:piece.h,rx:2,fill:"var(--card)",stroke:"var(--card-line)","stroke-width":.15}));
+  scene.append(svgNode("rect",{x:0,y:0,width:reach[0],height:reach[1],fill:"none",stroke:"var(--reach-line)","stroke-width":.3,"stroke-dasharray":"1 1"}));
+  if (etch) scene.append(svgNode("rect",{x:etch.x,y:etch.y,width:etch.w,height:etch.h,fill:"none",stroke:"var(--muted)","stroke-width":.12,"stroke-dasharray":".5 1"}));
+  for (const stage of preview.stages.filter(stage => stage.name === "guide" || (stage.side || "front") === selectedSide)) for (const burn of stage.burns) {
+    const raster = new DOMParser().parseFromString(burn.svg, "image/svg+xml");
+    for (const background of raster.querySelectorAll('rect[fill="white"]')) background.remove();
+    const svg = new XMLSerializer().serializeToString(raster.documentElement);
+    const layer = svgNode("image",{x:burn.x_mm,y:burn.y_mm,width:burn.w_mm,height:burn.h_mm,href:"data:image/svg+xml;charset=utf-8,"+encodeURIComponent(svg)});
+    layer.dataset.previewLayer = stage.name === "guide" ? "guide" : "content";
+    scene.append(layer);
+  }
+  for (const item of job.items.filter(item => (item.side || "front") === selectedSide)) scene.append(svgNode("rect",{x:piece.x+item.x_mm,y:piece.y+item.y_mm,width:item.size_mm || item.width_mm,height:item.size_mm || item.height_mm,fill:"none",stroke:"#367abe","stroke-width":.15}));
+  applyDisplay(preview.display || displayPolicy);
+}
+function dirty() {
+  prepared = null; acceptedGuide = false; $("card-placed").checked = false;
+  $("card-scene").replaceChildren(); $("card-goal").hidden = true;
+  $("output-stages").replaceChildren(); $("laser-output").hidden = true;
+  setLayerVisible("content", false); setLayerVisible("guide", displayPolicy.markings_visible);
+  message("Layout changed. Preview pending."); controls();
+}
+async function prepare() {
+  const values = {};
+  for (const id of changedFields) {
+    const field = $("field-" + id);
+    values[id] = field.type === "checkbox" ? field.checked : field.definition.type === "number" ? Number(field.value) : field.value;
+  }
+  const preview = await api("/api/jobs/form", {template:activeTemplate.id,review_id:loadedReviewId,fields:values,piece:$("piece").value,backing:$("backing").value,placement:$("placement").value,guide:$("include-guide").checked});
+  loadReview(preview, true);
+}
+function showOutput(preview) {
+  $("output-stages").replaceChildren();
+  for (const stage of preview.stages.filter(stage => stage.name === "guide" || (stage.side || "front") === selectedSide)) {
+    const section = document.createElement("div"); section.className = "output-stage";
+    const title = document.createElement("h3");
+    title.textContent = stage.name === "guide" ? "Markings" : (stage.side === "back" ? "Back content" : "Front content");
+    section.append(title);
+    for (const burn of stage.burns) {
+      const details = document.createElement("p"); details.className = "meta";
+      details.textContent = `${burn.width_px} x ${burn.height_px} px | ${burn.w_mm} x ${burn.h_mm} mm | bed (${burn.x_mm}, ${burn.y_mm}) mm`;
+      const image = document.createElement("img");
+      image.className = "output-image"; image.alt = "Exact " + title.textContent.toLowerCase() + " burn pixels";
+      image.dataset.previewLayer = stage.name === "guide" ? "guide" : "content";
+      image.src = burn.png; section.append(details, image);
+      const hidden = document.createElement("p"); hidden.className = "output-hidden";
+      hidden.dataset.hiddenLayer = image.dataset.previewLayer;
+      hidden.textContent = title.textContent + " hidden"; section.append(hidden);
+    }
+    $("output-stages").append(section);
+  }
+  $("laser-output").hidden = false;
+}
+function loadReview(preview, preserveSide = false) {
+  const job = preview.job;
+  const previousTemplate = activeTemplate?.id;
+  const previousSide = selectedSide;
+  $("card-placed").checked = false; acceptedGuide = false;
+  renderTemplate(preview.template, preview.fields);
+  const next = preview.stages.find((stage,index) => stage.name !== "guide" && !(preview.accepted_stages || []).includes(index));
+  selectedSide = preserveSide && previousTemplate === preview.template.id && preview.stages.some(stage => stage.side === previousSide)
+    ? previousSide : next?.side || "front";
+  $("card-side").value = selectedSide; showSideFields();
+  $("piece").value = job.piece; $("backing").value = job.backing; $("placement").value = job.placement;
+  $("include-guide").checked = job.guide;
+  prepared = {job,preview,review_id:preview.review_id}; stopped = false;
+  loadedReviewId = preview.review_id;
+  showOutput(preview);
+  drawPreview(job,preview);
+  $("card-goal").textContent = preview.stages.map(stage => stage.goal).join("\n"); $("card-goal").hidden = false;
+  $("profiles").textContent = [["piece","Card"],["backing","Backing"]].map(([key,label]) => {
+    const entry = materials.find(entry => entry.material.id === job[key]);
+    const values = {...entry?.values,...(key === "piece" ? job.values : {})};
+    return label + ": " + Object.entries(values).map(([key,value]) => `${key} ${value}`).join(", ");
+  }).join(" / ");
+  message("Pi raster preview ready. Markings go on bare backing. No burn started.");
+}
+function prepareCard() { return action(prepare); }
+function editCard() { if (state?.attempt || working) return; frozen = false; phase = null; ownedAttempt = null; dirty(); }
+async function startStage(stage) {
+  const index = prepared.preview.stages.findIndex(item => stage === "guide" ? item.name === "guide" : item.name !== "guide" && (item.side || "front") === selectedSide);
+  if (index < 0) throw new Error("This review has no " + stage + " stage.");
+  const attempt = await api("/api/plan", {review_id:prepared.review_id,stage:index,placement_confirmed:$("card-placed").checked});
+  ownedAttempt = attempt.id; phase = stage; frozen = true; stopped = false;
+  await api("/api/run", {});
+  await poll();
+}
+function burnGuide() { return action(async () => {
+  if (!prepared || frozen || state?.attempt) return;
+  if (modeInfo.real && !confirm("Burn the previewed markings on BARE BACKING? The card must not be in the guide footprint.")) return;
+  await startStage("guide");
+}); }
+function burnCard() { return action(async () => {
+  if (!prepared || stopped || !$("card-placed").checked) return;
+  if (modeInfo.real && !confirm(`Burn the previewed ${selectedSide} on the placed card?`)) return;
+  if (!acceptedGuide && prepared.preview.stages.some(stage => stage.name === "guide")) {
+    if (phase !== "guide" || ownedAttempt !== state?.attempt?.id || !state?.outcome?.ok) return;
+    await api("/api/verdict", {status:"ok",comment:"Guide matches; card placed by operator."});
+    acceptedGuide = true;
+  }
+  await startStage("content");
+}); }
+function guideDeviation() { const note = prompt("Describe the guide deviation."); if (note?.trim()) { $("comment").value = note; verdict("deviation"); } }
+function requestStop() { return action(async () => {
+  stopped = true; acceptedGuide = false;
+  const result = await api("/api/stop", {});
+  message(result.sent ? "STOP command sent. Confirm motion has stopped." : "No STOP handle available. Confirm device state.", true);
+}); }
+async function post(url, body) {
+  const r = await fetch(url, {method: "POST", body: JSON.stringify(body || {})});
+  const j = await r.json();
+  if (!r.ok) alert(j.error || r.status);
+  return r.ok ? j : null;
+}
+function testParams() {
+  const params = {};
+  for (const f of fields) params[f] = f === "text" ? $(f).value : Number($(f).value);
+  params.values = {};
+  for (const s of settings) params.values[s.key] = Number($("set-" + s.key).value);
+  return params;
+}
+async function updateTestPreview() {
+  const step = $("step").value;
+  if (!step) return;
+  const generation = ++testPreviewGeneration;
+  const image = $("test-pattern-image"), empty = $("test-pattern-empty");
+  try {
+    const preview = await api("/api/tests/preview", {step, params:testParams()});
+    if (generation !== testPreviewGeneration) return;
+    $("test-preview-goal").textContent = preview.goal || "No goal returned.";
+    $("test-preview-note").textContent = preview.note || "Pattern preview only; it is not a burn result.";
+    if (preview.svg) {
+      image.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(preview.svg);
+      image.hidden = false; empty.hidden = true;
+    } else {
+      image.removeAttribute("src"); image.hidden = true; empty.hidden = false;
+    }
+  } catch (error) {
+    if (generation !== testPreviewGeneration) return;
+    image.removeAttribute("src"); image.hidden = true; empty.hidden = false;
+    $("test-preview-goal").textContent = `Preview unavailable: ${error.message}`;
+  }
+}
+function scheduleTestPreview() {
+  clearTimeout(testPreviewTimer);
+  testPreviewTimer = setTimeout(() => updateTestPreview(), 180);
+}
+function show(id) {
+  for (const s of ["setup", "planned", "running", "judge"]) $(s).classList.toggle("hidden", s !== id);
+}
+async function plan() {
+  const params = testParams();
+  const a = await post("/api/plan", {step: $("step").value, params});
+  if (a) { $("goal").textContent = a.goal; show("planned"); }
+}
+async function run() { if (await post("/api/run")) poll(); }
+async function verdict(status) {
+  if (status === "deviation" && !$("comment").value.trim()) return alert("Describe the deviation.");
+  return action(async () => {
+    const own = ownedAttempt === state?.attempt?.id;
+    await api("/api/verdict", {status, comment:$("comment").value});
+    if (own) { phase = null; ownedAttempt = null; frozen = false; acceptedGuide = false; loadReview(await api("/api/jobs/review")); }
+    $("comment").value = ""; stopped = false;
+    await poll(); await refreshLog(); message("Recorded: " + status + ".");
+  });
+}
+async function skip() {
+  const comment = prompt("Why is this test skipped?");
+  if (comment && comment.trim() && await post("/api/verdict", {status: "skipped", comment})) location.reload();
+}
+async function poll() {
+  const s = await api("/api/state"); state = s; modeInfo = s.mode;
+  if (!s.running && !s.attempt) { frozen = false; ownedAttempt = null; phase = null; }
+  if (prepared && Array.isArray(s.accepted_stages)) prepared.preview.accepted_stages = s.accepted_stages;
+  if (s.review_id && loadedReviewId !== s.review_id) {
+    const review = await api("/api/jobs/review");
+    if (review.review_id === state?.review_id) loadReview(review);
+  }
+  if (s.attempt?.review_id && s.attempt.review_id === prepared?.review_id) {
+    ownedAttempt = s.attempt.id; phase = s.attempt.stage_name === "guide" ? "guide" : "content"; frozen = true;
+  }
+  if (s.attempt?.job && displayedAttempt !== s.attempt.id) {
+    const preview = await api("/api/attempt/preview");
+    if (state?.attempt?.id === preview.attempt_id) {
+      showOutput(preview);
+      drawPreview({items:[]}, preview);
+      $("card-goal").textContent = s.attempt.goal; $("card-goal").hidden = false;
+      displayedAttempt = preview.attempt_id;
+    }
+  }
+  if (!s.attempt && displayedAttempt) {
+    displayedAttempt = null;
+    if (prepared) { showOutput(prepared.preview); drawPreview(prepared.job, prepared.preview); }
+    else { $("card-scene").replaceChildren(); $("output-stages").replaceChildren(); $("laser-output").hidden = true; setLayerVisible("content", false); setLayerVisible("guide", true); $("card-goal").hidden = true; }
+  }
+  if (s.running) {
+    show("running"); const progress = progressText(s.progress);
+    $("pct").textContent = progress;
+    if (!stopped) message(`${modeInfo.real ? "Burning" : "Simulating"} ${phase || "attempt"}. ${progress}`);
+  }
+  else if (s.outcome) {
+    $("goal").textContent = s.attempt.goal;
+    $("saw").textContent = (s.outcome.ok ? "Software completed: " : "Device error: ") + s.outcome.saw;
+    const timings = s.outcome.band_timings || s.band_timings || [];
+    $("band-timing-details").hidden = timings.length === 0;
+    $("band-timing").textContent = bandTimingText(timings);
+    show("judge");
+    if (!stopped) message(s.outcome.ok ? (phase === "guide" ? "Markings reported done. Awaiting card placement." : "Run reported done. Observation pending.") : s.outcome.saw, !s.outcome.ok);
+  }
+  else if (s.attempt) { $("goal").textContent = s.attempt.goal; show("planned"); message("Planned; waiting for operator start."); }
+  else show("setup");
+  controls();
+}
+async function refreshLog() { const log = await api("/api/log"); $("log").textContent = log.slice(-20).reverse().map(entry => JSON.stringify(entry)).join("\n"); }
+async function init() {
+  const d = await (await fetch("/api/steps")).json();
+  const m = d.machine;
+  $("model").textContent = m.model;
+  $("reach").textContent = `Reach ${m.reach_mm[0]} x ${m.reach_mm[1]} mm`;
+  settings = m.settings;
+  for (const s of settings) {
+    const l = document.createElement("label");
+    l.textContent = `${s.label} (${s.min}-${s.max}) `;
+    const i = document.createElement("input");
+    Object.assign(i, {id: "set-" + s.key, type: "number", min: s.min, max: s.max, value: s.default, title: s.note});
+    l.append(i, ` ${s.note}`);
+    $("settings").append(l);
+  }
+  for (const s of d.steps) $("step").add(new Option(s.title, s.step));
+  for (const f of fields) $(f).value = d.defaults[f];
+  $("setup").addEventListener("input", scheduleTestPreview);
+  $("setup").addEventListener("change", scheduleTestPreview);
+  await updateTestPreview();
+  machine = m;
+  materials = await api("/api/materials");
+  templates = await api("/api/templates");
+  for (const template of templates) $("template").add(new Option(template.name, template.id));
+  for (const entry of materials) $(entry.material.role === "piece" ? "piece" : "backing").add(new Option(entry.material.name, entry.material.id));
+  $("card-inputs").addEventListener("input", event => { if (event.target.dataset.fieldId) changedFields.add(event.target.dataset.fieldId); if (!["card-file","template"].includes(event.target.id)) dirty(); });
+  $("template").addEventListener("change", () => action(async () => {
+    const selected = $("template").value;
+    if (loadedReviewId) {
+      if (!confirm("Discard the current private review and select another type?")) { $("template").value = activeTemplate.id; return; }
+      await api("/api/jobs/review", undefined, "DELETE"); loadedReviewId = null;
+    }
+    prepared = null; frozen = false; acceptedGuide = false;
+    const template = templates.find(template => template.id === selected);
+    if (template) renderTemplate(template);
+    else { activeTemplate = null; $("template-fields").replaceChildren(); }
+    dirty();
+  }));
+  $("card-placed").addEventListener("change", controls);
+  $("card-file").addEventListener("change", () => action(async () => {
+    const file = $("card-file").files[0]; if (!file) return;
+    dirty();
+    const source = await file.text();
+    const job = file.name.toLowerCase().endsWith(".toml") ? (await api("/api/cards/import", {toml:source,template:activeTemplate.id})).job : JSON.parse(source);
+    if (!job.template) job.template = activeTemplate.id;
+    loadReview(await api("/api/jobs/review", {job}));
+  }));
+  $("mode").addEventListener("change", event => {
+    const real = event.currentTarget.value === "real";
+    action(async () => {
+    if (real && !confirm("Enable the real laser? Burns will still require a separate confirmation.")) return;
+    modeInfo = await api("/api/mode", {real});
+    message(real ? "Real laser enabled. Idle." : "Simulator enabled. Idle.");
+    });
+  });
+  await refreshLog(); await poll();
+  if (!state.attempt) message("Simulator" === $("mode").selectedOptions[0].textContent ? "Simulator. Idle." : "Real laser. Idle.");
+  setInterval(() => poll().catch(error => { $("burn-guide").disabled = true; $("burn-card").disabled = true; message("Connection lost: " + error.message, true); }), 1000);
+}
+installSecretFields();
+setPreviewPolarity("dark");
+document.addEventListener("visibilitychange", () => { if (document.hidden) { hideSecrets(); setLayerVisible("content", false); } });
+action(init);
+</script>
+</body>
+</html>

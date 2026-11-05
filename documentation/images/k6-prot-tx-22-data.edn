@@ -1,30 +1,15 @@
-;; K6 Raster Data Packet (0x22)
-;; 9-byte header + variable pixel data
+;; Rust K6 raster DATA packet (0x22).
+;; The 16-bit big-endian size includes opcode, size, payload and checksum.
 
-;; Color coding
 (defattrs :bg-header {:fill "#e8f4f8"})
 (defattrs :bg-data {:fill "#fff4e8"})
 
 (draw-column-headers)
+(draw-box "0x22 (Raster DATA)" [:box-first {:span 8} :bg-header])
+(draw-box "Length MSB (u16 BE)" [:box-related {:span 8} :bg-header])
+(draw-box "Length LSB" [:box-related {:span 8} :bg-header])
+(draw-box "First payload byte" [:box-last {:span 8} :bg-data])
 
-;; Header row 1
-(draw-box "0x22 (Raster Data)" [:box-first {:span 8} :bg-header])
-(draw-box "Size MSB (16-bit BE)" [:box-related {:span 8} :bg-header])
-(draw-box "Size LSB" [:box-related {:span 8} :bg-header])
-(draw-box "Depth (1-255)" [:box-last {:span 8} :bg-header])
-
-;; Header row 2
 (next-row)
-(draw-box "Power MSB (16-bit BE, 0-1000)" [:box-first {:span 8} :bg-header])
-(draw-box "Power LSB" [:box-related {:span 8} :bg-header])
-(draw-box "Line MSB (16-bit BE)" [:box-related {:span 8} :bg-header])
-(draw-box "Line LSB" [:box-last {:span 8} :bg-header])
-
-;; Header row 3 and pixel data
-(next-row)
-(draw-box "Pixel Count" [{:span 8} :bg-header])
-(draw-gap "Packed Pixel Data (1-bit packed)" [{:span 24} :bg-data])
-
-;; Variable length continuation
-(next-row)
-(draw-gap "..." [{:span 32} :bg-data])
+(draw-gap "... packed 1-bit raster payload (up to 1900 bytes) ..." [{:span 24} :bg-data])
+(draw-box "Checksum" [:box-last {:span 8} :bg-header])

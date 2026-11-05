@@ -1,0 +1,29 @@
+= ADR-021: Rust Service
+
+== Status
+Accepted; current.
+
+== Decision
+The Pi service is a Rust workspace with four responsibilities:
+
+* `app`: HTTP API, review/run/verdict workflow and embedded UI.
+* `compose`: pure content, placement and raster generation.
+* `k6`: K6 serial protocol driver.
+* `laser`: machine, raster, settings, progress and stop contracts, plus simulator.
+
+The service handles raster jobs. Each user stage requires a separate plan and run request; a later card side requires the prior stage verdict and explicit placement confirmation.
+
+== State and lifetime
+
+Active review and attempt state are in process memory and disappear on restart. The service appends redacted run, stop, mode and verdict events to `DATA_DIR/runs.jsonl`. It does not persist submitted QR/text payloads or raster jobs. Public assets and TOML definitions are files, not user job state.
+
+== Consequences
+
+* Protocol and hardware behavior stay in the K6 driver; composition is testable without a laser.
+* There is no job queue, per-client session owner or restart recovery. These are current limits, not promised features.
+ifdef::single-page[]
+* The canonical API contract is included at <<api-contract>> and served at `GET /api`.
+endif::single-page[]
+ifndef::single-page[]
+* The canonical API contract is the service link:../../docker/docker-wainlux-rs/README.adoc[README], also served at `GET /api`.
+endif::single-page[]

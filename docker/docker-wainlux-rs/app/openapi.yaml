@@ -1,0 +1,557 @@
+openapi: 3.1.0
+info:
+  title: Wainlux K6 Rust Service API
+  version: 0.1.0
+  description: >-
+    HTTP contract for the Rust card-composition and K6 service. This API has no
+    authentication and is intended for a trusted LAN. Preview and review do not
+    execute a burn; each physical stage requires separate plan and run requests.
+servers:
+  - url: /
+    description: Same origin serving the OpenAPI document
+security: []
+paths:
+  /openapi.yaml:
+    get:
+      operationId: getOpenApi
+      summary: Get this OpenAPI document
+      responses:
+        '200':
+          description: OpenAPI 3.1 document
+          content:
+            application/yaml:
+              schema:
+                type: string
+  /api:
+    get:
+      operationId: getApiGuide
+      summary: Get the service API guide
+      responses:
+        '200':
+          description: AsciiDoc API guide
+          content:
+            text/plain:
+              schema:
+                type: string
+  /api/machine:
+    get:
+      operationId: getMachine
+      summary: Get machine profile and accepted settings
+      responses:
+        '200':
+          description: Machine capabilities
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Machine'
+  /api/mode:
+    get:
+      operationId: getMode
+      summary: Get current real/simulator mode
+      responses:
+        '200':
+          description: Current mode
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mode'
+    post:
+      operationId: setMode
+      summary: Select real or simulator mode while idle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [real]
+              properties:
+                real:
+                  type: boolean
+      responses:
+        '200':
+          description: Mode selected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mode'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /api/materials:
+    get:
+      operationId: listMaterials
+      summary: List material and backing definitions
+      responses:
+        '200':
+          description: Configured materials
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+  /api/templates:
+    get:
+      operationId: listTemplates
+      summary: List declared card templates
+      responses:
+        '200':
+          description: Field, element and display-policy definitions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+  /api/assets:
+    get:
+      operationId: listAssets
+      summary: List prepared public assets
+      responses:
+        '200':
+          description: Public asset catalogue
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+  /api/assets/tiger.png:
+    get:
+      operationId: getTigerAsset
+      summary: Get the prepared public tiger asset
+      responses:
+        '200':
+          description: PNG asset
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+  /api/steps:
+    get:
+      operationId: listTestSteps
+      summary: List supported test-ladder steps
+      responses:
+        '200':
+          description: Steps and goals
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+  /api/state:
+    get:
+      operationId: getState
+      summary: Get current attempt, progress, mode and review identifier
+      responses:
+        '200':
+          description: Current service state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/State'
+  /api/attempt/preview:
+    get:
+      operationId: getAttemptPreview
+      summary: Get the exact retained planned-stage preview
+      responses:
+        '200':
+          description: Active stage preview
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '404':
+          $ref: '#/components/responses/Problem'
+  /api/log:
+    get:
+      operationId: getRunLog
+      summary: Get redacted run, stop, mode and verdict events
+      responses:
+        '200':
+          description: JSONL event records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+  /api/pending-verdicts:
+    get:
+      operationId: getPendingVerdicts
+      summary: List completed attempts awaiting an operator verdict
+      responses:
+        '200':
+          description: Pending attempts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: true
+  /api/jobs/preview:
+    post:
+      operationId: previewJob
+      summary: Compose a job without retaining it or contacting the laser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [job]
+              properties:
+                job:
+                  $ref: '#/components/schemas/Job'
+      responses:
+        '200':
+          description: Layout and per-stage raster preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Preview'
+        '400':
+          $ref: '#/components/responses/Problem'
+  /api/jobs/review:
+    get:
+      operationId: getReview
+      summary: Get the current in-memory review
+      responses:
+        '200':
+          description: Current review
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Review'
+        '404':
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: submitReview
+      summary: Validate and retain a review in memory; does not execute it
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [job]
+              properties:
+                job:
+                  $ref: '#/components/schemas/Job'
+      responses:
+        '200':
+          description: Retained review and exact stage pixels
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Review'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: discardReview
+      summary: Discard an idle review
+      responses:
+        '200':
+          description: Review discarded
+        '409':
+          $ref: '#/components/responses/Problem'
+  /api/jobs/form:
+    post:
+      operationId: editReview
+      summary: Edit declared fields and regenerate an idle review
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FormRequest'
+      responses:
+        '200':
+          description: Updated review and raster pixels
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Review'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '403':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /api/cards/import:
+    post:
+      operationId: importCard
+      summary: Import card values using a declared template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [toml, template]
+              properties:
+                toml:
+                  type: string
+                template:
+                  type: string
+      responses:
+        '200':
+          description: Imported review values
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/Problem'
+  /api/tests/preview:
+    post:
+      operationId: previewTest
+      summary: Preview a supported test-ladder pattern
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanRequest'
+      responses:
+        '200':
+          description: Test goal and optional SVG preview
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/Problem'
+  /api/plan:
+    post:
+      operationId: planStage
+      summary: Plan a test step, job stage or retained review stage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanRequest'
+      responses:
+        '200':
+          description: Fixed attempt goal; does not run the laser
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /api/run:
+    post:
+      operationId: runPlannedStage
+      summary: Run the explicitly planned attempt
+      responses:
+        '202':
+          description: Execution started
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [running]
+                properties:
+                  running: {type: boolean, const: true}
+        '409':
+          $ref: '#/components/responses/Problem'
+  /api/verdict:
+    post:
+      operationId: recordVerdict
+      summary: Record an independent operator verdict
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                id:
+                  type: string
+                status:
+                  type: string
+                  enum: [ok, deviation, skipped]
+                comment:
+                  type: string
+                ok:
+                  type: boolean
+      responses:
+        '200':
+          description: Verdict recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /api/stop:
+    post:
+      operationId: requestStop
+      summary: Latch cancellation and send STOP when a handle is available
+      description: A successful response does not prove that the machine has physically stopped.
+      responses:
+        '200':
+          description: Stop request result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StopResult'
+components:
+  schemas:
+    Problem:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+    Machine:
+      type: object
+      required: [model, px_per_mm, reach_mm, pointer, frame, settings]
+      properties:
+        model: {type: string}
+        px_per_mm: {type: number}
+        reach_mm:
+          type: array
+          prefixItems: [{type: number}, {type: number}]
+          minItems: 2
+          maxItems: 2
+        pointer: {type: boolean}
+        frame: {type: boolean}
+        settings:
+          type: array
+          items: {type: object, additionalProperties: true}
+    Mode:
+      type: object
+      required: [real, mode, real_available]
+      properties:
+        real: {type: boolean}
+        mode: {type: string, enum: [real, simulator]}
+        real_available: {type: boolean}
+    Job:
+      type: object
+      description: Typed job content; detailed template bindings are in the service README.
+      required: [piece, items]
+      properties:
+        template: {type: string}
+        piece: {type: string}
+        backing: {type: string}
+        placement: {type: string, enum: [left, centred]}
+        guide: {type: boolean}
+        items:
+          type: array
+          items: {type: object, additionalProperties: true}
+        values: {type: object, additionalProperties: {type: integer}}
+      additionalProperties: false
+    FormRequest:
+      type: object
+      required: [template, piece, backing, placement, guide, fields]
+      properties:
+        template: {type: string}
+        review_id: {type: [string, 'null']}
+        piece: {type: string}
+        backing: {type: string}
+        placement: {type: string, enum: [left, centred]}
+        guide: {type: boolean}
+        fields: {type: object, additionalProperties: true}
+      additionalProperties: false
+    PlanRequest:
+      type: object
+      properties:
+        step: {type: string}
+        params: {type: object, additionalProperties: true}
+        material: {type: string}
+        job: {$ref: '#/components/schemas/Job'}
+        review_id: {type: string}
+        stage: {type: integer, minimum: 0}
+        placement_confirmed: {type: boolean}
+      additionalProperties: false
+    Preview:
+      type: object
+      required: [layout, stages]
+      properties:
+        layout: {type: object, additionalProperties: true}
+        display: {type: object, additionalProperties: true}
+        stages:
+          type: array
+          items: {$ref: '#/components/schemas/Stage'}
+    Review:
+      allOf:
+        - $ref: '#/components/schemas/Preview'
+        - type: object
+          properties:
+            review_id: {type: string}
+            template: {type: object, additionalProperties: true}
+            fields: {type: object, additionalProperties: true}
+            job: {type: object, additionalProperties: true}
+            accepted_stages:
+              type: array
+              items: {type: integer}
+    Stage:
+      type: object
+      properties:
+        name: {type: string}
+        side: {type: [string, 'null'], enum: [front, back, null]}
+        goal: {type: string}
+        burns:
+          type: array
+          items:
+            type: object
+            properties:
+              x_mm: {type: number}
+              y_mm: {type: number}
+              w_mm: {type: number}
+              h_mm: {type: number}
+              width_px: {type: integer}
+              height_px: {type: integer}
+              png: {type: string, description: PNG data URI}
+              svg: {type: string}
+    State:
+      type: object
+      properties:
+        attempt: {type: [object, 'null'], additionalProperties: true}
+        running: {type: boolean}
+        progress: {type: [object, 'null'], additionalProperties: true}
+        band_timings:
+          type: array
+          items: {type: object, additionalProperties: true}
+        outcome: {type: [object, 'null'], additionalProperties: true}
+        mode: {$ref: '#/components/schemas/Mode'}
+        review_id: {type: [string, 'null']}
+        accepted_stages:
+          type: array
+          items: {type: integer}
+    StopResult:
+      type: object
+      required: [sent, cancel_requested]
+      properties:
+        sent: {type: boolean}
+        cancel_requested: {type: boolean}
+  responses:
+    Problem:
+      description: Request refused or conflicting with current state
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Problem'

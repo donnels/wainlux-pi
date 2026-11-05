@@ -1,0 +1,16 @@
+= NFR-005: Redacted Run History
+
+== Status
+Implemented for run, stop, mode and verdict events.
+
+== Requirement
+Persist operational outcomes in an append-only JSONL file without persisting submitted card payloads or raster jobs.
+
+== Acceptance
+
+* Events are appended to `DATA_DIR/runs.jsonl` and are available through `GET /api/log`.
+* Run records retain a redacted goal, software outcome and band timings; verdict records retain the operator's status and comment.
+* Submitted job and parameter objects are removed before logging; tests verify synthetic SSIDs and passwords do not appear in the log.
+* The log is not a job database: active review state is in RAM and is lost on restart.
+
+The log currently has no rotation or retention policy.

@@ -1,0 +1,57 @@
+@startuml architecture-rust
+' Current deployment and crate boundaries; not a target-state sketch.
+title Wainlux K6 service - runtime ownership
+left to right direction
+skinparam backgroundColor #fff/aaf
+skinparam componentbackgroundColor #fff/aaf
+skinparam componentStyle rectangle
+skinparam shadowing true
+skinparam defaultFontName sans-serif
+
+actor "Sean Donnellan\n(operator)" as Sean
+component "Browser UI" as Browser
+component "HTTP producer\n(optional)" as Producer
+
+package "Pi Zero W host" {
+  component "app\nHTTP API + review/run/verdict" as App
+  component "MCP preview service\nStreamable HTTP\n(separate container)" as MCP
+  component "compose\nQR, text, placement, raster" as Compose
+  package "laser crate" {
+    interface "Machine contract" as Machine
+    component "sim\nautomated tests" as Sim
+    Sim ..|> Machine
+  }
+  component "k6\nserial protocol driver" as K6
+  folder "materials.toml\nuse-cases/*.toml\npublic assets" as Config
+  database "DATA_DIR/runs.jsonl\nredacted events" as Log
+}
+
+node "Wainlux K6" as Device #fff/red
+
+Sean --> Browser : review and decide
+Browser --> App : HTTP :8081
+Producer --> App : HTTP API
+MCP --> App : Streamable HTTP\npreview only
+App --> Compose : compose stages
+App --> Machine : plan/run contracts
+K6 ..|> Machine
+K6 --> Device : /dev/ttyUSB0\n115200 baud
+App --> Config : load at startup
+App --> Log : append outcome/verdict
+
+note bottom of App
+  Review and raster payloads stay in RAM.
+  The event log omits submitted content.
+  One API process owns machine access.
+end note
+note bottom of MCP
+  Assumed placement on this Pi host for now.
+  It can move to another hub later.
+  No plan, run, stop or verdict tools.
+end note
+note bottom of Device
+  The simulator never opens this link.
+  Normal K6 reach: 80 x 75 mm.
+end note
+footer (C)2026 Sean Donnellan
+@enduml

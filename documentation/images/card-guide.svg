@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="650" viewBox="0 0 1024 650" font-family="sans-serif" font-size="16">
+<!-- Copyright (c) 2026 Sean Donnellan -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#aaf"/></linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#172633"/></marker>
+  </defs>
+  <rect width="1024" height="650" fill="url(#bg)"/>
+  <text x="40" y="42" font-size="24" font-weight="bold" fill="#172633">Burn the U markings on bare backing</text>
+  <text x="40" y="72" fill="#566978">No card on the backing during this stage. Green shows the requested guide only.</text>
+
+  <rect x="100" y="100" width="560" height="525" fill="#fff" fill-opacity="0.65" stroke="#637786" stroke-width="2" stroke-dasharray="8 5"/>
+  <text x="100" y="94" fill="#566978">K6 working area: 80 x 75 mm</text>
+
+  <g fill="#196c53">
+    <rect x="100" y="169.58" width="560" height="3.5"/>
+    <rect x="100" y="551.92" width="560" height="3.5"/>
+    <rect x="102.1" y="169.58" width="3.5" height="385.84"/>
+  </g>
+
+  <text x="380" y="330" text-anchor="middle" font-size="24" font-weight="bold" fill="#196c53">Open-right U</text>
+  <path d="M100 600H660" stroke="#172633" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text x="380" y="622" text-anchor="middle" fill="#172633">80 mm reachable width</text>
+
+  <g transform="translate(710 150)" fill="#172633">
+    <text x="0" y="0" font-size="19" font-weight="bold">First card</text>
+    <text x="0" y="38">1. Place bare backing.</text>
+    <text x="0" y="70">2. Preview and start markings.</text>
+    <text x="0" y="102">3. Inspect only after motion stops.</text>
+    <text x="0" y="134">4. Seat the card inside the U.</text>
+    <text x="0" y="166">5. Review and start content separately.</text>
+    <text x="0" y="220" font-weight="bold">Repeat cards</text>
+    <text x="0" y="258">Keep the backing and U in place.</text>
+    <text x="0" y="290">Reuse the guide; do not burn it again.</text>
+    <text x="0" y="344" fill="#566978">Sean must confirm physical rest and</text>
+    <text x="0" y="370" fill="#566978">placement before proceeding.</text>
+  </g>
+</svg>

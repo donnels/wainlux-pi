@@ -1,0 +1,18 @@
+ACK:: Acknowledgement byte (`0x09`) observed from the K6 after a successful command.
+ARMv6:: 32-bit ARM architecture used by the Pi Zero W.
+Assumed completion:: Software outcome after 90 seconds without a received device byte. It is not device confirmation or an operator verdict.
+Band:: A contiguous group of raster rows transferred and burned as one unit. Progress percentages and timing records are band-local.
+Calibration envelope:: Coordinate range used by an explicit limit test. It may exceed normal job reach and does not establish the mechanical hard stop.
+CP2102:: USB-to-serial bridge family observed in the K6 connection; Linux exposes the serial device to the service.
+Depth:: K6 laser on-time setting per pixel. The supported setting range is 1-255; higher values increase exposure.
+Docker:: Container runtime used to package the service. Compose maps the serial device into the container.
+K6:: Wainlux K6 laser engraver controlled over USB serial. The configured normal working profile is 80 x 75 mm; this is not a measured mechanical stop.
+NFC:: Near-field communication used by compatible contactless cards such as the measured NTAG215 card.
+Operator verdict:: Human `ok`, `deviation`, or `skipped` record for a completed or unperformed plan. It is distinct from the software outcome.
+Plan:: A record of the reviewed stage and expected goal. Planning does not start machine motion.
+Pi Zero W:: Raspberry Pi Zero W, an ARMv6, 512 MB Wi-Fi host for the service.
+QR quiet zone:: Blank margin around a QR symbol that helps scanners locate and decode it.
+Raster:: One-bit image represented as rows of pixels; K6 transfer data packs eight pixels per byte.
+Review:: Composed job with layout and exact per-stage rasters. Creating or editing a review does not start the laser.
+Stage:: One separately reviewed and explicitly started unit of a card workflow, such as a guide, front, or back.
+Working reach:: Configured normal job rectangle. For the current K6 profile it is 80 x 75 mm; the mechanical end stop has not been measured.

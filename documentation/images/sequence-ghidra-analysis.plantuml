@@ -1,0 +1,52 @@
+@startuml sequence-ghidra-analysis
+' Method as reported by Sean Donnellan. No source/artifacts leave the isolated analysis boundary.
+title Ghidra-assisted protocol analysis - separated Copilot roles
+skinparam backgroundColor #fff/aaf
+skinparam participantBackgroundColor #fff/aaf
+skinparam actorBackgroundColor #fff/aaf
+skinparam noteBackgroundColor #fff/aaf
+skinparam shadowing true
+skinparam defaultFontName sans-serif
+hide footbox
+autonumber
+
+actor "Sean Donnellan" as Sean
+box "Steam Deck - isolated Ghidra analysis boundary" #fff-orange
+  participant "Analysis Copilot" as Analysis
+  participant "Ghidra MCP" as MCP
+  participant "Ghidra project" as Ghidra
+  database "Vendor binary\nread-only local mount" as Binary
+end box
+participant "Protocol-only notes" as Notes
+participant "Implementation Copilot\nseparate session" as Implementer
+participant "Rust repository" as Repo
+participant "Wainlux K6" as K6
+
+Sean -> Analysis : Ask a narrow protocol question
+Analysis -> MCP : Query binary behavior in Ghidra
+MCP -> Ghidra : Analyze inside container
+Ghidra -> Binary : Read local binary
+Binary --> Ghidra : Analysis input
+Ghidra --> MCP : Tool result stays in analysis session
+MCP --> Analysis : Evidence for protocol behavior
+Analysis -> Notes : Write packet/response description only
+note over Analysis,Ghidra
+  Vendor source and Ghidra artifacts are not emitted
+  through CLI, web UI or into the workspace.
+  No screenshots, source text or analysis artifacts
+  are handed to the implementation role.
+end note
+
+Sean -> Implementer : Provide protocol notes, packet captures\nand hardware observations
+Implementer -> Repo : Independently implement and test Rust behavior
+Sean -> K6 : Trigger and verify supervised hardware tests
+K6 --> Sean : Physical observation
+Sean -> Repo : Approve project decisions and record results
+
+note over Analysis,Implementer
+  Separate roles: the analysis Copilot could inspect code
+  only inside Ghidra; the implementation Copilot did not
+  access Ghidra, the binary or source.
+end note
+footer (C)2026 Sean Donnellan
+@enduml

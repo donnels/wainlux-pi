@@ -17,6 +17,9 @@ def add_gradient_background(svg_path: Path) -> None:
 
     tree = ET.parse(svg_path)
     root = tree.getroot()
+    root.set("data-copyright", "Copyright (c) 2026 Sean Donnellan")
+    if not any(child.tag is ET.Comment for child in root):
+        root.insert(0, ET.Comment("Copyright (c) 2026 Sean Donnellan"))
 
     # Get viewBox dimensions
     viewbox = root.get("viewBox", "0 0 672 200")
@@ -28,21 +31,29 @@ def add_gradient_background(svg_path: Path) -> None:
         defs = ET.Element("{http://www.w3.org/2000/svg}defs")
         root.insert(0, defs)
 
-    # Create gradient definition
-    gradient = ET.SubElement(defs, "{http://www.w3.org/2000/svg}linearGradient")
-    gradient.set("id", "bg-gradient")
-    gradient.set("x1", "0%")
-    gradient.set("y1", "0%")
-    gradient.set("x2", "100%")
-    gradient.set("y2", "100%")
+    # Keep reruns from duplicating the gradient, background or attribution.
+    gradient = defs.find("{http://www.w3.org/2000/svg}linearGradient[@id='bg-gradient']")
+    if gradient is None:
+        gradient = ET.SubElement(defs, "{http://www.w3.org/2000/svg}linearGradient")
+        gradient.set("id", "bg-gradient")
+        gradient.set("x1", "0%")
+        gradient.set("y1", "0%")
+        gradient.set("x2", "100%")
+        gradient.set("y2", "100%")
 
-    stop1 = ET.SubElement(gradient, "{http://www.w3.org/2000/svg}stop")
-    stop1.set("offset", "0%")
-    stop1.set("style", "stop-color:#ffffff;stop-opacity:1")
+        stop1 = ET.SubElement(gradient, "{http://www.w3.org/2000/svg}stop")
+        stop1.set("offset", "0%")
+        stop1.set("style", "stop-color:#ffffff;stop-opacity:1")
 
-    stop2 = ET.SubElement(gradient, "{http://www.w3.org/2000/svg}stop")
-    stop2.set("offset", "100%")
-    stop2.set("style", "stop-color:#aaaaff;stop-opacity:1")
+        stop2 = ET.SubElement(gradient, "{http://www.w3.org/2000/svg}stop")
+        stop2.set("offset", "100%")
+        stop2.set("style", "stop-color:#aaaaff;stop-opacity:1")
+
+    if not any(child.tag is ET.Comment for child in root):
+        root.insert(0, ET.Comment("Copyright (c) 2026 Sean Donnellan"))
+    for child in list(root):
+        if child.tag == "{http://www.w3.org/2000/svg}rect" and child.get("fill") == "url(#bg-gradient)":
+            root.remove(child)
 
     # Create background rectangle
     bg_rect = ET.Element("{http://www.w3.org/2000/svg}rect")

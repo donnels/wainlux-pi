@@ -1,40 +1,23 @@
-= FR-009: Test Pattern Generation
+= FR-009: Test Ladder
 
 == Status
+Implemented for the K6 and simulator; individual steps have machine capability gates.
 
-Implemented
+== Requirement
+Expose named machine tests with a stated goal and preview where available. Tests must use the same Rust machine contract as card jobs.
 
-== Description
+== Acceptance
 
-Generate calibration and test patterns for alignment, focus, and hardware validation.
+* `/api/steps` lists the steps supported by the selected machine.
+* Supported steps include communication, home, frame, square, limits, blank rows, corner/registration comparisons and QR tests.
+* A plan records the expected goal before execution; the API does not label a physical test OK on the operator's behalf.
+* Rasters used by tests obey the machine's declared bounds unless the step explicitly tests the calibration envelope.
 
-== Acceptance Criteria
-
-* **Center pattern**: Small box with crosshair in center of work area
-* **Corners pattern**: Boxes in all four corners
-* **Frame pattern**: Full work area outline
-* **Grid pattern**: Graph paper lines at configurable spacing
-* **Bottom-test pattern**: Diagonal line at Y-axis limit (tests cropping)
-* Configurable resolution (mm/px)
-* Configurable size (mm)
-* Preview before burn
-
-== Rationale
-
-* Alignment: position material correctly
-* Focus: test laser focus at different positions
-* Limits: verify work area boundaries
-* Debugging: test Y-axis cropping issues
-
-== Related ADRs
-
-* ADR-012: Pipeline architecture (calibration uses standard workflow)
-
-== Implementation
-
-* `/api/calibration/generate` - pattern generation
-* `/api/calibration/burn` - burn pattern
-* `/api/calibration/preview` - BOUNDS preview
-* `PatternService` - pattern generation (DRY)
-* Patterns use standard engrave workflow
-* Work area: 1600×1520px measured limits
+ifdef::single-page[]
+Run results, selected measurements, the 0–12 ladder and pattern illustrations are in <<hardware-observations>>.
+endif::single-page[]
+ifndef::single-page[]
+Run results and selected measurements are summarized in link:../hardware-observations.adoc[Hardware Observations].
+The 0–12 acceptance ladder and recorded evidence are summarized there as well.
+Pattern illustrations: link:../images/test-case-07a-limit-stairs.svg[limit stairs], link:../images/test-case-07c-seven-squares.svg[limit squares], link:../images/test-case-08-blank-rows.svg[blank rows] and link:../images/test-case-09-corners.svg[corner positions].
+endif::single-page[]

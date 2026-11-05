@@ -1,0 +1,9 @@
+[package]
+name = "k6"
+version = "0.1.0"
+edition = "2021"
+description = "Wainlux K6 laser: protocol and device driver (raster only)"
+
+[dependencies]
+laser = { path = "../laser" }
+serialport = { version = "4", default-features = false }

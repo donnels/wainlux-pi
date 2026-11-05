@@ -1,91 +1,39 @@
-# Clean Room Statement
+# Clean-Room Statement
 
-## Protocol Reverse-Engineering
+## Scope
 
-All K6 laser engraver protocol documentation and implementation in this repository
-was derived through **clean-room reverse-engineering** methods:
+This statement covers the current Rust service in `docker/docker-wainlux-rs` and the K6 protocol observations distributed with it.
 
-### Methods Used
-1. **USB packet capture** - Observing data exchange between vendor software and device
-2. **Serial monitoring** - Recording commands and responses at 115200 baud
-3. **Black-box testing** - Empirical testing of command sequences and parameters
-4. **Public documentation** - Analysis of publicly available K3 protocol references
-5. **Decompilation for verification** - Ghidra analysis of vendor binaries through LLM and MCP to *verify* empirically observed protocol behavior
+## Research Method
 
-### Decompilation Methodology (Verification Only)
+Project owner and decision authority: Sean Donnellan. Sean triggered and verified the physical K6 tests described here. GitHub Copilot assisted with implementation and documentation; the isolated Ghidra analysis described below was also performed by Copilot.
 
-**Critical distinction:** Decompiled code was used for **verification**, not **implementation**.
+Protocol behavior was established through:
 
-**Process:**
-1. **Observe first:** USB captures and device testing revealed protocol structure
-2. **Implement independently:** Code written based on observed packet formats and device responses
-3. **Verify with decompilation:** Ghidra/ILSpy used to confirm our understanding was correct
-4. **Document discrepancies:** Where our observations differed from decompiled code, we tested on hardware
+- USB packet capture and serial monitoring at 115200 baud
+- Black-box tests on the K6
+- Public K3 protocol documentation as comparative material
+- Protocol-only descriptions produced by a GitHub Copilot analysis session that queried Ghidra inside an isolated container
 
-**Example:**
-- Observed: Header is 38 bytes, big-endian, depth defaults to 10
-- Verified: Decompiled Java confirmed structure and default values
-- Implemented: Python code written from documented structure, not translated from Java
+The implementation and protocol documents are based on observed bytes and hardware behavior, not translated vendor source.
 
-**AI-Mediated Analysis:**
-Ghidra was accessed via Model Context Protocol (MCP) with an LLM (Claude) acting as intermediary:
-- LLM analyzed decompiled code to answer specific protocol questions (e.g., "what are slider min/max values?")
-- User received structured answers without directly reading vendor source line-by-line
-- This created separation between implementation and vendor code internals
-- **Note:** Not equivalent to strict two-team clean-room, but reduces direct code exposure
-- User could have read files directly if desired and still could but didn't and won't becasue he couldn't tell a line of java from random noise.
+## Boundary and Limitations
 
-**Not used:**
-- Algorithms or business logic from vendor code
-- Variable names (Chinese pinyin like `zhang_san`, `li_si_wu` - made-up examples, not actual vendor names) or comments from decompiled code
-- Implementation details beyond packet structure
-- Code structure or design patterns
-- Direct translation of decompiled code
+- No vendor source code, SDK, firmware image or binary is committed or distributed. A local, gitignored `backup/Laser.jar` is retained for the final Ghidra run.
+- Do not copy vendor code, comments, names, algorithms or implementation structure. Document packet fields and observed behavior only.
+- The analysis Copilot could inspect the vendor binary in Ghidra inside the isolated container. The binary and Ghidra project/artifacts stayed there; no source or analysis output was emitted through its CLI, web UI or other interface into the workspace.
+- The analysis Copilot was instructed to return protocol behavior only. That protocol description was the only Ghidra-derived material passed to the implementation Copilot session; no source, screenshots or analysis artifacts were passed along.
+- The implementation Copilot had no Ghidra access and did not see the binary or source. It used the protocol description, packet captures and Sean Donnellan's hardware observations to write the Rust service independently.
+- This was a tool-mediated separation between analysis and implementation roles, not a formal two-human or two-team clean-room program. Describe it as performed; do not imply a stronger process.
 
-**Note:** Documentation may cite original function names when referencing decompiled source locations (e.g., "found in `vendor_class.foo_bar`" - placeholder example), but implementation uses English names only.
+## Verification
 
-**Legal basis:** Decompilation for interoperability is established as fair use (Sega v. Accolade, Sony v. Connectix)
+Protocol claims are checked against device responses, captured traffic and observed machine behavior. Historical measurements are identified as such and are not assumed to describe current Rust timing or capabilities.
 
-### Sources NOT Used
-- Decompiled vendor source code (not included in this repository)
-- Proprietary firmware binaries (not redistributed)
-- Vendor SDKs or internal documentation
-- Leaked or confidential materials
+## Legal Context
 
-### Excluded Content
-The following are **explicitly excluded** from this repository:
-- `backup/wainlux.sw/` - Vendor software and drivers (gitignored)
-- `backup/K3_LASER_ENGRAVER_PROTOCOL/` - Third-party K3 reference (gitignored)
-- `analysis/java/` - Decompiled artifacts used only for verification (gitignored)
-- Vendor binaries (*.exe, *.jar, ROM.bin) - Not redistributed
+This is a record of research methods, not a legal opinion or a guarantee about legal outcomes. Applicable legal requirements depend on the facts and jurisdiction; obtain qualified advice where needed.
 
-**Important:** Decompiled code was analyzed but is NOT included in the repository.
-All distributed code is original implementation based on documented protocol behavior.
+## Excluded Material
 
-### Implementation Independence
-All code in `/docker-wainlux` and `/scripts` was written independently based on
-observed protocol behavior, not copied or derived from vendor source code.
-
-### Purpose
-This clean-room approach ensures:
-- Legal distribution under MIT/CC licenses
-- No copyright infringement
-- No trade secret misappropriation
-- Community can safely use and build upon this work
-
-### Verification
-Protocol correctness was validated solely through:
-- Device responses (ACK/NAK bytes)
-- Actual laser behavior (movement, marking)
-- Comparison with captured USB traffic
-- Published K3 protocol similarities (not as many as hoped)
-
----
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contamination control policies
-and contributor declarations required for pull requests.
-
-If you have questions about the reverse-engineering process or licensing,
-please open an issue on GitHub.
+Vendor software, binaries and Ghidra project artifacts remain local and are excluded from Git. See `.gitignore` and contributor guidance before adding protocol material.

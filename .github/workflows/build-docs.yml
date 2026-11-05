@@ -4,10 +4,16 @@ on:
   push:
     branches: [main]
     paths:
-      - 'images/*.plantuml'
-      - 'images/*.edn'
-      - '**.adoc'
-      - '**.asciidoc'
+      - 'documentation/**'
+      - 'documentation/includes/**'
+      - 'README.asciidoc'
+      - 'CLEAN_ROOM.md'
+      - 'LICENSE*'
+      - 'scripts/generate_diagrams.sh'
+      - 'scripts/test_docs.sh'
+      - 'docker/docker-bytefield/**'
+      - 'docker/docker-wainlux-rs/README.adoc'
+      - 'docker/docker-wainlux-rs/app/openapi.yaml'
       - '.github/workflows/build-docs.yml'
   pull_request:
     branches: [main]
@@ -39,7 +45,7 @@ jobs:
       
       - name: Generate PlantUML diagrams
         run: |
-          for file in images/*.plantuml; do
+          for file in documentation/images/*.plantuml; do
             if [ -f "$file" ]; then
               basename="${file%.plantuml}"
               echo "Generating $basename.png"
@@ -63,17 +69,20 @@ jobs:
       - name: Generate bytefield diagrams
         run: |
           # Copy gradient script
-          cp docker-bytefield/add_svg_background.py /tmp/
+          cp docker/docker-bytefield/add_svg_background.py /tmp/
           
-          # Generate SVG diagrams in images/ directory
-          for file in images/k6-prot-*.edn; do
+          # Generate SVG diagrams in documentation/images/
+          for file in documentation/images/k6-prot-*.edn; do
             if [ -f "$file" ]; then
               basename=$(basename "$file" .edn)
               echo "Generating $basename.svg"
-              bytefield-svg "$file" -o "images/$basename.svg"
-              python3 /tmp/add_svg_background.py "images/$basename.svg"
+              bytefield-svg "$file" -o "documentation/images/$basename.svg"
+              python3 /tmp/add_svg_background.py "documentation/images/$basename.svg"
             fi
           done
+
+      - name: Prepare output directory
+        run: mkdir -p docs
       
       - name: Build AsciiDoc HTML
         uses: docker://asciidoctor/docker-asciidoctor:latest
@@ -82,6 +91,7 @@ jobs:
           args: >
             -a allow-uri-read
             -a data-uri
+            -a single-page
             -o docs/README.html
             README.asciidoc
       

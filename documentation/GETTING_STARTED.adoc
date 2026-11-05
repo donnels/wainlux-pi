@@ -2,7 +2,7 @@
 ifdef::flag-book[]
 :imagesdir-saved: {imagesdir}
 :localdir-saved: {localdir}
-:imagesdir: ./images
+:imagesdir: ./documentation/images
 :localdir: ./documentation
 endif::flag-book[]
 ifndef::flag-book[]
@@ -18,7 +18,7 @@ ifdef::github-env[]
 :caution-caption: :fire:
 :warning-caption: :warning:
 endif::github-env[]
-:imagesdir: ../images
+:imagesdir: images
 :localdir: .
 endif::flag-book[]
 
@@ -28,77 +28,50 @@ Quick guide to using this repository.
 
 === Deploy to Pi
 
+.Start the preloaded ARM image
 [source,bash]
 ----
-cd docker
-docker compose build
+cd docker/docker-wainlux-rs
 docker compose up -d
 ----
 
-Access: `http://<pi-ip>:8080`
-
-=== Testing Modes
-
-==== Mock Mode (No K6 Hardware)
-
-Test without K6 connected:
-
-[source,bash]
-----
-cd docker
-docker compose -f compose-dev.yaml up -d
-----
-
-Uses simulated K6 (version v0.0.1). For development, CI/CD, Steam Deck testing.
-
-==== Dry Run Mode (Real K6, No Burn)
-
-Test with K6 connected but disable laser:
-
-1. Connect K6 hardware
-2. Open Settings page
-3. Enable "Dry Run Mode"
-4. Burns will upload data but skip laser firing
-
-Use for: positioning tests, material verification, protocol debugging.
-
-==== Operation Modes (Workflow Visibility)
-
-Control logging and intermediate files via Settings page:
-
-* *SILENT* (default): Production mode, no intermediate files
-* *VERBOSE*: Save all intermediates (.npy, .bin, logs) for debugging
-* *SINGLE-STEP*: Manual approval at each stage (not yet implemented)
-
-Check title bar for current mode: "Mode: MOCK | DRY-RUN | VERBOSE"
+Access: `http://<pi-ip>:8081`. The ARM image must already be loaded on the Pi; this compose file does not build it.
 
 == For Developers
 
 === Read Code
 
-* link:docker/docker-wainlux/k6/driver.py[K6 Driver] - Protocol
-* link:docker/docker-wainlux/app/main.py[Flask App] - API
-* link:docker/docker-wainlux/templates/index.html[Web UI] - Interface
+ifdef::single-page[]
+* <<api-contract,Service API and operator workflow>>
+* <<protocol-reference>> for K6 serial behavior
+* <<first-card>> for the embedded operator UI preview
+endif::single-page[]
+ifndef::single-page[]
+* link:../docker/docker-wainlux-rs/README.adoc[Service API and operator workflow]
+* link:../docker/docker-wainlux-rs/app/src/lib.rs[HTTP API and review workflow]
+* link:../docker/docker-wainlux-rs/k6/src/device.rs[K6 serial driver]
+* link:../docker/docker-wainlux-rs/app/src/ui.html[Embedded operator UI]
+endif::single-page[]
 
-See link:docker/docker-wainlux/README.adoc[App README].
+Run `cargo test --workspace` from `docker/docker-wainlux-rs`.
 
 === Generate Diagrams
 
+.Render the documentation diagrams
 [source,bash]
 ----
-cd images
-plantuml *.puml
-cd ..
+plantuml documentation/images/*.plantuml
 ----
 
-Output: `images/*.png`
+Output: `documentation/images/*.png`
 
 == For Documentation Writers
 
 === Add Diagram
 
-Create `.plantuml` file in `images/`:
+Create `.plantuml` file in `documentation/images/`:
 
+.Minimal source for a PlantUML diagram
 [source,plantuml]
 ----
 @startuml
@@ -108,22 +81,23 @@ User --> System
 @enduml
 ----
 
-Generate:
+.Render a new PlantUML diagram
 [source,bash]
 ----
 plantuml images/new-diagram.plantuml
 ----
 
-Reference in AsciiDoc:
+.Reference the rendered diagram from AsciiDoc
 [source,asciidoc]
 ----
-\image::images/new-diagram.png[Description]
+\image::documentation/images/new-diagram.png[Description]
 ----
 
 == For Contributors
 
 === Clone Repository
 
+.Clone the repository
 [source,bash]
 ----
 git clone <repo-url> wainlux-pi
@@ -139,19 +113,14 @@ cd wainlux-pi
 
 == Quick Commands
 
+.Run documentation and Rust checks
 [source,bash]
 ----
-# Generate diagrams
-plantuml images/*.plantuml
+# Check documentation
+./scripts/test_docs.sh
 
-# Build container
-cd docker && docker compose build
-
-# Run container
-docker compose up -d
-
-# View logs
-docker compose logs -f
+# Test Rust workspace
+cd docker/docker-wainlux-rs && cargo test --workspace
 ----
 
 ifdef::flag-book[]

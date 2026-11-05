@@ -1,0 +1,70 @@
+@startuml sequence-stage-run
+' Current Rust card-stage lifecycle. Physical verdict remains with Sean.
+title One reviewed card stage - preview is not permission to burn
+skinparam backgroundColor #fff/aaf
+skinparam participantBackgroundColor #fff/aaf
+skinparam actorBackgroundColor #fff/aaf
+skinparam noteBackgroundColor #fff/aaf
+skinparam shadowing true
+skinparam defaultFontName sans-serif
+hide footbox
+autonumber
+
+actor "Sean Donnellan" as Sean
+participant Browser
+participant "app\nRust API" as App
+participant "compose" as Compose
+participant "laser::Machine" as Machine
+participant "k6 driver" as Driver
+participant "Wainlux K6" as Device
+database "runs.jsonl" as Log
+
+Sean -> Browser: Review proposed card
+Browser -> App: POST /api/jobs/review
+App -> Compose: Validate and compose stages
+Compose --> App: Exact 1-bit rasters + layout
+App --> Browser: review_id, per-stage PNG/SVG
+note over Sean,App
+  Submission composes a review only.
+  No serial access or motion yet.
+end note
+
+Sean -> Browser: Choose stage and confirm placement
+Browser -> App: POST /api/plan (review_id, stage)
+App -> App: Check current review, prior verdicts,\nmode and back-side flip confirmation
+App --> Browser: Fixed goal; no motion
+Sean -> Browser: Explicitly start
+Browser -> App: POST /api/run
+App -> Machine: Run retained raster; report progress
+Machine -> Driver: burn(band, progress callback)
+loop Each nonblank band
+  Driver -> Device: FRAMING, JOB_HEADER, CONNECT, DATA chunks, INITs
+  Device --> Driver: ACKs, activity and status frames
+  Driver --> App: band-local progress + timings
+  Browser -> App: GET /api/state
+  App --> Browser: phase, band, percent, timing
+  alt Device reports 100%
+    Driver --> Machine: reported completion
+  else 90 seconds of silence
+    Driver --> Machine: assumed completion
+    note right of Driver
+      Interim policy, not proof
+      of physical rest.
+    end note
+  end
+end
+Machine --> App: Software outcome
+App -> Log: Append redacted run event
+App --> Browser: Outcome + band timings
+Sean -> Browser: Inspect physical result
+Browser -> App: POST /api/verdict
+App -> Log: Append independent verdict
+
+note over Sean,Device
+  No automatic next-stage run.
+  Back side requires accepted prior stage,
+  confirmed flip and a separate run request.
+  STOP requests cancellation; Sean confirms rest.
+end note
+footer (C)2026 Sean Donnellan
+@enduml

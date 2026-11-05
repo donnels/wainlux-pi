@@ -4,6 +4,7 @@ Docker container for generating protocol diagrams using bytefield-svg.
 
 == Build
 
+.Build the Bytefield-SVG container
 [source,bash]
 ----
 cd docker-bytefield
@@ -14,6 +15,7 @@ host-spawn podman build -t bytefield-svg .
 
 Generate diagram from JSON spec:
 
+.Render a JSON packet specification
 [source,bash]
 ----
 host-spawn podman run --rm -v $(pwd):/diagrams:Z bytefield-svg input.json -o output.svg
@@ -21,6 +23,7 @@ host-spawn podman run --rm -v $(pwd):/diagrams:Z bytefield-svg input.json -o out
 
 Generate from Clojure EDN spec:
 
+.Render an EDN packet specification
 [source,bash]
 ----
 host-spawn podman run --rm -v $(pwd):/diagrams:Z bytefield-svg input.edn -o output.svg
@@ -32,6 +35,7 @@ Use `scripts/generate_diagrams.sh` which handles host-spawn automatically.
 
 Or create alias:
 
+.Define a local Bytefield command alias
 [source,bash]
 ----
 alias bytefield='host-spawn podman run --rm -v $(pwd):/diagrams:Z bytefield-svg'
@@ -45,4 +49,9 @@ No additional Flatpak extensions needed.
 
 == Examples
 
-See link:../images/[images/] directory for K6 protocol packet specs.
+ifdef::single-page[]
+See the included <<image-sources>> appendix for K6 protocol packet specs.
+endif::single-page[]
+ifndef::single-page[]
+See link:../../documentation/images/[documentation/images/] directory for K6 protocol packet specs.
+endif::single-page[]

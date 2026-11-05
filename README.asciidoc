@@ -1,4 +1,5 @@
 = WAINLUX K6 Web abstraction on Pi Zero W
+:single-page:
 // Repository configuration - set these base variables to generate all URLs
 :repo-org: donnels
 :repo-name: wainlux-pi
@@ -16,20 +17,22 @@ ifdef::github-env[]
 :caution-caption: :fire:
 :warning-caption: :warning:
 endif::github-env[]
-:imagesdir: ./images
+:imagesdir: ./documentation/images
 :localdir: .
-include::includes/include-formatting-book-header.adoc[]
+include::documentation/includes/include-formatting-book-header.adoc[]
 
 ifdef::github-env[]
-// Table of Contents placement (manual for both GitHub and PDF)
-toc::[]
-image::../includes/laser-warning.svg[align=center,pdfwidth=20%]
+.Laser safety symbol
+image::../includes/laser-warning.svg[Laser warning symbol,align=center,width=160,pdfwidth=20%]
 
 *Other formats:* icon:html5[] {html-docs-url}[HTML] | icon:file-pdf-o[] {pdf-docs-url}[PDF]
 endif::github-env[]
 ifndef::github-env[]
-include::includes/include-formatting-content-html-pdf.adoc[]
+include::documentation/includes/include-formatting-content-html-pdf.adoc[]
 endif::github-env[]
+ifndef::flag-book[]
+toc::[]
+endif::flag-book[]
 
 == Summary
 
@@ -51,7 +54,14 @@ It is not affiliated with or endorsed by Wainlux.
 * [line-through]#Vendor software redistribution#
 * [line-through]#Reverse-engineered source release#
 
-Pi Zero W controls Wainlux K6 laser via USB serial. Docker containerized Flask app. Web UI. Binary protocol.
+The current service is a standalone Rust application for the Pi Zero W. It serves the operator UI and HTTP API on port 8081, composes and reviews card jobs, and controls the K6 over USB serial. See <<api-contract>>.
+
+The laser service runs from `docker/docker-wainlux-rs`. Continue to <<clone-build-deploy>> for deployment, then <<technical-reference-and-evidence>> for the protocol and test record. A separate MFA backup tool can provide recovery-code content.
+
+[[clean-room-statement]]
+=== Clean-Room Statement
+
+Project owner and decision authority: Sean Donnellan. Sean triggered and verified the physical K6 tests. Protocol behavior was established from packet captures, serial monitoring, black-box tests and public comparative material. GitHub Copilot performed isolated Ghidra analysis and separately assisted with implementation; only protocol descriptions were handed between those roles. No vendor source, binary, Ghidra project or analysis artifacts are distributed. This was tool-mediated role separation, not a formal two-human clean-room program. See the included <<adr-006-clean-room>> decision for the implementation boundary.
 
 == WARNINGS
 
@@ -63,18 +73,143 @@ Pi Zero W controls Wainlux K6 laser via USB serial. Docker containerized Flask a
 * Use a smoke detector.
 ====
 
-// Documentation - Main content
-include::documentation/README.adoc[leveloffset=+1]
+[[first-card]]
+== First Card: Preview, Mark, Then Burn
+
+The operator reviews each exact raster and starts each stage separately. For a first card, burn the optional guide on bare backing, confirm the machine has stopped, place the card against the guide, then review and start the content stage.
+
+.Choose a card placement before composing its content
+image::card-placement.svg[Placement choices on the K6 work area]
+
+.The first stage marks the bare backing; the card is not present
+image::card-guide.svg[U-shaped guide marks on bare backing]
+
+.Rust operator UI with a synthetic Wi-Fi preview; simulator mode, no burn started
+image::ui-simulator-preview.png[Card composition and exact raster preview in simulator mode,align="center"]
+
+The UI and API are served at `http://<pi-ip>:8081`. The complete Pi service contract is included at <<api-contract>>.
+
+== Architecture
+
+.System context
+image::system-context.png[Development, host and client context]
+
+.Rust service and device ownership
+image::architecture-rust.png[Rust service components and ownership boundaries]
+
+.One reviewed stage from API submission through physical verdict
+image::sequence-stage-run.png[One stage from review through operator verdict]
+
+.Operator UI and external clients share the API
+image::card-api-clients.png[Operator and external-client API sequence]
+
+.Clean-room analysis and implementation handoff
+image::sequence-ghidra-analysis.png[Separated protocol analysis and implementation roles]
+
+[[clone-build-deploy]]
+== Clone, Build, Deploy
+
+include::documentation/GETTING_STARTED.adoc[leveloffset=+1]
+
+[[technical-reference-and-evidence]]
+== Technical Reference and Evidence
+
+[[api-contract]]
+include::docker/docker-wainlux-rs/README.adoc[leveloffset=+1]
+
+[[protocol-reference]]
+include::documentation/reference-k6_protocol.adoc[leveloffset=+1]
+
+[[hardware-observations]]
+include::documentation/hardware-observations.adoc[leveloffset=+1]
+
+[[burn-timing]]
+include::documentation/doing-debugging.adoc[leveloffset=+1]
 
 [appendix]
-include::ADR/README.adoc[leveloffset=+1]
+include::documentation/ADR/README.adoc[leveloffset=+1]
+
+[[adr-002-serial-communication]]
+include::documentation/ADR/ADR-002-serial-communication.adoc[leveloffset=+1]
+[[adr-006-clean-room]]
+include::documentation/ADR/ADR-006-clean-room.adoc[leveloffset=+1]
+[[adr-007-asciidoc]]
+include::documentation/ADR/ADR-007-asciidoc.adoc[leveloffset=+1]
+[[adr-010-bytefield-diagrams]]
+include::documentation/ADR/ADR-010-bytefield-diagrams.adoc[leveloffset=+1]
+[[adr-013-simulator-testing]]
+include::documentation/ADR/ADR-013-simulator-testing.adoc[leveloffset=+1]
+[[adr-019-http-review-boundary]]
+include::documentation/ADR/ADR-019-http-review-boundary.adoc[leveloffset=+1]
+[[adr-021-rust-core]]
+include::documentation/ADR/ADR-021-rust-core.adoc[leveloffset=+1]
+[[adr-022-build-packaging]]
+include::documentation/ADR/ADR-022-build-packaging.adoc[leveloffset=+1]
+[[adr-025-placement]]
+include::documentation/ADR/ADR-025-placement.adoc[leveloffset=+1]
+[[adr-026-mcp-hub]]
+include::documentation/ADR/ADR-026-mcp-hub.adoc[leveloffset=+1]
 
 [appendix]
-include::includes/include-structure-documentation.adoc[leveloffset=+1]
+include::documentation/REQ/README.adoc[leveloffset=+1]
+
+[[fr-001-burn-raster-image]]
+include::documentation/REQ/FR-001-burn-raster-image.adoc[leveloffset=+1]
+[[fr-002-generate-wifi-qr]]
+include::documentation/REQ/FR-002-generate-wifi-qr.adoc[leveloffset=+1]
+[[fr-003-progress-and-timing]]
+include::documentation/REQ/FR-003-progress-and-timing.adoc[leveloffset=+1]
+[[fr-007-emergency-stop]]
+include::documentation/REQ/FR-007-emergency-stop.adoc[leveloffset=+1]
+[[fr-009-calibration-patterns]]
+include::documentation/REQ/FR-009-calibration-patterns.adoc[leveloffset=+1]
+[[fr-011-placement]]
+include::documentation/REQ/FR-011-placement.adoc[leveloffset=+1]
+[[fr-013]]
+include::documentation/REQ/FR-013.adoc[leveloffset=+1]
+[[fr-015-laser-test-ladder]]
+include::documentation/REQ/FR-015-laser-test-ladder.adoc[leveloffset=+1]
+[[fr-016-qr-cards]]
+include::documentation/REQ/FR-016-qr-cards.adoc[leveloffset=+1]
+[[nfr-002-no-material-waste]]
+include::documentation/REQ/NFR-002-no-material-waste.adoc[leveloffset=+1]
+[[nfr-005-run-history]]
+include::documentation/REQ/NFR-005-run-history.adoc[leveloffset=+1]
 
 [appendix]
-include::includes/include-glossary.adoc[leveloffset=+1]
+[[image-sources]]
+include::documentation/images/README.adoc[leveloffset=+1]
 
 [appendix]
-include::includes/include-license.adoc[leveloffset=+1]
+== Glossary
+include::documentation/includes/include-glossary.adoc[leveloffset=+1]
+
+[appendix]
+include::documentation/includes/include-license.adoc[leveloffset=+1]
+
+[appendix]
+[[mit-license]]
+== MIT License
+.Full text of the repository's MIT code license
+[listing]
+....
+include::LICENSE[]
+....
+
+[appendix]
+[[docs-license]]
+== Protocol Documentation License
+.Full text of the protocol documentation license
+[listing]
+....
+include::LICENSE-DOCS[]
+....
+
+[appendix]
+== Bytefield-SVG
+
+The protocol packet diagrams are generated from the EDN sources in `documentation/images/` with the Bytefield-SVG container. See <<bytefield-svg>> and `scripts/generate_diagrams.sh`.
+
+[[bytefield-svg]]
+include::docker/docker-bytefield/README.adoc[leveloffset=+1]
 

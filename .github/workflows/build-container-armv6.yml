@@ -4,16 +4,12 @@ on:
   push:
     branches: [main]
     paths:
-      - 'docker-wainlux/docker/**'
-      - 'docker-wainlux/compose.yaml'
-      - 'docker-wainlux/compose-dev.yaml'
+      - 'docker/docker-wainlux-rs/**'
       - '.github/workflows/build-container-armv6.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'docker-wainlux/docker/**'
-      - 'docker-wainlux/compose.yaml'
-      - 'docker-wainlux/compose-dev.yaml'
+      - 'docker/docker-wainlux-rs/**'
       - '.github/workflows/build-container-armv6.yml'
   workflow_dispatch:
 
@@ -59,9 +55,10 @@ jobs:
       - name: Build and push ARMv6 image
         uses: docker/build-push-action@v6
         with:
-          context: docker-wainlux/docker
-          file: docker-wainlux/docker/Dockerfile
-          platforms: linux/arm/v6
+          context: docker/docker-wainlux-rs
+          file: docker/docker-wainlux-rs/Dockerfile
+          # The tested Pi image uses the v5-compatible Debian runtime on the ARMv6 Pi Zero W.
+          platforms: linux/arm/v5
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

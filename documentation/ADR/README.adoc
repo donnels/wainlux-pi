@@ -1,73 +1,30 @@
-= Architecture Decision Records
-ifdef::flag-book[]
-:imagesdir-saved: {imagesdir}
-:localdir-saved: {localdir}
-:imagesdir: ./images
-:localdir: ./ADR
-endif::flag-book[]
-ifndef::flag-book[]
-:toc: right
-:toclevels: 5
-:sectnums:
-:sectnumlevels: 5
-ifdef::github-env[]
-:icons: font
-:tip-caption: :bulb:
-:note-caption: :information_source:
-:important-caption: :heavy_exclamation_mark:
-:caution-caption: :fire:
-:warning-caption: :warning:
-endif::github-env[]
-:imagesdir: ../images
-:localdir: .
-endif::flag-book[]
+= Architecture Decisions
 
-All ADRs for the Wainlux K6 project.
+Only decisions that remain in force for the Rust service are listed here. Sean Donnellan approved these project decisions; superseded implementation history was removed from the working docs, with provenance left to Git history.
 
-== Format
-
-.Each ADR follows standard structure
-* Status (Proposed/Accepted/Deprecated/Superseded)
-* Context (the problem)
-* Decision (what we chose)
-* Rationale (why)
-* Consequences (trade-offs)
-
-== Records
-
-include::ADR-001-base-image.adoc[leveloffset=+2]
-
-include::ADR-002-serial-communication.adoc[leveloffset=+2]
-
-include::ADR-003-flask.adoc[leveloffset=+2]
-
-include::ADR-004-no-database.adoc[leveloffset=+2]
-
-include::ADR-005-bash-deployment.adoc[leveloffset=+2]
-
-include::ADR-006-clean-room.adoc[leveloffset=+2]
-
-include::ADR-007-asciidoc.adoc[leveloffset=+2]
-
-include::ADR-008-ghidra-mcp.adoc[leveloffset=+2]
-
-include::ADR-010-bytefield-diagrams.adoc[leveloffset=+2]
-
-include::ADR-011-ui-colour-and-goggles.adoc[leveloffset=+2]
-
-include::ADR-012-pipeline-architecture.adoc[leveloffset=+2]
-
-include::ADR-013-testing-modes.adoc[leveloffset=+2]
-
-include::ADR-016-material-positioning.adoc[leveloffset=+2]
-
-include::ADR-017-object-burn-workflow.adoc[leveloffset=+2]
-
-include::ADR-018-job-data-structure.adoc[leveloffset=+2]
-
-include::ADR-019-distributed-architecture.adoc[leveloffset=+2]
-
-ifdef::flag-book[]
-:imagesdir: {imagesdir-saved}
-:localdir: {localdir-saved}
-endif::flag-book[]
+ifdef::single-page[]
+Clean-room methodology is summarized in <<clean-room-statement>>.
+* <<adr-002-serial-communication,ADR-002: K6 serial transport>>
+* <<adr-006-clean-room,ADR-006: Clean-room protocol work>>
+* <<adr-007-asciidoc,ADR-007: AsciiDoc>>
+* <<adr-010-bytefield-diagrams,ADR-010: Bytefield diagrams>>
+* <<adr-013-simulator-testing,ADR-013: Simulator testing>>
+* <<adr-019-http-review-boundary,ADR-019: HTTP review boundary>>
+* <<adr-021-rust-core,ADR-021: Rust service>>
+* <<adr-022-build-packaging,ADR-022: ARM packaging>>
+* <<adr-025-placement,ADR-025: Card placement>>
+* <<adr-026-mcp-hub,ADR-026: Network MCP hub>>
+endif::single-page[]
+ifndef::single-page[]
+Clean-room methodology lives in link:../../CLEAN_ROOM.md[the clean-room statement].
+* link:ADR-002-serial-communication.adoc[ADR-002: K6 serial transport]
+* link:ADR-006-clean-room.adoc[ADR-006: Clean-room protocol work]
+* link:ADR-007-asciidoc.adoc[ADR-007: AsciiDoc]
+* link:ADR-010-bytefield-diagrams.adoc[ADR-010: Bytefield diagrams]
+* link:ADR-013-simulator-testing.adoc[ADR-013: Simulator testing]
+* link:ADR-019-http-review-boundary.adoc[ADR-019: HTTP review boundary]
+* link:ADR-021-rust-core.adoc[ADR-021: Rust service]
+* link:ADR-022-build-packaging.adoc[ADR-022: ARM packaging]
+* link:ADR-025-placement.adoc[ADR-025: Card placement]
+* link:ADR-026-mcp-hub.adoc[ADR-026: Network MCP hub]
+endif::single-page[]

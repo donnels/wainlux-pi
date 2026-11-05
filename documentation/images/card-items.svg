@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1160" height="690" viewBox="0 0 1160 690" font-family="sans-serif" font-size="15">
+<!-- Copyright (c) 2026 Sean Donnellan -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#aaf"/></linearGradient>
+    <pattern id="etch" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="10" stroke="#9aacb7" stroke-width="2"/>
+    </pattern>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#172633"/>
+    </marker>
+  </defs>
+  <rect width="1160" height="690" fill="url(#bg)"/>
+  <text x="40" y="38" font-size="23" font-weight="bold" fill="#172633">Place content in the card frame; the service translates it to the bed</text>
+  <text x="40" y="66" fill="#566978">Generic Wi-Fi example. The QR square is a placeholder, not a credential-bearing code.</text>
+
+  <g transform="translate(0 0)">
+    <rect x="40" y="90" width="480" height="450" fill="#fff" stroke="#637786" stroke-width="2" stroke-dasharray="8 5"/>
+    <text x="40" y="84" fill="#566978">Bed frame: 80 x 75 mm reach</text>
+    <rect x="46" y="153.84" width="512.7" height="322.32" rx="14" fill="#e9d9b8" stroke="#8b6f47" stroke-width="3"/>
+    <text x="52" y="174" fill="#172633" font-weight="bold">Card frame origin = bed (1, 10.64) mm</text>
+    <rect x="84.7" y="153.84" width="435.3" height="322.32" fill="url(#etch)" opacity="0.45"/>
+    <rect x="40" y="149.64" width="480" height="3" fill="#196c53"/>
+    <rect x="40" y="477.36" width="480" height="3" fill="#196c53"/>
+    <rect x="41.8" y="149.64" width="3" height="330.72" fill="#196c53"/>
+
+    <rect x="93.7" y="207" width="216" height="216" fill="#fff" stroke="#172633" stroke-width="2"/>
+    <text x="201.7" y="305" text-anchor="middle" font-weight="bold">QR placeholder</text>
+    <text x="201.7" y="330" text-anchor="middle">36 x 36 mm</text>
+    <text x="201.7" y="352" text-anchor="middle" fill="#566978">card x=7.95, y=8.86</text>
+
+    <rect x="321.7" y="249.84" width="189.3" height="108" fill="#fff" stroke="#8b1e2d" stroke-width="2" stroke-dasharray="7 4"/>
+    <text x="416.35" y="292" text-anchor="middle" font-weight="bold">Optional title</text>
+    <text x="416.35" y="317" text-anchor="middle">31.55 x 18 mm</text>
+
+    <rect x="321.7" y="375.84" width="189.3" height="48" fill="#fff" stroke="#8b1e2d" stroke-width="2" stroke-dasharray="7 4"/>
+    <text x="416.35" y="405" text-anchor="middle">Optional note</text>
+
+    <rect x="87.7" y="435.84" width="417.3" height="30" fill="#fff" stroke="#367abe" stroke-width="2" stroke-dasharray="7 4"/>
+    <text x="296.35" y="456" text-anchor="middle">Optional SSID label</text>
+
+    <path d="M40 565H520" stroke="#172633" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+    <text x="280" y="590" text-anchor="middle">Bed x (mm); card-local item positions are offset by the card origin</text>
+  </g>
+
+  <g transform="translate(600 105)" fill="#172633">
+    <text x="0" y="0" font-size="18" font-weight="bold">How to read this drawing</text>
+    <text x="0" y="40">1. Place the physical card against the backing guide.</text>
+    <text x="0" y="72">2. QR and text coordinates are relative to the card's top-left.</text>
+    <text x="0" y="104">3. The app translates each item into bed coordinates.</text>
+    <text x="0" y="136">4. Content outside the centered etch area is refused, not clipped.</text>
+    <text x="0" y="192" font-weight="bold">Workflow</text>
+    <text x="0" y="228">Burn markings on bare backing (optional, first card only).</text>
+    <text x="0" y="260">Inspect; confirm motion stopped; place card against markings.</text>
+    <text x="0" y="292">Review the exact raster and placement in the app.</text>
+    <text x="0" y="324">Start the content stage explicitly; inspect and record a verdict.</text>
+    <text x="0" y="380" fill="#566978">A back side is a separate stage: inspect front, confirm stop,</text>
+    <text x="0" y="405" fill="#566978">flip against the same guide, confirm placement, then start back.</text>
+    <text x="0" y="465" font-weight="bold">Visibility rule</text>
+    <text x="0" y="500">Guide is outside the card; content is inside the card frame.</text>
+    <text x="0" y="532">Dark marks in this drawing are diagram labels, not burn output.</text>
+  </g>
+</svg>

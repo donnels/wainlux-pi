@@ -1,0 +1,15 @@
+= ADR-013: Simulator Testing
+
+== Status
+Accepted; current.
+
+== Decision
+Use the Rust simulator for API and workflow tests that must not access the K6. `MACHINE=sim` removes the serial-device dependency; tests exercise the HTTP contract against that driver.
+
+This is simulation, not a real-device dry-run. Real mode can move and burn. A preview or simulator verdict is not evidence of physical completion.
+
+== Consequences
+
+* Keep hardware-independent tests deterministic and explicit about their simulator driver.
+* Do not describe the retired Python dry-run toggle or its operation modes as Rust features.
+* Physical acceptance remains an operator observation recorded separately from software outcome.

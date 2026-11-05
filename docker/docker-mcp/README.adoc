@@ -1,30 +1,30 @@
-= Wainlux K6 MCP Container
+= K6 MCP Client Draft
 
-Standalone MCP server container for K6 laser workflows.
+This is a networked Streamable HTTP MCP server for the current Rust API. It runs as a separate service on the Pi Zero host for now and can move to another MCP hub later. It never owns the serial port.
 
-== Purpose
+== Scope
 
-Run MCP separately from the Flask/K6 runtime.
+Tools exposed:
 
-* MCP HTTP/SSE server on `:8081`
-* Calls Flask API via `FLASK_API_BASE` (default `http://wainlux-k6:8080`)
-* No direct serial/device access
+* `get_machine`: current machine profile.
+* `list_materials`: configured pieces, backings and settings.
+* `list_templates`: declared card templates.
+* `preview_job`: calls `POST /api/jobs/preview` and returns layout/stage geometry only.
 
-== Files
-
-----
-docker-mcp/
-├── Dockerfile
-├── requirements.txt
-└── app/
-    └── mcp_server.py
-----
+The preview tool does not save a review, open serial, plan, run, stop, or record a verdict. It omits submitted content and raster pixels from its result. The operator UI remains the place to inspect exact pixels and start physical work. No MCP tool can trigger a burn.
 
 == Run
 
-Use compose from `docker-wainlux/`:
+Build and run the MCP container on the Pi Zero host:
 
+.Build and start the network MCP service
 [source,bash]
 ----
-docker compose up -d
+docker compose -f docker/docker-mcp/compose.yaml up -d --build
 ----
+
+The host bind is on the private network at port 8082. The MCP container calls the Rust API at `127.0.0.1:8081`. The VS Code entry prompts for the Pi MCP URL, for example `http://piz-k6:8082/mcp`. Neither this MCP service nor the Rust API authenticates clients; keep them on a trusted network and restrict access with firewall/TLS controls as appropriate.
+
+== API
+
+The canonical API guide is `docker/docker-wainlux-rs/README.adoc`, served at `GET /api`. The OpenAPI 3.1 spec is served at `GET /openapi.yaml`; a Swagger UI can load that URL.

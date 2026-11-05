@@ -1,0 +1,22 @@
+= FR-011: Material Placement
+
+== Status
+Implemented in the Rust composition layer.
+
+== Requirement
+Represent the piece, backing, guide and content geometry in millimetres. Refuse any generated burn rectangle outside the K6's declared reach or the piece's etch area.
+
+== Acceptance
+
+* Materials define dimensions, role and machine-specific settings.
+* Placement supports the configured centered and left layouts; guide segments are emitted only where they fit.
+* Content positions are relative to the piece and translated to bed coordinates.
+* Out-of-area content is rejected without clipping or silent resizing.
+
+The current K6 normal profile is 80 x 75 mm.
+ifdef::single-page[]
+Card dimensions and placement assumptions are in <<adr-025-placement,ADR-025>> and the included API contract.
+endif::single-page[]
+ifndef::single-page[]
+Card dimensions and placement assumptions are in link:../ADR/ADR-025-placement.adoc[ADR-025] and the service materials file.
+endif::single-page[]

@@ -1,0 +1,15 @@
+= ADR-022: ARM Packaging
+
+== Status
+Accepted; current.
+
+== Decision
+Build the Pi ARMv6 container away from the Pi. The Rust cross-build targets `arm-unknown-linux-musleabihf`; the runtime image copies in the binary and configuration. GitHub Actions also builds the ARMv6 image from `docker/docker-wainlux-rs/Dockerfile`.
+
+The Pi Compose file in `docker/docker-wainlux-rs/compose.yaml` runs the loaded `localhost/laser-app:arm` image, mounts `/dev/ttyUSB0` and persistent `data/`, and serves port 8081. Compose does not compile the service on the Pi.
+
+== Consequences
+
+* Pi Zero W is a runtime target, not a Rust build host.
+* Keep image architecture, target triple and serial-device mapping aligned with the actual Pi deployment.
+* Build and deployment commands belong with the service README and workflow; the retired Bash deployment scripts are not part of this decision.

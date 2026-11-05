@@ -1,0 +1,10 @@
+[package]
+name = "compose"
+version = "0.1.0"
+edition = "2021"
+description = "Content and placement in, Raster and guide out. Pure: no I/O, no machine."
+
+[dependencies]
+laser = { path = "../laser" }
+qrcode = { version = "0.14", default-features = false }
+fontdue = "0.9"

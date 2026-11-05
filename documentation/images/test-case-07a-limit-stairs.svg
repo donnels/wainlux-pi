@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="800" viewBox="0 0 940 800" font-family="sans-serif" font-size="14">
+<!-- Copyright (c) 2026 Sean Donnellan -->
+  <!-- Limit stairs, ladder rung 7. One step per row. Drawn with 24 steps; the real burn has 120. Y stretched. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff"/>
+      <stop offset="1" stop-color="#aaf"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0L10 5L0 10z" fill="#000"/>
+    </marker>
+  </defs>
+  <rect width="940" height="800" fill="url(#bg)"/>
+  <text x="70" y="34" font-size="20" font-weight="bold">Limit stairs: one line per row, a diagonal until the head stops</text>
+  <text x="70" y="58">Calibration pattern only. Current normal K6 working Y is 75 mm; this is not a stop measurement.</text>
+
+  <!-- A: what we send -->
+  <text x="70" y="98" font-size="17" font-weight="bold">A. What we send: step k on row y0 + k, length L</text>
+  <rect x="70" y="110" width="800" height="180" fill="#fff" fill-opacity="0.5" stroke="#000"/>
+  <path d="M71.5 110V290" stroke="#000" stroke-width="2"/>
+  <text x="80" y="282" font-size="12">zero line: measure from here</text>
+  <path d="M70 113.8h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33" stroke="#000" stroke-width="2.5" fill="none"/>
+  <text x="62" y="118" text-anchor="end" font-size="12">y0 74</text>
+  <text x="62" y="292" text-anchor="end" font-size="12">y1 80</text>
+  <path d="M70 128v8M103.3 128v8M70 132h33.3" stroke="#000"/>
+  <text x="80" y="152" font-size="12">L</text>
+  <line x1="880" y1="113.8" x2="880" y2="121.3" stroke="#000"/>
+  <text x="886" y="122" font-size="12">1 row</text>
+
+  <!-- B: illustrative response; not a current measured limit -->
+  <text x="70" y="348" font-size="17" font-weight="bold">B. Illustrative response (example only)</text>
+  <rect x="70" y="360" width="800" height="180" fill="#fff" fill-opacity="0.5" stroke="#000"/>
+  <path d="M71.5 360V432" stroke="#000" stroke-width="2"/>
+  <path d="M70 363.8h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33m0 7.5h33.33" stroke="#000" stroke-width="2.5" fill="none"/>
+  <path d="M403.3 432H870" stroke="#000" stroke-width="2.5"/>
+  <circle cx="71.5" cy="432" r="5" fill="#000"/>
+  <text x="82" y="470" font-size="12">dark dot: the zero line burns one spot again and again</text>
+  <line x1="70" y1="432" x2="870" y2="432" stroke="#000" stroke-dasharray="4 4" stroke-opacity="0.4"/>
+  <text x="62" y="368" text-anchor="end" font-size="12">74</text>
+  <text x="62" y="436" text-anchor="end" font-size="12">limit</text>
+  <text x="62" y="542" text-anchor="end" font-size="12">80</text>
+  <text x="520" y="460">steps past the limit land on the last row,</text>
+  <text x="520" y="478">side by side: one straight line, not darker</text>
+  <line x1="403.3" y1="440" x2="403.3" y2="560" stroke="#000" stroke-dasharray="5 3"/>
+  <line x1="70" y1="560" x2="401" y2="560" stroke="#000" marker-end="url(#arrow)"/>
+  <text x="236" y="578" text-anchor="middle" font-weight="bold">x_k: ruler from the left line to the kink</text>
+  <circle cx="403.3" cy="432" r="7" fill="none" stroke="#000" stroke-width="2"/>
+  <text x="416" y="422">kink</text>
+
+  <!-- How to size and read it -->
+  <g font-size="15">
+    <text x="70" y="620" font-weight="bold">Size it</text>
+    <text x="70" y="644">Guess a range y0 to y1 that holds the limit: 74 to 80 mm. Burn a thin line down the left edge.</text>
+    <text x="70" y="666">Steps n = (y1 - y0) / 0.05 mm = 120. One step per row: every row has burn data.</text>
+    <text x="70" y="688">L = width / n = 1600 px / 120 = 13 px (0.65 mm). 1 row tall: our thinnest line.</text>
+
+    <text x="70" y="724" font-weight="bold">Read it</text>
+    <text x="70" y="748">limit = y0 + (x_k / L) x 0.05 mm.  Example: kink at 31.2 mm -&gt; 48 steps -&gt; 74 + 2.4 = 76.4 mm.</text>
+    <text x="70" y="772">Run 2: range +/- 0.5 mm around run 1 -&gt; 20 steps, L = 4 mm. Low power. X: turn 90 degrees.</text>
+  </g>
+</svg>

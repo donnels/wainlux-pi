@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1060" height="700" viewBox="0 0 1060 700" font-family="sans-serif" font-size="15">
+<!-- Copyright (c) 2026 Sean Donnellan -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#aaf"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#000"/>
+    </marker>
+  </defs>
+  <rect width="1060" height="700" fill="url(#bg)"/>
+  <text x="40" y="36" font-size="22" font-weight="bold">Rung 9: broken perimeter and four corner squares</text>
+  <text x="40" y="62">One planned attempt. HOME first. Burn all marks before moving the laser to inspect.</text>
+
+  <rect x="80" y="110" width="480" height="450" fill="#fff" fill-opacity="0.45" stroke="#666" stroke-dasharray="3 5"/>
+  <g fill="none" stroke="#000" stroke-width="2">
+    <path d="M80 275V110H260M380 110H560V275"/>
+    <path d="M80 395V560H260M380 560H560V395"/>
+  </g>
+  <g fill="#000">
+    <rect x="80" y="110" width="12" height="12"/>
+    <rect x="548" y="110" width="12" height="12"/>
+    <rect x="80" y="548" width="12" height="12"/>
+    <rect x="548" y="548" width="12" height="12"/>
+  </g>
+  <g text-anchor="middle" font-size="13">
+    <text x="86" y="101">1</text><text x="554" y="101">2</text>
+    <text x="86" y="596">3</text><text x="554" y="596">4</text>
+    <text x="320" y="103">20 mm gap</text>
+    <text x="320" y="596">20 mm gap</text>
+    <text x="320" y="330" font-size="18" font-weight="bold">No marks in the centre</text>
+    <text x="320" y="356">Historical request: 80 x 77.45 mm; current Y limit: 75 mm</text>
+  </g>
+  <text x="68" y="342" text-anchor="middle" transform="rotate(-90 68 342)">20 mm gap</text>
+  <text x="580" y="342" text-anchor="middle" transform="rotate(90 580 342)">20 mm gap</text>
+  <path d="M80 620H560" stroke="#000" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text x="320" y="644" text-anchor="middle">80 mm</text>
+
+  <text x="620" y="120" font-size="18" font-weight="bold">What is burned</text>
+  <text x="620" y="151">Four filled 2 x 2 mm squares.</text>
+  <text x="620" y="177">Each sits inside its corner.</text>
+  <text x="620" y="203">Perimeter: one commanded row/column.</text>
+  <text x="620" y="229">20 mm gap centred on each side.</text>
+  <text x="620" y="255">Numbers and grey boundary: preview only.</text>
+
+  <text x="620" y="302" font-size="18" font-weight="bold">Goal and verdict</text>
+  <text x="620" y="333">All four squares intact and equally sized.</text>
+  <text x="620" y="359">Opposite sides straight and parallel.</text>
+  <text x="620" y="385">Gaps centred; no compressed bottom edge.</text>
+  <text x="620" y="411">Record clipping, shifts or reburning.</text>
+
+  <text x="620" y="458" font-size="18" font-weight="bold">Execution</text>
+  <text x="620" y="489">One raster and one attempt.</text>
+  <text x="620" y="515">Blank middle rows use K6 band splitting:</text>
+  <text x="620" y="541">two upload/burn cycles, no inspection between.</text>
+  <text x="620" y="567">Backing: power 1000, depth 10.</text>
+  <text x="620" y="593">Inspect only when all motion stops.</text>
+
+  <text x="40" y="680">Dimensions describe requested outer edges. Line thickness is illustrative; physical beam width remains unmeasured.</text>
+</svg>

@@ -1,0 +1,60 @@
+@startuml system-context
+' Logical context only. No SSID, IP address or credentials.
+title Wainlux K6 - system context
+left to right direction
+skinparam backgroundColor #fff/aaf
+skinparam componentbackgroundColor #fff/aaf
+skinparam nodebackgroundColor #fff/aaf
+skinparam componentStyle rectangle
+skinparam shadowing true
+skinparam defaultFontName sans-serif
+
+rectangle "One shared Wi-Fi network\n(SSID and addresses intentionally omitted)" as Wifi {
+  node "Steam Deck\nDevelopment platform" as Deck {
+    component "Rust workspace\nbuild + tests" as RustDev
+    component "Ghidra analysis\nisolated container" as Ghidra
+  }
+
+  node "Pi Zero W\nLaser host" as PiZero {
+    component "Rust laser service\nHTTP API + browser UI" as Laser
+    component "MCP preview service\nStreamable HTTP\n(separate container, assumed here)" as MCP
+  }
+
+  node "Laptop" as Laptop {
+    component "Web browser\noperator UI" as Browser
+  }
+
+  node "Pi 5" as Pi5 {
+    component "neocv\nproducer/client" as NeoCV
+  }
+
+  actor "Sean Donnellan" as Sean
+  actor "iPhone" as Phone
+}
+
+node "Wainlux K6" as K6 #fff/red
+artifact "Bamboo card\nWi-Fi/contact QR + NFC" as Card #fff/orange
+
+Sean --> Deck : develops; starts Ghidra analysis
+Ghidra --> RustDev : protocol-only findings\n(no source/artifacts)
+RustDev --> PiZero : built service image\nwhen deployed
+Sean --> Browser : reviews and starts stages
+Browser --> Laser : HTTP review / plan / run / verdict
+MCP --> Laser : local HTTP discovery + preview only
+NeoCV --> Laser : HTTP job submission / preview
+Laser --> K6 : USB serial
+Phone --> Card : scans QR / reads NFC
+Phone --> Wifi : joins the network\nwhen QR describes Wi-Fi access
+
+note bottom of PiZero
+  Assumed context placement for MCP.
+  MCP never opens the serial device.
+  Rust service is sole K6 owner.
+end note
+note bottom of Ghidra
+  Vendor binary and Ghidra artifacts stay
+  inside the isolated analysis container.
+  Only protocol descriptions cross roles.
+end note
+footer (C)2026 Sean Donnellan
+@enduml

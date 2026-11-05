@@ -5,7 +5,16 @@ data/
 backup/
 analysis/
 
+# Test renders and scratch
+.render-tmp/
+.tmp/
+.private/
+
+# Rust build output
+target/
+
 # Python
+.venv/
 *.pyc
 __pycache__/
 .pytest_cache/
@@ -20,7 +29,6 @@ __pycache__/
 .coverage
 htmlcov/
 QR-WIFI*.png
-sync_with_pi.sh
 
 # Vendor artifacts (clean-room: not redistributed)
 *.mp4

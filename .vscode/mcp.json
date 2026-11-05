@@ -1,12 +1,20 @@
 {
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "wainluxMcpHubUrl",
+      "description": "Trusted Pi MCP URL, including /mcp",
+      "default": "http://piz-k6:8082/mcp"
+    }
+  ],
   "servers": {
     "pyghidra-mcp": {
-      "type": "sse",
-      "url": "http://127.0.0.1:8000/sse"
+      "type": "http",
+      "url": "http://127.0.0.1:8000/mcp"
     },
-    "k6-laser-mcp": {
-      "type": "streamable-http",
-      "url": "http://127.0.0.1:8082/mcp"
+    "wainlux-k6-preview": {
+      "type": "http",
+      "url": "${input:wainluxMcpHubUrl}"
     }
   }
 }

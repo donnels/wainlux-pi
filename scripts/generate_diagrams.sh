@@ -5,7 +5,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-IMAGES_DIR="$PROJECT_ROOT/images"
+IMAGES_DIR="$PROJECT_ROOT/documentation/images"
 
 # Use host-spawn if available (Flatpak), otherwise direct podman
 if command -v host-spawn >/dev/null 2>&1; then
@@ -17,10 +17,10 @@ fi
 # Build container if not exists
 if ! $PODMAN image inspect bytefield-svg >/dev/null 2>&1; then
     echo "Building bytefield-svg container..."
-    $PODMAN build -t bytefield-svg "$PROJECT_ROOT/docker-bytefield"
+    $PODMAN build -t bytefield-svg "$PROJECT_ROOT/docker/docker-bytefield"
 fi
 
-# Generate diagrams from EDN specs in images/
+# Generate diagrams from EDN specs in documentation/images/
 echo "Generating diagrams from EDN specs..."
 
 for edn_file in "$IMAGES_DIR"/*.edn; do

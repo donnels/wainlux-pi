@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1260" height="1010" viewBox="0 0 1260 1010" font-family="sans-serif" font-size="15">
+<!-- Copyright (c) 2026 Sean Donnellan -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#aaf"/></linearGradient>
+  </defs>
+  <rect width="1260" height="1010" fill="url(#bg)"/>
+  <text x="38" y="42" font-size="24" font-weight="bold" fill="#172633">K6 hardware test ladder: historical rungs 0 through 12</text>
+  <text x="38" y="70" fill="#566978">Climb from rung 0 at the bottom to rung 12 at the top. Python and Rust results are kept distinct.</text>
+
+  <g font-size="14" font-weight="bold" fill="#172633">
+    <text x="50" y="117">#</text><text x="110" y="117">TEST</text><text x="350" y="117">EXPECTED CHECK</text><text x="820" y="117">RECORDED EVIDENCE</text>
+  </g>
+  <g stroke="#6f8190" stroke-opacity="0.45">
+    <path d="M38 129H1222"/><path d="M38 184H1222"/><path d="M38 239H1222"/><path d="M38 294H1222"/>
+    <path d="M38 349H1222"/><path d="M38 404H1222"/><path d="M38 459H1222"/><path d="M38 514H1222"/>
+    <path d="M38 569H1222"/><path d="M38 624H1222"/><path d="M38 679H1222"/><path d="M38 734H1222"/>
+    <path d="M38 789H1222"/><path d="M38 844H1222"/><path d="M38 899H1222"/>
+  </g>
+  <g font-size="13" fill="#172633">
+    <text x="50" y="821" font-weight="bold">0</text><text x="110" y="821" font-weight="bold">Historical #0</text><text x="350" y="821">Original rung label and goal were not recovered.</text><text x="820" y="821" fill="#176b4d">Python: pass; no Rust rung-0 result recorded.</text>
+    <text x="50" y="766" font-weight="bold">1</text><text x="110" y="766" font-weight="bold">Talk</text><text x="350" y="766">K6 replies to version/connect queries.</text><text x="820" y="766" fill="#176b4d">Python and Rust: pass; firmware reply 04 01 06.</text>
+    <text x="50" y="711" font-weight="bold">2</text><text x="110" y="711" font-weight="bold">Home</text><text x="350" y="711">Head moves home and stops.</text><text x="820" y="711" fill="#176b4d">Python and Rust: pass; homing observed OK.</text>
+    <text x="50" y="656" font-weight="bold">3</text><text x="110" y="656" font-weight="bold">Pointer</text><text x="350" y="656">Toggle aiming dot without head motion.</text><text x="820" y="656" fill="#9c2935">Deviation: no visible toggle; Rust rung was skipped.</text>
+    <text x="50" y="601" font-weight="bold">4</text><text x="110" y="601" font-weight="bold">Frame</text><text x="350" y="601">Laser-off bounds frame exits cleanly.</text><text x="820" y="601" fill="#176b4d">Python and Rust: pass after explicit exit sequence.</text>
+    <text x="50" y="546" font-weight="bold">5</text><text x="110" y="546" font-weight="bold">First burn</text><text x="350" y="546">Small filled square marks on backing.</text><text x="820" y="546" fill="#176b4d">Python and Rust: pass; 5 mm, 500/10, 102 s.</text>
+    <text x="50" y="491" font-weight="bold">6</text><text x="110" y="491" font-weight="bold">Limit stairs</text><text x="350" y="491">Repeat at higher settings; tune slope, then fine-tune.</text><text x="820" y="491" fill="#925900">Originally OK; superseded by 9b; discrepancy unknown.</text>
+    <text x="50" y="436" font-weight="bold">7</text><text x="110" y="436" font-weight="bold">Limit squares</text><text x="350" y="436">Compare seven square edges near the Y limit.</text><text x="820" y="436" fill="#925900">Square 4 intact; 5-7 clipped; 77.45 mm superseded.</text>
+    <text x="50" y="381" font-weight="bold">8</text><text x="110" y="381" font-weight="bold">Blank rows</text><text x="350" y="381">Preserve position across empty raster rows.</text><text x="820" y="381" fill="#176b4d">Rust: pass with band split; unbanded upload got 0x08.</text>
+    <text x="50" y="326" font-weight="bold">9</text><text x="110" y="326" font-weight="bold">Corners</text><text x="350" y="326">Check corner squares and bottom-edge placement.</text><text x="820" y="326" fill="#9c2935">Deviation at 77.45 mm; 9b selected 75 mm normal Y.</text>
+    <text x="50" y="271" font-weight="bold">10</text><text x="110" y="271" font-weight="bold">Continuous</text><text x="350" y="271">Compare continuous perimeter with the gapped run.</text><text x="820" y="271" fill="#176b4d">Historical Python: pass; no separate Rust verdict recorded.</text>
+    <text x="50" y="216" font-weight="bold">11</text><text x="110" y="216" font-weight="bold">Registration</text><text x="350" y="216">Compare repeated marks for placement drift.</text><text x="820" y="216" fill="#566978">No physical verdict recovered.</text>
+    <text x="50" y="161" font-weight="bold">12</text><text x="110" y="161" font-weight="bold">QR</text><text x="350" y="161">Scan the engraved backing QR.</text><text x="820" y="161" fill="#176b4d">18.9 mm backing QR scanned first try, 2026-11-03.</text>
+  </g>
+
+  <rect x="38" y="922" width="18" height="18" fill="#176b4d"/><text x="65" y="936" font-size="13">Observed OK for the stated run</text>
+  <rect x="318" y="922" width="18" height="18" fill="#9c2935"/><text x="345" y="936" font-size="13">Performed deviation</text>
+  <rect x="526" y="922" width="18" height="18" fill="#925900"/><text x="553" y="936" font-size="13">Provisional boundary / software assumption</text>
+  <rect x="883" y="922" width="18" height="18" fill="#566978"/><text x="910" y="936" font-size="13">No verified result</text>
+  <text x="38" y="962" font-size="13" fill="#566978">Historical passes: Python 0, 1, 2, 4, 5, 10; Rust 1, 2, 4, 5, 6, 7, 8. Rust rung 3 was skipped; physical deviations were noted at 3 and 9.</text>
+  <text x="38" y="987" font-size="13" fill="#566978">A software pass is not a physical verdict. See Hardware Observations for run conditions, 9b measurements and Sean's verdicts.</text>
+</svg>

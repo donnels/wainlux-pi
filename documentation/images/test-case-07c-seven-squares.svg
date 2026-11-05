@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="460" viewBox="0 0 1040 460" font-family="sans-serif" font-size="15">
+<!-- Copyright (c) 2026 Sean Donnellan -->
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#aaf"/></linearGradient></defs>
+  <rect width="1040" height="460" fill="url(#bg)"/>
+  <text x="35" y="36" font-size="22" font-weight="bold">7c: seven squares bracket the Y working bound</text>
+  <text x="35" y="65">One raster. HOME first. Seven 2 mm squares, 1 mm gaps. No locator; inspect after the whole burn.</text>
+  <g fill="#000">
+    <rect x="60" y="120" width="80" height="80"/><rect x="180" y="124" width="80" height="80"/>
+    <rect x="300" y="128" width="80" height="80"/><rect x="420" y="132" width="80" height="80"/>
+    <rect x="540" y="136" width="80" height="80"/><rect x="660" y="140" width="80" height="80"/>
+    <rect x="780" y="144" width="80" height="80"/>
+  </g>
+  <g text-anchor="middle">
+    <text x="100" y="105">1</text><text x="220" y="105">2</text><text x="340" y="105">3</text><text x="460" y="105" font-weight="bold">4</text>
+    <text x="580" y="105">5</text><text x="700" y="105">6</text><text x="820" y="105">7</text>
+    <text x="100" y="255">77.15</text><text x="220" y="255">77.25</text><text x="340" y="255">77.35</text><text x="460" y="255" font-weight="bold">77.45</text>
+    <text x="580" y="255">77.55</text><text x="700" y="255">77.65</text><text x="820" y="255">77.75</text>
+  </g>
+  <path d="M45 212H890" stroke="#000" stroke-dasharray="5 4"/>
+  <text x="895" y="217" font-size="13">candidate</text>
+  <text x="35" y="298">Numbers below squares are requested bottom Y edges, mm. Drawing shows the request, not the captured result.</text>
+  <text x="35" y="332" font-weight="bold">Calibration pattern only; no normal working limit is implied.</text>
+  <text x="35" y="366">Bottom-edge values are request parameters. Choose a candidate border for the supervised test.</text>
+  <text x="35" y="400">This diagram is explanatory, not printable artwork or a captured result.</text>
+  <text x="35" y="434">Inspect only after the combined burn has stopped; record the actual observation and verdict.</text>
+</svg>

@@ -1,0 +1,11 @@
+services:
+  wainlux-k6-preview-mcp:
+    build: .
+    container_name: wainlux-k6-preview-mcp
+    environment:
+      LASER_API_BASE_URL: ${LASER_API_BASE_URL:-http://127.0.0.1:8081}
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: 8082
+    ports:
+      - "${MCP_BIND_ADDRESS:-0.0.0.0}:8082:8082"
+    restart: unless-stopped

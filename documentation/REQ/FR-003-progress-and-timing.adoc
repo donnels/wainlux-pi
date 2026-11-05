@@ -1,0 +1,22 @@
+= FR-003: Progress and Timing
+
+== Status
+Implemented; Rust API and UI tests cover the structured report.
+
+== Requirement
+Report progress and elapsed work without implying that one band percentage is whole-job progress or that software completion proves physical rest.
+
+== Acceptance
+
+* `/api/state.progress` identifies phase, band, source rows and band-local percentage.
+* Completed bands appear in `band_timings` and the run outcome with `transfer_ms`, `setup_ms`, `wait_ms` and `elapsed_ms`.
+* Reported device completion and assumed completion after 90 seconds of silence remain distinct.
+* The UI labels waiting and assumed completion explicitly.
+
+All durations are milliseconds. Historical Python timings are not performance targets for Rust.
+ifdef::single-page[]
+See <<burn-timing,Burn Timing>>.
+endif::single-page[]
+ifndef::single-page[]
+See link:../doing-debugging.adoc[Burn Timing].
+endif::single-page[]

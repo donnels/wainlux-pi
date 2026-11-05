@@ -1,0 +1,101 @@
+Progress percentages are scoped to the current band, not the full side/card. `GET /api/state` exposes terminal band records in `band_timings` and the run outcome. Each record includes `transfer_ms` (raster transfer), `setup_ms` (preparation and protocol setup outside transfer and wait), `wait_ms` (completion-status wait), and `elapsed_ms` (total band time). Sum the fields across bands for a run total. All values are milliseconds.
+
+After 90 seconds of silence, completion is reported as assumed, not device-confirmed. The UI labels this separately. If a band was assumed complete, the following band event indicates that fact.
+= Laser Service API
+
+Standalone Pi Zero service. HTTP clients submit content; the operator reviews exact 1-bit rasters and starts each burn separately.
+`GET /api` serves this contract. The browser and external clients use the same endpoints.
+`GET /openapi.yaml` serves the OpenAPI 3.1 contract. `GET /docs` serves bundled Swagger UI 5.34.1; Try It Out is enabled for GET only. License notices are in `app/assets/swagger-ui/`.
+
+== Discover
+
+[cols="1,3",options="header"]
+|===
+| Request | Response
+| `GET /api/machine` | Reach, resolution, settings and capabilities.
+| `GET /api/materials` | Material/card definitions and resolved machine settings.
+| `GET /openapi.yaml` | OpenAPI 3.1 schema for Swagger-compatible clients; no UI bundle is included.
+| `GET /api/templates` | Complete field, element, side and edit/reveal policy definitions.
+| `GET /api/assets` | Reusable public assets. Initially the prepared 1-bit tiger.
+| `GET /api/assets/tiger.png` | Public tiger pixels, prepared from the repository's existing example.
+|===
+
+== Submit and Review
+
+Two submission forms are available. Neither opens the serial connection or starts the laser.
+
+* Producer: `POST /api/jobs/review` with a `job` object: `template`, `piece`, `backing`, `placement`, `guide`, `items`, optional `values`.
+* Template form: `POST /api/jobs/form` with `template`, `review_id` (`null` for a new idle review), `piece`, `backing`, `placement`, `guide`, and changed `fields` keyed by template field ID. Field edit policy is enforced.
+
+Each item names a declared element `id`, `side` (`front` or `back`) and `content`.
+Content kinds are `qr` (`text` payload), `text` (`text`, `font_size_mm`, optional `font`), `wifi` (network fields) or `image` (`asset_id`).
+Positions and dimensions omitted by a producer come from the template. An image asset ID refers to prepared pixels; it is not an arbitrary URL or Pi path.
+
+.Example vCard job with a prepared logo asset
+[source,json]
+----
+{
+  "job": {
+    "template": "vcard",
+    "piece": "bamboo-ntag215-light",
+    "backing": "backing-first",
+    "placement": "left",
+    "guide": false,
+    "items": [
+      {"id":"contact-qr","side":"front","content":{"kind":"qr","text":"BEGIN:VCARD\nVERSION:3.0\nFN:Jane Example\nURL:https://example.com/cv\nEND:VCARD"}},
+      {"id":"logo-back","side":"back","content":{"kind":"image","asset_id":"tiger"}}
+    ]
+  }
+}
+----
+
+The response contains `review_id`, `template`, policy-projected `fields`, geometry-only `job`, `layout`, `display`, ordered `stages` and `accepted_stages`.
+Each stage has `name`, `side`, `goal`, resolved `values`, and `burns` with PNG/SVG pixels, pixel dimensions and physical position/size.
+Different sides are separate rasters, never composited together.
+`guide=true` adds an optional guide stage before the front; existing markings can be reused with `guide=false`.
+
+`GET /api/jobs/review` retrieves the current review. The UI discovers it from `GET /api/state` and loads it without a browser-file injection.
+`POST /api/jobs/form` edits and regenerates a review using its current ID. Stale IDs, undeclared fields and forbidden edits are rejected.
+`DELETE /api/jobs/review` explicitly discards an idle review; an active attempt blocks replacement/discard.
+
+== Types
+
+* `wifi-login`: network QR plus independently optional readable labels. Password is QR-only.
+* `vcard`: producer-supplied vCard text or CV URL, optional readable contact label, optional logo back. The producer owns vCard serialization/escaping and contact data; the laser does not query neocv's graph.
+* `github-recovery`: recovery payload QR on the front and login URL QR on the back. Small required-by-default captions identify “GitHub MFA recovery codes” and “GitHub login to use these codes”. Recovery codes are transport data, not printable page text. A second small, optional caption can print the login URL.
+  An optional front checklist adds 16 blank boxes (2 columns x 8 rows) beside the recovery QR for manually marking used codes. It defaults off and does not contain or encode code values. A producer opts in by submitting a `use-checklist` item with `kind: checkboxes`, `count: 16`, `columns: 2`, `box_mm: 3.5`, `gap_mm: 0.8`, and `line_mm: 0.35` at the declared `check-x` / `check-y` position.
+
+For `mfa-backup`, use only `examples/synthetic-codes.txt` for demonstrations. It is not a valid GitHub recovery-code set.
+The whole text is submitted as `recovery-payload` for the front QR. In the operator form it is masked by default, but editable and explicitly revealable so a user entering real codes by hand can check their input. The QR preview still visibly carries those codes.
+The client submits both `recovery-qr` (front) and `login-qr` (back) items. Small front/back purpose captions are on by default and carry no secret data; `include-url-text` is off by default and can add the URL as an additional caption.
+Real recovery formats and line lengths must be previewed; overflow is rejected, not silently shrunk.
+Private payloads remain in RAM, not template files or operational logs.
+
+== Execute One Stage
+
+. Review both sides before starting. Confirm placement.
+. `POST /api/plan` with `review_id`, `stage` (zero-based) and `placement_confirmed` (`true` required for a back stage).
+. Only `POST /api/run` starts the planned stage. It never advances automatically to another user stage.
+. Poll `GET /api/state`. `POST /api/stop` cancels queued driver work and requests stop; the operator confirms physical rest.
+. Record `POST /api/verdict` with `status` (`ok`, `deviation`, or `skipped` for an unperformed plan) and an observation.
+. A later stage requires accepted prior stages. Inspect the front, confirm motion stopped, flip the card and seat it against the same guide before planning the back.
+
+.Plan the reviewed front stage
+[source,json]
+----
+{"review_id":"returned-review-id","stage":1,"placement_confirmed":true}
+----
+
+An edited review clears stage acceptance. Re-running an earlier stage invalidates later acceptance. Simulator/Real mode changes clear acceptance too.
+The K6's temporary completion policy assumes completion after 90 seconds without a response; it does not prove a physical OK.
+
+== Trust and Lifetime
+
+This is a trusted-LAN service, not a public authenticated API. Producer/operator role separation and session leases remain open.
+Non-revealable fields are omitted from operator source projections, but visible raster/QR pixels can disclose their contents.
+Reviews and acceptance are RAM-only; restart loses them. Do not write payloads into URLs, logs or template defaults.
+
+== Tests
+
+`cargo test --workspace` includes real-HTTP simulator tests for both new types, asset retrieval, front/back separation, stale review handling and manual flip gating.
+`app/tests/ui.cjs` exercises the generic template editor and side controls using synthetic data. Safari/Firefox rendering still needs separate checks.

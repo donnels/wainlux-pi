@@ -1,0 +1,111 @@
+= Hardware Observations
+ifdef::flag-book[]
+:imagesdir-saved: {imagesdir}
+:imagesdir: ./documentation/images
+endif::flag-book[]
+ifndef::flag-book[]
+:toc: right
+:imagesdir: images
+endif::flag-book[]
+
+Sean Donnellan triggered and verified the physical tests summarized here. This page keeps measurements that affect the current Rust service. Values are labeled by evidence type; historical runs are not current performance guarantees.
+
+== Current K6 Profile
+
+[cols="1,3",options="header"]
+|===
+| Value | Evidence
+| Working reach: 80 x 75 mm; 20 px/mm | Current profile in `k6::info`. Sean selected 75 mm as the normal Y limit from the 9b comparison; it is not a measured hard stop.
+| Bamboo NFC card: 85.45 x 53.72 mm | Physically measured; configured as `bamboo-ntag215-light`.
+| Card material settings: power 1000, depth 10 | Current configured profile. Safe depth and NFC survival remain material-specific acceptance checks.
+| Backing board dimensions | Not measured. `backing-first` dimensions are a planning placeholder, not a physical measurement.
+|===
+
+== Executed Rust Ladder Tests
+
+Sean Donnellan triggered the real-device runs and supplied the observations/verdicts below. Software status and elapsed time are reported separately from the physical observation.
+
+.Historical test ladder, climbed from rung 0 at the bottom to rung 12 at the top
+image::test-ladder.svg[Rust/K6 hardware test ladder, 0 through 12]
+
+[cols="1,2,3",options="header"]
+|===
+| Historical rung / test | Conditions / software report | Sean's observation / verdict
+| Rung 1: Talk | Rust ladder; firmware reply `04 01 06`. | Talk observed OK.
+| Rung 2: Home | Rust ladder. | Homing observed OK.
+| Rung 3: Pointer | Python pointer test had no visible toggle; Rust ladder marked this K6 rung skipped. | Deviation for the attempted behavior; not a Rust physical pass.
+| Rung 4: Frame | Laser-off bounds frame; ended with STOP, FRAMING, HOME. | Frame observed OK after the explicit exit sequence; an earlier frame attempt deviated.
+| Rung 5: First square | Filled 5 mm square on backing; power 500, depth 10; 102 s; status stalled at 99%. | Square intact; OK.
+| Rung 6: Limit stairs | 74-80 mm Y, 80 mm width. 300/5 was unreadable; 500/10 showed a faint kink near 45 mm. Repeated at higher settings; slope was adjusted and fine-tuned until the pattern yielded an interpreted result. Exact later settings and endpoint are not in the current record. | Originally marked OK after tuning. Its result did not match 9b; the cause is unknown.
+| Rung 7: Limit squares | Attempt `1793779971-limit_squares`; power 1000, depth 10; requested bottoms 77.15-77.75 mm. | Square 4 intact, squares 5-7 clipped. Initial 77.45 mm decision was superseded by the 9b comparison.
+| Rung 8: Blank rows | First unbanded upload received `08` for an all-zero DATA chunk. Band-split workaround: 205 s at 500/10. | Two squares correctly placed, with no marks between; OK with workaround.
+| Rung 9: Corners | 80 x 77.45 mm, power 1000, depth 10; two bands; 5849 s (97.5 min); status stalled at 99%. | Top squares good. Bottom squares compressed against/below the bottom line; Deviation on bottom placement. Cause was not established.
+| Rung 10: Continuous perimeter | Historical Python ladder result was pass. | No separate Rust physical verdict recovered; the 9b continuous-strip comparison is recorded below.
+| Rung 11: Registration | Rust step exists in the current ladder. | No physical verdict recovered.
+| Rung 12: QR | Backing QR, 377 px (18.9 mm), power 500 / depth 10. | Scanned on the first attempt.
+|===
+
+Rung 6 was repeated at higher values, first adjusting the slope and then fine-tuning it, and was marked OK at the time. The later 9b comparison did not agree with its apparent limit: both 77.45 mm strips deviated while the 75 mm gap and continuous strips were OK. No cause for the discrepancy is established. The 9b result is the accepted basis for the 75 mm normal Y profile; it does not measure the hard stop.
+
+.Limit stairs: requested calibration pattern, not a measured result
+image::test-case-07a-limit-stairs.svg[Limit stairs pattern]
+
+.Seven-square calibration pattern: 77.45 mm was provisional and later superseded
+image::test-case-07c-seven-squares.svg[Limit square pattern]
+
+.Blank-row test pattern
+image::test-case-08-blank-rows.svg[Blank-row pattern]
+
+.Corner test pattern at the former 77.45 mm height
+image::test-case-09-corners.svg[Corner pattern]
+
+== 9b: Height and Gap Comparison
+
+A/B/C were one joint session on the stock base. D was a later follow-up on the same setup. Each strip was a separate job with HOME before it; the backing was not repositioned. All used power 1000 and depth 10. Software status stalled near 99% in all four runs.
+
+[cols="1,2,1,1,1,2",options="header"]
+|===
+| Strip | Pattern | X | Height | Duration | Sean's verdict / observation
+| A | 20 mm gap | 10 mm | 77.45 mm | 223 s | Deviation: bottom marker compressed.
+| B | Continuous line | 20 mm | 77.45 mm | 242 s | Deviation: same bottom compression as A.
+| C | 20 mm gap | 30 mm | 75 mm | 219 s | OK, approximately 75 mm.
+| D | Continuous line, later follow-up | 40 mm | 75 mm | 237 s | OK; matched C.
+|===
+
+Sean's joint inspection found the gap and continuous pair matched at each height. The 77.45 mm pair deviated at the bottom; the 75 mm pair was OK. Decision: 75 mm normal Y working bound. This did not measure the mechanical hard stop or prove every multi-band placement.
+
+.9b four-strip comparison geometry; D was a later follow-up
+image::../../docker/docker-wainlux-rs/app/assets/test-patterns/vertical-comparison.svg[Four-strip comparison geometry; D was run as a later follow-up]
+
+== Card Result
+
+Sean reported that the first card run had a good guide, readable QR and working NFC. Printed text was too small. The subsequent larger bold text defaults have not been physically accepted in a physical run; verify them on a new supervised card before treating them as measured results.
+
+.Generic open-right card guide used on bare backing
+image::card-guide.svg[Generic open-right card guide]
+
+== Historical Cork and PLA Close-ups
+
+These recovered images show material behavior from earlier experiments. They are microscope/camera close-ups of cork and PLA, not the missing close-ups from the 9b corner/limit run.
+
+.Cork test-pattern surface
+image::capture_20260127_124112.jpg[Cork close-up]
+
+.Cork pattern at wider view
+image::capture_20260127_124223.jpg[Cork pattern close-up]
+
+.Pulsed line detail on PLA
+image::capture_20260127_124337.jpg[PLA close-up]
+
+.Tiger pattern on PLA
+image::capture.2426611769506763096.jpg[PLA tiger close-up]
+
+== Historical QR Run
+
+A QR on the backing board was 377 px (18.9 mm), burned at power 500 / depth 10, and scanned on the first attempt. This was a backing-board run, not the current card template's 36 mm QR.
+
+For the historical transfer-time capture, see the provenance and measurements in `doing-debugging.adoc`.
+
+ifdef::flag-book[]
+:imagesdir: {imagesdir-saved}
+endif::flag-book[]

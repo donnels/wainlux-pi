@@ -1,79 +1,52 @@
-;; K6 Job Header (0x23)
-;; 38-byte command to initialize raster/vector job
-;; All multi-byte fields are big-endian
+;; Rust K6 raster JOB_HEADER (0x23), 38 bytes.
+;; Multi-byte numeric fields are big-endian. Raster-only fields are populated;
+;; bytes reserved for vector data are zero in the current driver.
 
-(defattrs :bg-header {:fill "#e8f4f8"})
+(defattrs :bg-fixed {:fill "#e8f4f8"})
 (defattrs :bg-raster {:fill "#ffe8e8"})
-(defattrs :bg-vector {:fill "#e8ffe8"})
-(defattrs :bg-pos {:fill "#f8f8e8"})
+(defattrs :bg-position {:fill "#f8f8e8"})
+(defattrs :bg-reserved {:fill "#eeeeee"})
 
 (draw-column-headers)
+(draw-box "0x23" [:box-first {:span 8} :bg-fixed])
+(draw-box "0x00" [:box-related {:span 8} :bg-fixed])
+(draw-box "0x26 (38 bytes)" [:box-related {:span 8} :bg-fixed])
+(draw-box "Packet count MSB" [:box-last {:span 8} :bg-fixed])
 
-;; Row 1
-(draw-box "0x23 (Job Header)" [:box-first {:span 8} :bg-header])
-(draw-box "0x00 (Reserved)" [:box-related {:span 8} :bg-header])
-(draw-box "0x26 (Length = 38)" [:box-related {:span 8} :bg-header])
-(draw-box "Pkt Cnt MSB (16-bit BE)" [:box-last {:span 8} :bg-header])
-
-;; Row 2
 (next-row)
-(draw-box "Pkt Cnt LSB" [:box-first {:span 8} :bg-header])
-(draw-box "0x01 (Version/Mode)" [:box-related {:span 8} :bg-header])
-(draw-box "Raster W MSB (16-bit BE)" [:box-related {:span 8} :bg-raster])
-(draw-box "Raster W LSB" [:box-last {:span 8} :bg-raster])
+(draw-box "Packet count LSB" [:box-first {:span 8} :bg-fixed])
+(draw-box "0x01 mode" [:box-related {:span 8} :bg-fixed])
+(draw-box "Raster width MSB" [:box-related {:span 8} :bg-raster])
+(draw-box "Raster width LSB" [:box-last {:span 8} :bg-raster])
 
-;; Row 3
 (next-row)
-(draw-box "Raster H MSB (16-bit BE)" [:box-first {:span 8} :bg-raster])
-(draw-box "Raster H LSB" [:box-related {:span 8} :bg-raster])
-(draw-box "0x00 (Offset MSB)" [:box-related {:span 8} :bg-header])
-(draw-box "0x21 (Offset LSB = 33)" [:box-last {:span 8} :bg-header])
+(draw-box "Raster height MSB" [:box-first {:span 8} :bg-raster])
+(draw-box "Raster height LSB" [:box-related {:span 8} :bg-raster])
+(draw-box "0x00 offset MSB" [:box-related {:span 8} :bg-fixed])
+(draw-box "0x21 offset LSB (=33)" [:box-last {:span 8} :bg-fixed])
 
-;; Row 4
 (next-row)
-(draw-box "Rast Pwr MSB (16-bit BE, 0-1000)" [:box-first {:span 8} :bg-raster])
-(draw-box "Rast Pwr LSB" [:box-related {:span 8} :bg-raster])
-(draw-box "Rast Dep MSB (16-bit BE, 1-255)" [:box-related {:span 8} :bg-raster])
-(draw-box "Rast Dep LSB" [:box-last {:span 8} :bg-raster])
+(draw-box "Power MSB" [:box-first {:span 8} :bg-raster])
+(draw-box "Power LSB" [:box-related {:span 8} :bg-raster])
+(draw-box "Depth MSB" [:box-related {:span 8} :bg-raster])
+(draw-box "Depth LSB" [:box-last {:span 8} :bg-raster])
 
-;; Row 5
 (next-row)
-(draw-box "Vect W MSB (16-bit BE)" [:box-first {:span 8} :bg-vector])
-(draw-box "Vect W LSB" [:box-related {:span 8} :bg-vector])
-(draw-box "Vect H MSB (16-bit BE)" [:box-related {:span 8} :bg-vector])
-(draw-box "Vect H LSB" [:box-last {:span 8} :bg-vector])
+(draw-box "Vector width: 0x0000" [:box-first {:span 8} :bg-reserved])
+(draw-box "Vector height: 0x0000" [:box-related {:span 8} :bg-reserved])
+(draw-box "Total size (u32 BE)" [:box-related {:span 16} :bg-raster])
 
-;; Row 6
 (next-row)
-(draw-box "Vect Offset byte 0 (32-bit BE)" [:box-first {:span 8} :bg-raster])
-(draw-box "Vect Offset byte 1" [:box-related {:span 8} :bg-raster])
-(draw-box "Vect Offset byte 2" [:box-related {:span 8} :bg-raster])
-(draw-box "Vect Offset byte 3" [:box-last {:span 8} :bg-raster])
+(draw-box "Vector power: 0x0000" [:box-first {:span 8} :bg-reserved])
+(draw-box "Vector depth: 0x0000" [:box-related {:span 8} :bg-reserved])
+(draw-box "Vector count: 0x00000000" [:box-related {:span 16} :bg-reserved])
 
-;; Row 7
 (next-row)
-(draw-box "Vect Pwr MSB (16-bit BE, 0-1000)" [:box-first {:span 8} :bg-vector])
-(draw-box "Vect Pwr LSB" [:box-related {:span 8} :bg-vector])
-(draw-box "Vect Dep MSB (16-bit BE, 1-255)" [:box-related {:span 8} :bg-vector])
-(draw-box "Vect Dep LSB" [:box-last {:span 8} :bg-vector])
+(draw-box "Center X MSB" [:box-first {:span 8} :bg-position])
+(draw-box "Center X LSB" [:box-related {:span 8} :bg-position])
+(draw-box "Center Y MSB" [:box-related {:span 8} :bg-position])
+(draw-box "Center Y LSB" [:box-last {:span 8} :bg-position])
 
-;; Row 8
 (next-row)
-(draw-box "Pt Cnt byte 0 (32-bit BE)" [:box-first {:span 8} :bg-vector])
-(draw-box "Pt Cnt byte 1" [:box-related {:span 8} :bg-vector])
-(draw-box "Pt Cnt byte 2" [:box-related {:span 8} :bg-vector])
-(draw-box "Pt Cnt byte 3" [:box-last {:span 8} :bg-vector])
-
-;; Row 9
-(next-row)
-(draw-box "Center X MSB (16-bit BE)" [:box-first {:span 8} :bg-pos])
-(draw-box "Center X LSB" [:box-related {:span 8} :bg-pos])
-(draw-box "Center Y MSB (16-bit BE)" [:box-related {:span 8} :bg-pos])
-(draw-box "Center Y LSB" [:box-last {:span 8} :bg-pos])
-
-;; Row 10
-(next-row)
-(draw-box "Repeat (1-10)" [:box-first {:span 8} :bg-header])
-(draw-box "0x00 (Reserved)" [:box-related {:span 8} :bg-header])
-(draw-box "0x00 (Reserved)" [:box-related {:span 8} :bg-header])
-(draw-box "0x00 (Reserved)" [:box-last {:span 8} :bg-header])
+(draw-box "0x01 repeat" [:box-first {:span 8} :bg-fixed])
+(draw-box "0x00 reserved" [:box-related {:span 8} :bg-fixed])

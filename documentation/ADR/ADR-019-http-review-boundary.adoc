@@ -1,0 +1,16 @@
+= ADR-019: HTTP Review Boundary
+
+== Status
+Accepted; current, with an explicit trust limit.
+
+== Decision
+The Pi service is the single owner of the K6 serial port. A producer may submit a job for validation and preview through HTTP; submission does not execute it. The operator reviews the raster, then separately plans and runs each stage and records a verdict.
+
+The API is for a trusted LAN. Producer and operator roles are not authenticated, and there is no per-client ownership lease. This boundary is workflow separation, not access control.
+
+== Consequences
+
+* Browser and external clients use the same HTTP contract; neither accesses serial directly.
+* Do not expose the service to an untrusted network.
+* Reviews are held in process memory; run, stop and verdict events are appended to `DATA_DIR/runs.jsonl` without submitted job payloads.
+* Restart loses the active review; the JSONL log is not a job database or restart-recovery mechanism.

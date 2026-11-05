@@ -1,0 +1,15 @@
+= ADR-025: Card Placement
+
+== Status
+Accepted; current.
+
+== Decision
+Placement uses millimetres and the machine's declared reach. The current K6 profile is 80 x 75 mm. For the measured 85.45 x 53.72 mm bamboo card, the default left placement uses a 1 mm margin; its centered reachable etch area is 72.55 x 53.72 mm.
+
+The optional guide is generated only on sides that fit wholly inside reach. For the default card placement it is an open-right U, with a 0.5 mm line 0.2 mm outside the piece. Items are positioned in the card coordinate frame and translated to bed coordinates. Any content outside the etch area is refused, not clipped.
+
+== Consequences
+
+* Materials and per-machine settings are declared in `docker/docker-wainlux-rs/materials.toml`.
+* Use the 80 x 75 mm profile for normal jobs. The 75 mm Y value is an operator-selected working bound; it is not an exact stop measurement.
+* The configured backing dimensions are a placeholder until the physical board is measured.

@@ -1,0 +1,16 @@
+# Rust laser service on the Pi. Image built on the Deck and loaded, not built here (ADR-022).
+# Only one program may hold /dev/ttyUSB0 at a time.
+services:
+  laser-app:
+    image: localhost/laser-app:arm
+    container_name: laser-app
+    # The app has no signal handler; init passes SIGTERM so stop is instant.
+    init: true
+    devices:
+      - /dev/ttyUSB0:/dev/ttyUSB0
+    volumes:
+      - ./data:/data
+      - ./materials.toml:/etc/laser/materials.toml:ro
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
