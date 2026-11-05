@@ -598,12 +598,13 @@ pre.rouge .gs {
 </li>
 <li><a href="#technical-reference-and-evidence">7. Technical Reference and Evidence</a>
 <ul class="sectlevel2">
-<li><a href="#_discover">7.1. Discover</a></li>
+<li><a href="#_routes">7.1. Routes</a></li>
 <li><a href="#_submit_and_review">7.2. Submit and Review</a></li>
 <li><a href="#_types">7.3. Types</a></li>
 <li><a href="#_execute_one_stage">7.4. Execute One Stage</a></li>
 <li><a href="#_trust_and_lifetime">7.5. Trust and Lifetime</a></li>
-<li><a href="#_tests">7.6. Tests</a></li>
+<li><a href="#_clear_pi_and_account_state">7.6. Clear Pi and Account State</a></li>
+<li><a href="#_tests">7.7. Tests</a></li>
 </ul>
 </li>
 <li><a href="#protocol-reference">8. K6 Raster Protocol</a>
@@ -1149,42 +1150,113 @@ User --&gt; System
 <code>GET /openapi.yaml</code> serves the OpenAPI 3.1 contract. <code>GET /docs</code> serves bundled Swagger UI 5.34.1; Try It Out is enabled for GET only. License notices are in <code>app/assets/swagger-ui/</code>.</p>
 </div>
 <div class="sect2">
-<h3 id="_discover">7.1. Discover</h3>
+<h3 id="_routes">7.1. Routes</h3>
+<div class="paragraph">
+<p>This inventory is extracted from the current <code>app/src/lib.rs</code> dispatcher. <code>GET /openapi.yaml</code> is the machine-readable contract.</p>
+</div>
 <table class="tableblock frame-all grid-all stretch">
 <colgroup>
-<col style="width: 25%;">
-<col style="width: 75%;">
+<col style="width: 14.2857%;">
+<col style="width: 28.5714%;">
+<col style="width: 57.1429%;">
 </colgroup>
 <thead>
 <tr>
-<th class="tableblock halign-left valign-top">Request</th>
-<th class="tableblock halign-left valign-top">Response</th>
+<th class="tableblock halign-left valign-top">Method</th>
+<th class="tableblock halign-left valign-top">Path</th>
+<th class="tableblock halign-left valign-top">Purpose</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>GET /api/machine</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Reach, resolution, settings and capabilities.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">GET</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Embedded operator UI</p></td>
 </tr>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>GET /api/materials</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Material/card definitions and resolved machine settings.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">GET</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/api</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">This API guide</p></td>
 </tr>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>GET /openapi.yaml</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">OpenAPI 3.1 schema for Swagger-compatible clients; no UI bundle is included.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">GET</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/openapi.yaml</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">OpenAPI contract</p></td>
 </tr>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>GET /api/templates</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Complete field, element, side and edit/reveal policy definitions.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">GET</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/docs</code>, <code>/docs/</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Bundled Swagger UI</p></td>
 </tr>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>GET /api/assets</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Reusable public assets. Initially the prepared 1-bit tiger.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">GET</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/docs/swagger-ui.css</code>, <code>/docs/swagger-ui-bundle.js</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Swagger UI assets</p></td>
 </tr>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>GET /api/assets/tiger.png</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Public tiger pixels, prepared from the repository&#8217;s existing example.</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">GET</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/docs/favicon-16x16.png</code>, <code>/docs/favicon-32x32.png</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Swagger UI icons</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">GET</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/assets/vsr-logo.png</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Operator UI logo</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">GET</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/api/machine</code>, <code>/api/mode</code>, <code>/api/materials</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Machine profile, mode, and material settings</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">GET</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/api/templates</code>, <code>/api/assets</code>, <code>/api/assets/tiger.png</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Templates and prepared assets</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">GET</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/api/steps</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Supported test-ladder steps</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">GET, DELETE</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/api/state</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Read state; DELETE clears idle RAM state but retains the run log</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">GET</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/api/attempt/preview</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Exact active-stage preview</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">GET</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/api/log</code>, <code>/api/pending-verdicts</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Redacted audit events and outstanding verdicts</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">POST</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/api/jobs/preview</code>, <code>/api/tests/preview</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Preview a card job or test pattern; no run</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">GET, POST, DELETE</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/api/jobs/review</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Read, submit, or discard a review</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">POST</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/api/jobs/form</code>, <code>/api/cards/import</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Edit a template review or import card data</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">POST</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/api/mode</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Change real/simulator mode while idle</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">POST</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/api/plan</code>, <code>/api/run</code>, <code>/api/verdict</code>, <code>/api/stop</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Plan, run, judge, or request stop</p></td>
 </tr>
 </tbody>
 </table>
@@ -1307,7 +1379,16 @@ Reviews and acceptance are RAM-only; restart loses them. Do not write payloads i
 </div>
 </div>
 <div class="sect2">
-<h3 id="_tests">7.6. Tests</h3>
+<h3 id="_clear_pi_and_account_state">7.6. Clear Pi and Account State</h3>
+<div class="paragraph">
+<p>The operator UI&#8217;s top-level <strong>Sign out / Clear Pi</strong> control calls <code>DELETE /api/state</code>. It clears the in-memory review, planned attempt, progress, and pending outcome, drops idle device handles, and refuses while a run is active. The redacted <code>runs.jsonl</code> audit log is retained; a clear event is appended. Clearing is not a laser command and does not prove or change physical machine state.</p>
+</div>
+<div class="paragraph">
+<p>Authentication is not implemented; this remains a trusted-LAN service, so the current control is a state-reset convenience, not a secure logout. Login is deferred. When authentication is added, this control is intended to become <strong>Sign in</strong>; an unauthenticated client should see only a login prompt and no machine controls or data. That access boundary is also deferred and is not enforced today.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_tests">7.7. Tests</h3>
 <div class="paragraph">
 <p><code>cargo test --workspace</code> includes real-HTTP simulator tests for both new types, asset retrieval, front/back separation, stale review handling and manual flip gating.
 <code>app/tests/ui.cjs</code> exercises the generic template editor and side controls using synthetic data. Safari/Firefox rendering still needs separate checks.</p>
@@ -3210,7 +3291,7 @@ No additional Flatpak extensions needed.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2026-11-05 20:59:58 UTC
+Last updated 2026-11-05 21:29:29 UTC
 </div>
 </div>
 </body>
