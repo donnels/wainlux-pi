@@ -4,3 +4,9 @@
 
 * halftone qr modifier (probably wont work)
 ** link:https://lucerojc.github.io/halftone-qr/[]
+
+* decode by hand
+** link:https://noel-friedrich.github.io/read-qr-by-hand/?e=L&m=4&v=1[]
+
+* codes with special mods
+** link:https://www.noel-friedrich.de/hqr/?c=Hackaday[]
