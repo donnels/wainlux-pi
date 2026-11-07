@@ -10,3 +10,9 @@
 
 * codes with special mods
 ** link:https://www.noel-friedrich.de/hqr/?c=Hackaday[]
+
+== open items
+
+* how to identify ended jobs
+* how to skip empty space
+* vectors
