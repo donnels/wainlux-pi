@@ -1,0 +1,6 @@
+= Next Steps
+
+== Ideas to investigate
+
+* halftone qr modifier (probably wont work)
+** link:https://lucerojc.github.io/halftone-qr/[]
