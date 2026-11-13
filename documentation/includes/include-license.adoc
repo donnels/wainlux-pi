@@ -1,29 +1,21 @@
+[[project-license]]
 = Copyright and License
 
-== Code License
+One root license covers project-owned code, documentation, examples and illustrations: personal, non-commercial use and learning only, with no AI/ML training, fine-tuning, evaluation or dataset collection without separate permission. This is a custom source-available license, not an OSI-approved open-source license. Obtain legal review before relying on its enforceability.
 
-All source code in this repository is licensed under the **MIT License**.
+Third-party dependencies, bundled fonts used by the Pi renderer, and other third-party assets retain their existing licenses and notices. This change cannot revoke earlier MIT or Creative Commons grants for copies already released under those terms, nor relicense contributions without the necessary rights.
 
-ifdef::single-page[]
-See <<mit-license>> for the full text.
-endif::single-page[]
-ifndef::single-page[]
-See link:../LICENSE[LICENSE] for full text.
-endif::single-page[]
+.Full project license
+[listing]
+....
+include::../../LICENSE[]
+....
 
-== Protocol Documentation License
+== Crawler Requests
 
-All protocol documentation (files in `/documentation`) is dual-licensed:
+The root `robots.txt` requests that all crawlers stay out; published HTML also carries `noindex, nofollow, noarchive` metadata from `docinfo.html`. There is no universally enforced no-AI-scan file. These requests are advisory, not authentication, encryption or technical prevention of scraping. The license states the permission boundary; it cannot force a bot to comply or remove material already collected.
 
-* **Creative Commons Attribution 4.0 International (CC BY 4.0)**, or
-* **Creative Commons Zero v1.0 Universal (CC0 1.0)** - Public Domain Dedication
-
-ifdef::single-page[]
-See <<docs-license>> for the full text.
-endif::single-page[]
-ifndef::single-page[]
-See link:../LICENSE-DOCS[LICENSE-DOCS] for full text.
-endif::single-page[]
+`robots.txt` must be served at the hosting origin's `/robots.txt`. A file at a GitHub repository URL or a project Pages subpath does not control `github.com` or the whole `github.io` origin. The docs workflow copies the file into the site output, but origin-root configuration requires control of that host. HTML metadata applies to the rendered project page for crawlers that honor it. Use private hosting or access control when actual exclusion is required.
 
 == Clean Room Statement
 

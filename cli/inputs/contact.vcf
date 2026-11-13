@@ -1,0 +1,7 @@
+BEGIN:VCARD
+VERSION:3.0
+FN:Jane Example
+N:Example;Jane;;;
+EMAIL:jane@example.com
+URL:https://example.com/cv
+END:VCARD

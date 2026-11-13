@@ -1,18 +1,63 @@
 = Next Steps
+ifndef::imagesdir[]
+:imagesdir: images
+endif::imagesdir[]
 
-== Ideas to investigate
+These are investigation and experiment ideas, not commitments or claims of device support. Check the current implementation and tests first; use MCP Ghidra analysis when observable behavior or packet captures leave a device-side question unresolved.
 
-* halftone qr modifier (probably wont work)
-** link:https://lucerojc.github.io/halftone-qr/[]
+== Optional Hardware
 
-* decode by hand
-** link:https://noel-friedrich.github.io/read-qr-by-hand/?e=L&m=4&v=1[]
+=== NFC read/write module
 
-* codes with special mods
-** link:https://www.noel-friedrich.de/hqr/?c=Hackaday[]
+The photos show both sides of an HW-147 reader board. It has SCK/MISO/MOSI/SS SPI pins and a separate TXD/RXD UART header. Confirm the controller, UART protocol, voltage, tag support, GPIO allocation and HAT pin sharing before wiring it to the original Pi Zero W.
 
-== open items
+.Proposed HW-147 NFC reader, component side
+image::hardware-nfc-reader-hw147-front.jpg[HW-147 reader front]
 
-* how to identify ended jobs
-* how to skip empty space
-* vectors
+.Proposed HW-147 NFC reader, reverse side
+image::hardware-nfc-reader-hw147-back.jpg[HW-147 reader back]
+
+If compatible, expose NFC read, write and read-back as a separate adapter and operator-confirmed API action. Verify the payload by reading the tag after writing it. Keep tag operations separate from laser plan/run and use them to test cards after engraving.
+
+=== CYD operator display
+
+The photo shows a 2.8-inch, 240 x 320 CYD. It needs separate firmware and should use Wi-Fi to call the API, not GPIO to control the laser. Preserve the existing review and explicit plan/run flow.
+
+.Proposed 2.8-inch CYD board
+image::hardware-cyd-2.8-tft.jpg[2.8-inch CYD]
+
+=== Audio/display HAT
+
+The LAFVIN audio/display HAT is ordered, not installed or tested. Before use, verify original Zero W ARMv6/32-bit support, GPIO/SPI allocation, power draw, capture quality and coexistence with an NFC reader.
+
+== Supervised power sweep
+
+* *Purpose:* Compare the adjacent 20 mm block of commanded power levels with the previous block, capturing a bounded RX trace for each job.
+* *Layout:* Keep the laser fixed in place. Block 1 starts at X=0; the next block starts immediately to its right at X=20 mm. On sacrificial stock, burn a 20 x 20 mm frame at (20, 0), then nine 19 mm horizontal lines at X=20.5, Y=2 through 18 mm in 2 mm steps. The frame's top edge is the full-power 1000 reference and replaces a duplicate line. Remaining powers descend from 889 to 0. Zero is not assumed laser-off; every mark may be active.
+* *Procedure:* Review the entire layout and start one attempt. In Real mode, the UI plays a three-tone preamble and six DTMF digits (last six digits of the attempt ID) before sending the run request; record the room audio on an iPhone with computer speakers audible and use that ID to label the recording. The service homes and submits the frame, then each remaining row as a separate sequential job. A bounded RX trace records raw received bytes, decoded frames, progress and quiet intervals, keyed by job index; it captures no outgoing raster data. A software/device error stops the remaining submissions. The existing 100% and 90-second silence rules are unchanged; silence remains an assumption, not proof of rest. After the run physically stops, judge both blocks together and record one verdict. Keep the unit and stock in place.
+* *Observation:* On the first block, Sean reports the first five lines visible, line 6 very faint, line 7 only partly visible under magnification, and later lines not visible on the backing. The reference frame appeared offset above the first line. This is a material/power visibility result, not an end-detection result. The adjacent traced block's physical result remains to be judged.
+* *Fixture:* If a locating jig is used, it must register the laser without shifting its established position. Measure and verify the actual unit before relying on a downloaded or printed fixture; published K6 trays note unit/printer dimensional variation.
+
+.To-scale projection of both adjacent 20 mm blocks, with X=20 selected for the next traced run
+image::power-sweep-projection.svg[Adjacent sweep blocks and receive-traced test,align="center"]
+
+== Protocol investigations
+
+* *Job completion:* No signal reliably proves physical rest. Preserve the reported-100% and 90-second silence-assumption rules. Compare bounded traces and audio with attended stops before changing them; never auto-advance on silence.
+* *Pi-local capture:* Check microphone and OS support without installing packages or changing the Pi. Keep iPhone recording available.
+* *Vector jobs:* The K6 driver remains raster-only. Do not infer support from reserved fields.
+ifdef::single-page[]
+Packet hypotheses and safety-gated experiments remain in `documentation/unverified-protocol-experiments.adoc`.
+endif::single-page[]
+ifndef::single-page[]
+See link:unverified-protocol-experiments.adoc[Unverified Protocol Experiments] for the test plan.
+endif::single-page[]
+
+== QR experiments
+
+* *Modified QR patterns:* Explore candidates from link:https://www.noel-friedrich.de/hqr/?c=Hackaday[HQR] and its link:https://www.noel-friedrich.de/hqr/drawonqr/[DrawOnQR tool]. Identify which can be rendered as the project's raster input while staying scannable after engraving. The goal is laser-friendly codes that remain visually distinctive:
+** A human-readable text rectangle; the linked example uses one rectangle with two lines.
+** Custom pencil or rectangle marks, starting with metadata and alignment/timing patterns protected while the tool optimizes QR parameters around the drawing.
+** Marks that alter QR metadata, using the tool's separate metadata option.
+** Marks that alter alignment or timing patterns. The tool warns that these may not scan with all readers, so treat them as higher-risk trials.
+* *Halftone QR:* Try a small, controlled test based on link:https://lucerojc.github.io/halftone-qr/[Halftone QR]. This is lower-confidence for a laser because engraving reduces the pattern to material marks, but a supervised scan test can establish whether any useful effect survives.

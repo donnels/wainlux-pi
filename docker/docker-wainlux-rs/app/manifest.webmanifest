@@ -1,0 +1,10 @@
+{
+  "id": "/",
+  "name": "Laser | VSR",
+  "short_name": "Laser",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8f9fc",
+  "theme_color": "#8b1e2d"
+}

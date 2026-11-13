@@ -1,16 +1,16 @@
 = ADR-026: Network MCP Hub
 
 == Status
-Accepted by Sean Donnellan. Current placement is a separate preview-only service on the Pi Zero host; relocation remains possible.
+Accepted by Sean Donnellan. The read-only Streamable HTTP service may run on the Pi or a trusted operator host; the current Deck-local instance calls the Pi API over Wi-Fi.
 
 == Decision
-Run the MCP server as a separate Streamable HTTP process/container on the Pi Zero host for now. It is not part of the Rust app process and is not a stdio child of the IDE. It is an HTTP client of the Rust service; it never opens `/dev/ttyUSB0`. The same service can later move to an independent MCP hub without changing its API role.
+Run the MCP server as a separate Streamable HTTP process/container, not as part of the Rust app or a stdio child of the IDE. It is an HTTP client of the Rust service and never opens `/dev/ttyUSB0`. Hosting it beside the IDE allows loopback-only MCP binding while leaving the Pi API on the trusted LAN.
 
-The first tool slice is machine/material/template discovery and non-mutating job preview. It does not create or replace a retained review and has no plan, run, stop or verdict tools. The operator UI remains the only supported path for inspecting exact raster pixels and starting work.
+The read-only tool slice provides machine/material/template discovery, non-mutating job preview, cursor-based run-log/state polling, and attempt-scoped audio timing/report metadata. It does not create or replace a retained review and has no plan, run, stop or verdict tools. Streamable HTTP push notifications are not implemented or relied upon; clients pass the returned cursor to fetch deltas. The operator UI remains the only supported path for inspecting exact raster pixels and starting work.
 
 == Consequences
 
-* The MCP container uses the Pi-local Rust API by default. Its Streamable HTTP endpoint is reachable to trusted Wi-Fi clients on port 8082.
+* The MCP container's Rust API URL is configurable. The Deck-local instance reaches the Pi over Wi-Fi and exposes MCP only on Deck loopback port 8082.
 * Keep it on the private network and use firewall/TLS/access controls where available; the service API itself has no authentication.
 * The current MCP and laser APIs have no authentication. Do not expose either publicly.
 * Future mutating MCP tools require an explicit ADR and authorization design; do not add burn controls by implication.

@@ -3,10 +3,12 @@
 Current diagrams used by the documentation.
 
 * `k6-prot-*.edn` -> `.svg` with Bytefield-SVG (`scripts/generate_diagrams.sh`).
-* `system-context.plantuml`, `architecture-rust.plantuml`, `sequence-stage-run.plantuml`, `card-api-clients.plantuml` and `sequence-ghidra-analysis.plantuml` show the current device/client context, service ownership, stage execution, API clients and clean-room handoff. Their PNGs are generated with PlantUML.
+* `plantuml-style.puml` is shared by all PlantUML sources. `system-context.plantuml`, `architecture-rust.plantuml`, `code-topology.plantuml`, `sequence-stage-run.plantuml`, `card-api-clients.plantuml`, `sequence-audio-capture.plantuml`, `activity-audio-test.plantuml` and `sequence-ghidra-analysis.plantuml` show system ownership and workflows. Their PNGs are generated with PlantUML.
 * `card-guide.svg` is a generic open-right guide with no submitted content or credentials.
 * `card-placement.svg` and `card-items.svg` are generic illustrations of the current K6/card geometry and template coordinates.
 * `ui-simulator-preview.png` is a Rust operator UI screenshot with synthetic Wi-Fi values, simulator mode and no burn started. The simulator's 80 x 80 mm profile is not the measured K6 working reach.
+* `hardware-nfc-reader-hw147-front.jpg`, `hardware-nfc-reader-hw147-back.jpg` and `hardware-cyd-2.8-tft.jpg` are proposed hardware references, not installed or tested devices.
+* `recovery-demo-qr.png` is a historical illustration containing synthetic instructions and codes, not a current Pi raster. `recovery-workflow.plantuml` and its PNG describe Pi-reviewed card submission, manual NFC write/read-back and recovery, not an implemented NFC adapter or CLI exporter.
 * `test-ladder.svg`, `test-case-07a-limit-stairs.svg`, `test-case-07c-seven-squares.svg`, `test-case-08-blank-rows.svg` and `test-case-09-corners.svg` show Rust test coverage/evidence. The 9b comparison is shared from `docker/docker-wainlux-rs/app/assets/test-patterns/vertical-comparison.svg`.
 * `capture_20260127_124112.jpg`, `capture_20260127_124223.jpg`, `capture_20260127_124337.jpg` and `capture.2426611769506763096.jpg` are recovered historical cork/PLA close-ups; they are not 9b ladder microscope captures.
 

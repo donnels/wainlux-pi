@@ -1,0 +1,13 @@
+{
+  "job": {
+    "template": "wifi-login",
+    "piece": "bamboo-ntag215-light",
+    "backing": "backing-first",
+    "placement": "left",
+    "guide": false,
+    "items": [
+      {"id":"wifi","side":"front","content":{"kind":"wifi","ssid":"SYNTHETIC Guest","password":"NOT-A-REAL-PASSWORD"}},
+      {"id":"title","side":"front","content":{"kind":"text","text":"Demo Wi-Fi","font_size_mm":4.25}}
+    ]
+  }
+}

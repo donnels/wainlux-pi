@@ -29,9 +29,10 @@ impl Default for Display {
 pub struct Template {
     pub id: String,
     pub name: String,
+    #[serde(default)]
+    pub audio_recording_enabled: bool,
     pub fields: Vec<Field>,
     pub elements: Vec<Element>,
-    pub legacy_items: Vec<String>,
     #[serde(default)]
     pub exclusive_groups: Vec<Vec<String>>,
     pub display: Display,
@@ -48,6 +49,8 @@ pub struct Field {
     pub editable: bool,
     pub revealable: bool,
     pub masked: bool,
+    #[serde(default)]
+    pub file_input: bool,
     #[serde(default)]
     pub options: Vec<Value>,
     pub min: Option<f64>,
@@ -73,8 +76,8 @@ impl Template {
     pub fn values(&self, job: &JobReq) -> Result<BTreeMap<String, Value>, String> {
         let mut values = self.defaults();
         let mut assigned = BTreeSet::new();
-        for (index, item) in job.items.iter().enumerate() {
-            let id = item.id.as_ref().or_else(|| self.legacy_items.get(index)).ok_or("submitted item needs a declared element id")?;
+        for item in &job.items {
+            let id = item.id.as_ref().ok_or("submitted item needs a declared element id")?;
             let element = self.elements.iter().find(|element| &element.id == id).ok_or("undeclared submitted element")?;
             if item.side != element.side { return Err("submitted element is on the wrong side".into()); }
             let item = serde_json::to_value(item).map_err(|error| error.to_string())?;
@@ -167,6 +170,7 @@ fn parse(path: &Path) -> Result<Template, String> {
             return Err("invalid/duplicate field id or unmasked non-revealable field".into());
         }
         if field.masked && !["text", "multiline"].contains(&field.kind.as_str()) { return Err("only text fields can be masked".into()); }
+        if field.file_input && (!field.editable || field.kind != "multiline") { return Err("file input requires an editable multiline field".into()); }
     }
     let mut element_ids = BTreeSet::new();
     for element in &template.elements {
@@ -195,7 +199,6 @@ fn parse(path: &Path) -> Result<Template, String> {
             if !template.fields.iter().any(|field| &field.id == id && field.kind == "checkbox") { return Err("enabled_by needs a declared checkbox".into()); }
         }
     }
-    for id in &template.legacy_items { if !element_ids.contains(id) { return Err("legacy item mapping needs a declared element".into()); } }
     for group in &template.exclusive_groups {
         if group.len() < 2 || group.iter().any(|id| !template.fields.iter().any(|field| &field.id == id && field.kind == "checkbox")) { return Err("exclusive groups require declared checkbox fields".into()); }
     }
@@ -216,11 +219,15 @@ mod tests {
     fn wifi_defines_private_fields_and_visible_markings() {
         let templates = load(concat!(env!("CARGO_MANIFEST_DIR"), "/../use-cases")).unwrap();
         let wifi = templates.iter().find(|template| template.id == "wifi-login").unwrap();
+        assert!(wifi.audio_recording_enabled);
         assert!(wifi.display.masked_fields.contains(&"ssid".into()));
         assert!(wifi.display.masked_fields.contains(&"password".into()));
         assert!(wifi.display.masked_fields.contains(&"title".into()));
         assert!(!wifi.display.card_content_visible && wifi.display.markings_visible);
         assert!(wifi.fields.iter().find(|field| field.id == "security").unwrap().options.contains(&json!("WPA3")));
+        assert!(!templates.iter().find(|template| template.id == "vcard").unwrap().audio_recording_enabled);
+        let file_fields: Vec<_> = templates.iter().flat_map(|template| &template.fields).filter(|field| field.file_input).map(|field| field.id.as_str()).collect();
+        assert_eq!(file_fields, ["recovery-payload", "contact"]);
     }
 
     #[test]

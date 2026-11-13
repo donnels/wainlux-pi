@@ -1,0 +1,17 @@
+skinparam backgroundColor #fff/aaf
+skinparam actorBackgroundColor #fff/aaf
+skinparam activityBackgroundColor #fff/aaf
+skinparam activityBorderColor #667985
+skinparam componentBackgroundColor #fff/aaf
+skinparam componentBorderColor #344054
+skinparam componentStyle rectangle
+skinparam nodeBackgroundColor #fff/aaf
+skinparam noteBackgroundColor #fff/aaf
+skinparam packageBorderColor #7b8794
+skinparam participantBackgroundColor #fff/aaf
+skinparam sequenceLifeLineBackgroundColor #fff/aaf
+skinparam shadowing true
+skinparam defaultFontName sans-serif
+skinparam ArrowColor #40515c
+
+footer (C)2026 Sean Donnellan

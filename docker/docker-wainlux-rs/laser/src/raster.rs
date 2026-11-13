@@ -20,6 +20,10 @@ impl Raster {
         self.bits[y as usize * self.width as usize + x as usize] = on;
     }
 
+    pub fn fill_rect(&mut self, x: u32, y: u32, width: u32, height: u32) {
+        for row in y..y + height { for column in x..x + width { self.set(column, row, true); } }
+    }
+
     /// Filled rectangle, all burn.
     pub fn filled(width: u32, height: u32) -> Self {
         Raster { width, height, bits: vec![true; width as usize * height as usize] }

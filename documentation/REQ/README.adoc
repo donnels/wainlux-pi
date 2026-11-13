@@ -1,6 +1,6 @@
 = Requirements
 
-Only requirements backed by current Rust behavior or an explicit safety boundary remain. Superseded Flask requirements and unimplemented proposals were removed; numbering gaps are intentional.
+Active requirements are listed below. Numbering gaps are intentional; superseded and proposed work was removed.
 
 == Functional
 
@@ -12,9 +12,10 @@ Historical physical evidence is in <<hardware-observations>>.
 * <<fr-007-emergency-stop,FR-007: Stop and cancellation>>
 * <<fr-009-calibration-patterns,FR-009: Test ladder>>
 * <<fr-011-placement,FR-011: Material placement>>
-* <<fr-013,FR-013: Simulator testing>>
+* <<fr-013,FR-013: Hardware-independent tests>>
 * <<fr-015-laser-test-ladder,FR-015: Operator test verdicts>>
 * <<fr-016-qr-cards,FR-016: Card review workflow>>
+* <<fr-017-end-detection,FR-017: Physical end estimates>>
 endif::single-page[]
 ifndef::single-page[]
 Historical physical evidence is in link:../hardware-observations.adoc[Hardware Observations].
@@ -24,18 +25,44 @@ Historical physical evidence is in link:../hardware-observations.adoc[Hardware O
 * link:FR-007-emergency-stop.adoc[FR-007: Stop and cancellation]
 * link:FR-009-calibration-patterns.adoc[FR-009: Test ladder]
 * link:FR-011-placement.adoc[FR-011: Material placement]
-* link:FR-013.adoc[FR-013: Simulator testing]
+* link:FR-013.adoc[FR-013: Hardware-independent tests]
 * link:FR-015-laser-test-ladder.adoc[FR-015: Operator test verdicts]
 * link:FR-016-qr-cards.adoc[FR-016: Card review workflow]
+* link:FR-017-end-detection.adoc[FR-017: Physical end estimates]
+endif::single-page[]
+
+ifdef::single-page[]
+[appendix]
+[[fr-001-burn-raster-image]]
+include::FR-001-burn-raster-image.adoc[leveloffset=+1]
+[[fr-002-generate-wifi-qr]]
+include::FR-002-generate-wifi-qr.adoc[leveloffset=+1]
+[[fr-003-progress-and-timing]]
+include::FR-003-progress-and-timing.adoc[leveloffset=+1]
+[[fr-007-emergency-stop]]
+include::FR-007-emergency-stop.adoc[leveloffset=+1]
+[[fr-009-calibration-patterns]]
+include::FR-009-calibration-patterns.adoc[leveloffset=+1]
+[[fr-011-placement]]
+include::FR-011-placement.adoc[leveloffset=+1]
+[[fr-013]]
+include::FR-013.adoc[leveloffset=+1]
+[[fr-015-laser-test-ladder]]
+include::FR-015-laser-test-ladder.adoc[leveloffset=+1]
+[[fr-016-qr-cards]]
+include::FR-016-qr-cards.adoc[leveloffset=+1]
+[[fr-017-end-detection]]
+include::FR-017-end-detection.adoc[leveloffset=+1]
 endif::single-page[]
 
 == Non-Functional
 
+* NFR-005 defines the JSONL run-history and redaction contract.
 ifdef::single-page[]
-* <<nfr-002-no-material-waste,NFR-002: Hardware-free test isolation>>
-* <<nfr-005-run-history,NFR-005: Redacted run history>>
+[appendix]
+[[nfr-005-run-history]]
+include::NFR-005-run-history.adoc[leveloffset=+1]
 endif::single-page[]
 ifndef::single-page[]
-* link:NFR-002-no-material-waste.adoc[NFR-002: Hardware-free test isolation]
-* link:NFR-005-run-history.adoc[NFR-005: Redacted run history]
+link:NFR-005-run-history.adoc[NFR-005: Redacted run history].
 endif::single-page[]

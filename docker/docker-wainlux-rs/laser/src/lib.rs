@@ -84,6 +84,11 @@ impl Info {
         Ok(out)
     }
 
+    /// Settings in the operator's words: "Power 1000, Depth 10".
+    pub fn describe(&self, values: &Values) -> String {
+        self.settings.iter().map(|setting| format!("{} {}", setting.label, values.get(setting.key).copied().unwrap_or(setting.default))).collect::<Vec<_>>().join(", ")
+    }
+
     /// Whole rectangle inside reach. Nothing is ever clipped.
     pub fn check_fits(&self, r: Rect) -> Result<()> {
         let (w, h) = self.reach_mm;
@@ -127,6 +132,14 @@ pub enum Done {
     Silent { last_pct: Option<u8> },
 }
 
+pub fn done_text(done: &Done) -> String {
+    match done {
+        Done::Complete => "status reached 100%".into(),
+        Done::Stalled { last_pct } => format!("status stalled at {last_pct}%"),
+        Done::Silent { last_pct } => format!("assumed complete after 90 seconds without a response; last status {last_pct:?}"),
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProgressPhase { Starting, Waiting, ReportedComplete, AssumedComplete }
 
@@ -143,6 +156,28 @@ pub struct Progress {
     pub setup_ms: Option<u64>,
     pub wait_ms: Option<u64>,
     pub elapsed_ms: Option<u64>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct ReceiveTrace {
+    pub events: Vec<ReceiveTraceEvent>,
+    pub bytes_captured: usize,
+    pub truncated: bool,
+    pub duration_ms: u64,
+    pub started_at_unix_ms: Option<u64>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ReceiveTraceEvent {
+    pub at_ms: u64,
+    pub job_index: Option<u16>,
+    pub phase: &'static str,
+    pub kind: &'static str,
+    pub byte: Option<u8>,
+    pub frame: Option<&'static str>,
+    pub frame_bytes: Option<Vec<u8>>,
+    pub percent: Option<u8>,
+    pub quiet_ms: Option<u64>,
 }
 
 impl Progress {
@@ -181,6 +216,9 @@ pub trait Machine: Send {
     fn stopper(&self) -> Result<Box<dyn Stop>>;
     /// Upload and burn. Blocks until done.
     fn burn(&mut self, job: &Job, progress: &mut dyn FnMut(Progress)) -> Result<Done>;
+    /// Opt in to a bounded receive-only trace around the next raster completion exchange.
+    fn set_receive_trace(&mut self, _enabled: bool) {}
+    fn take_receive_trace(&mut self) -> ReceiveTrace { ReceiveTrace::default() }
     fn calibrate_limits(&mut self, _job: &Job, _progress: &mut dyn FnMut(Progress)) -> Result<Done> {
         Err(Error::Unsupported("limit calibration"))
     }

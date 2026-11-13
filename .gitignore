@@ -1,5 +1,7 @@
 # Docker volumes
 data/
+docker/docker-audio-analysis/.env
+docker/docker-wainlux-rs/.env
 
 # Vendor binaries and decompiled artifacts (not redistributed)
 backup/
@@ -9,6 +11,9 @@ analysis/
 .render-tmp/
 .tmp/
 .private/
+/example.txt
+/cli/private/
+/cli/output/
 
 # Rust build output
 target/

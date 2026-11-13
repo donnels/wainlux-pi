@@ -29,6 +29,10 @@ The Rust service exposes completed band timings in `GET /api/state` as `band_tim
 
 The timing values are milliseconds. Small differences between summed component times and elapsed time can result from measurement boundaries and millisecond rounding. Assumed completion is not device confirmation.
 
+Card review responses also report raster-generation and preview-encoding milliseconds. The browser and CLI report their own review round trips, which include transport and client-side work and are not additive server phases. The outcome's `elapsed_ms` covers the prepared operation sequence. The UI breaks its measured band totals into transfer, setup and laser feedback wait, with the remaining operation time shown separately. Audio upload/analysis response time is a different workflow and is labelled separately.
+
+For interpretation, the UI can open a self-contained real-run sample at `GET /examples/audio-analysis`. It demonstrates decoded sync ID and candidate activity beside run-log markers. This one sample is not a process capability study: use repeated comparable runs, retain the defined measurement boundaries and analyze distributions before drawing Six Sigma conclusions. Acoustic activity remains a candidate, not confirmation of laser motion.
+
 == Historical Measurements
 
 The following measurements are from the retired Python service and are not Rust performance claims.
@@ -38,6 +42,30 @@ The following measurements are from the retired Python service and are not Rust 
 * In a separate completion-detection run, the estimated duration was 336 seconds while the observed burn lasted 889 seconds. The old monitor stopped early; this observation informed later completion handling.
 
 These are dated observations from specific runs. Use `band_timings` to see how a current Rust run divides time among setup, transfer and completion wait.
+
+== Audio Sync and Candidate Motion
+
+Use the containerized analyzer from the repository root:
+
+.Analyze an audio recording and correlate it with the API log
+[source,bash]
+----
+./scripts/analyze_laser_audio.sh /path/to/recording.m4a \
+	--run-log /path/to/sanitized-run-log.json \
+	--attempt-id ATTEMPT-ID --expected-id DDDDDD
+----
+
+The current upload report includes the recording for playback, its decoded ID match, filtered run-log events and measured processing timings. It does not display or classify audible activity. The in-app archived example at `/examples/audio-analysis` is an older exploratory report and is explicitly not the current analysis method.
+
+The M4A creation-time tag differed from the API marker wall clock by about 2 h 40 min even though the audio DTMF ID matched. Use the ID for association; do not treat file metadata as a physical timing reference. The analyzer uses FFmpeg 5.1.9 in its pinned container and Python standard-library Goertzel analysis for the sync ID; no audio packages are installed on the Deck.
+
+The current detector still waits 90 seconds after the final received byte. The run log, measured timings and recording playback do not prove exact physical stop.
+ifdef::single-page[]
+See <<adr-027-audio-end-detection,ADR-027>> and <<fr-017-end-detection,FR-017>> for the evidence and decision gate.
+endif::single-page[]
+ifndef::single-page[]
+See link:ADR/ADR-027-audio-end-detection.adoc[ADR-027] and link:REQ/FR-017-end-detection.adoc[FR-017] for the evidence and decision gate.
+endif::single-page[]
 
 ifdef::flag-book[]
 :imagesdir: {imagesdir-saved}

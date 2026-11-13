@@ -59,7 +59,7 @@ If you're contributing code:
 - Include comments explaining protocol behavior (not vendor implementation details)
 
 ### 3. Documentation Contributions
-- CC-BY-4.0 or CC0 dual-license applies (see [LICENSE-DOCS](LICENSE-DOCS))
+- The root [LICENSE](LICENSE) applies to project-owned code and documentation: personal, non-commercial use, with no AI/ML training or dataset collection without separate permission.
 - Must be your original writing or properly attributed
 - Protocol documentation must cite observation methods
 
@@ -117,10 +117,10 @@ Maintainers will review before you invest time in a PR.
 
 ## License Agreement
 
-- **Code contributions:** MIT License (see [LICENSE](LICENSE))
-- **Documentation contributions:** CC-BY-4.0 or CC0 dual-license (see [LICENSE-DOCS](LICENSE-DOCS))
+- **Code and documentation contributions:** the root [LICENSE](LICENSE).
+- Third-party material retains its existing terms and must have compatible redistribution rights; include its notices.
 
-By submitting a PR, you agree to license your contribution under these terms.
+By submitting a PR, you agree to license your contribution under these terms and confirm you have the rights to do so. Earlier grants for already-released copies are not revoked by this change.
 
 ## Communication
 

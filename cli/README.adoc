@@ -1,0 +1,54 @@
+[[cli-client]]
+= Card CLI Client
+
+`wainlux-client` only submits content to the laser service for operator review. It does not generate PDFs, QRs or images, embed fonts, plan, run, flip, or judge a burn, change machine mode, or write NFC tags. The Pi owns templates, fonts, QR encoding, placement and exact raster generation.
+
+== Build and Test
+
+Run from the repository root with Rust/Cargo installed, or use `./scripts/build_laser.sh` for containerized tests and the service image build.
+
+.Build and test the CLI
+[source,shell]
+----
+cargo test --locked --manifest-path cli/Cargo.toml
+cargo build --release --locked --manifest-path cli/Cargo.toml
+----
+
+Tests use synthetic data and a local API without serial access. They verify all three examples, text-file input, front/back separation, and review-only submission.
+
+== Submit One Example
+
+Choose one command below and replace `PI-HOST` with your explicit service host. Submission replaces an idle review; do not replace a review you still need. All examples use fictional data and `guide=false` to reuse existing backing marks. For a new backing, set `guide=true` and perform its separate markings stage with the card removed.
+
+.Submit a synthetic Wi-Fi card
+[source,shell]
+----
+cli/target/release/wainlux-client submit --server http://PI-HOST:8081 cli/inputs/wifi.json
+----
+
+.Submit synthetic GitHub codes from a file, with a login QR on the back
+[source,shell]
+----
+cli/target/release/wainlux-client submit --server http://PI-HOST:8081 cli/inputs/github.json \
+  --text-file recovery-qr=cli/inputs/synthetic-codes.txt
+----
+
+.Submit a fictional vCard from a file, with the prepared tiger image on the back
+[source,shell]
+----
+cli/target/release/wainlux-client submit --server http://PI-HOST:8081 cli/inputs/vcard.json \
+  --text-file contact-qr=cli/inputs/contact.vcf
+----
+
+Open the service UI, review the exact pixels and placement, and start each stage yourself. For two sides: finish and inspect the front, record the verdict, confirm physical rest, flip into the same guide, confirm placement and start the back separately. Submission never starts a burn.
+
+Input JSON is the service's `POST /api/jobs/review` request, not another client-side template format. Repeat `--text-file ELEMENT=FILE` to replace a declared QR/text item's text with a UTF-8 file. No truncation or formatting is applied. The success receipt reports server raster-generation and preview-encoding time plus client round-trip time; these boundaries overlap and should not be added as disjoint stages. Use a codes-only file for the recovery QR. Keep private inputs in ignored `cli/private/`, not tracked examples; the root `.gitignore` owns these rules. The CLI writes no generated outputs. Keep login passwords separate from recovery codes.
+
+Network submission uses the explicit URL and the service's trusted-LAN boundary; HTTP is not encrypted. Redirects are not followed. Errors withhold server response bodies and never print file payloads. If a request times out, check the UI before resubmitting: the server may already have accepted it.
+
+ifdef::single-page[]
+NFC writing/read-back, recovery and custody: <<nfc-cards>>. API: <<api-contract>>. The same <<project-license>> covers the CLI and main project.
+endif::single-page[]
+ifndef::single-page[]
+NFC writing/read-back and custody: link:../documentation/nfc-cards.adoc[NFC Cards]. API: link:../docker/docker-wainlux-rs/README.adoc[service contract]. License: link:../LICENSE[the one root project license].
+endif::single-page[]

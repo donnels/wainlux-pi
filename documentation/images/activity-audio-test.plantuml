@@ -1,0 +1,75 @@
+@startuml activity-audio-test
+!include plantuml-style.puml
+title Phone-driven audio test through the Pi UI (implemented upload path)
+
+|User|
+start
+:Start Voice Memos recording;
+:Open the Pi UI on the iPhone;
+:Select the separate audio 10-line + box test;
+
+|Pi operator UI|
+:POST /api/plan;
+
+|Pi Rust service|
+:Require Real mode and idle device;
+:Create attempt ID and recording ID;
+:Return expected goal and pattern;
+
+|Pi operator UI|
+:Show pattern and sacrificial-stock warning;
+
+|User|
+:Confirm Voice Memos is recording;
+:Tap Start test;
+
+|Pi operator UI|
+:Play 3-tone preamble + 6-digit recording ID;
+:POST /api/run;
+
+|Pi Rust service|
+:Validate planned attempt;
+:Append sync marker to run log;
+
+|Laser driver + K6|
+:Run full-power box + nine lines;
+:Wait for run outcome;
+
+|Pi Rust service|
+:Append outcome and receive trace;
+:Expose completed attempt to UI;
+
+|Pi operator UI|
+:Show upload control only after run ends;
+
+|User|
+:Choose exported Voice Memo (.m4a);
+:Upload recording;
+
+|Pi operator UI|
+:POST audio to same-origin Pi endpoint;
+
+|Pi Rust service|
+:Require matching completed audio-test attempt;
+:Select only its sync marker + run outcome;
+:Pass audio and filtered events to analyzer;
+
+|External audio container (analysis only; no laser control)|
+:Validate shared bearer token and attempt/event match;
+:Decode recording ID and analyze audio;
+:Generate playable, annotated HTML;
+:Return report;
+
+|Pi Rust service|
+:Pass report back to the Pi UI;
+
+|Pi operator UI|
+:Display report with waveform, playhead and run markers;
+:Keep report available for physical verdict;
+
+|User|
+:Listen, inspect and record OK or deviation;
+
+stop
+
+@enduml

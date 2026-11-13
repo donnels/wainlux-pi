@@ -6,41 +6,19 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 TEMP_DIR="${PROJECT_ROOT}/.test-docs-tmp"
+source "${SCRIPT_DIR}/lib/container.sh"
 mkdir -p "${TEMP_DIR}"
 trap 'rm -rf "${TEMP_DIR}"' EXIT
 
-# Detect host-spawn for Flatpak environments
-HOST_SPAWN=""
-if [ -n "${FLATPAK_ID:-}" ] || [ -f "/.flatpak-info" ]; then
-  if command -v host-spawn >/dev/null 2>&1; then
-    HOST_SPAWN="host-spawn"
-    echo "Detected Flatpak sandbox; using host-spawn"
-  else
-    echo "WARNING: Flatpak environment detected but host-spawn is unavailable." >&2
-  fi
-fi
-
-host_exec() {
-  if [ -n "${HOST_SPAWN}" ]; then
-    "${HOST_SPAWN}" "$@"
-  else
-    "$@"
-  fi
-}
-
-# Check for podman
-if ! host_exec podman --version >/dev/null 2>&1; then
-  echo "ERROR: podman not found. Install with:"
-  echo "  sudo apt install podman (Debian/Ubuntu)"
-  echo "  brew install podman (macOS)"
-  echo "  or use Docker: docker run --rm -v ... asciidoctor/docker-asciidoctor"
+if ! container_engine; then
+  echo "ERROR: start a Docker or Podman engine on the host before running documentation checks." >&2
   exit 1
 fi
 
 # Asciidoctor wrapper using container
 asciidoctor() {
-  host_exec podman run --rm \
-    -v "${PROJECT_ROOT}:${PROJECT_ROOT}:Z" \
+  container_host run --rm \
+    -v "${PROJECT_ROOT}:${PROJECT_ROOT}" \
     -w "${PROJECT_ROOT}" \
     asciidoctor/docker-asciidoctor \
     asciidoctor --failure-level=WARN "$@"
@@ -48,7 +26,7 @@ asciidoctor() {
 
 echo "=== AsciiDoc Consistency Test ==="
 echo "Project: ${PROJECT_ROOT}"
-echo "Container: asciidoctor/docker-asciidoctor via ${HOST_SPAWN:-native} podman"
+echo "Container engine: ${CONTAINER_ENGINE_SELECTED}"
 echo
 
 TOTAL=0
@@ -57,7 +35,8 @@ FAILED=0
 SKIPPED=0
 
 # Find all .adoc and .asciidoc files
-mapfile -t DOCS < <(find "${PROJECT_ROOT}" \( -name .git -o -name .venv -o -name docs -o -name backup -o -name history \) -prune -o -type f \( -name "*.adoc" -o -name "*.asciidoc" \) -print | sort)
+DOCS=()
+while IFS= read -r doc; do DOCS[${#DOCS[@]}]="$doc"; done < <(find "${PROJECT_ROOT}" \( -name .git -o -name .venv -o -name docs -o -name backup -o -name history \) -prune -o -type f \( -name "*.adoc" -o -name "*.asciidoc" \) -print | sort)
 
 echo "Found ${#DOCS[@]} AsciiDoc files"
 echo
@@ -116,15 +95,23 @@ if [[ "${FAILED}" -eq 0 ]]; then
   echo "[ PASS ] Every image, source block, and listing has a block caption"
 fi
 
-mapfile -t PLANTUML_FILES < <(find "${PROJECT_ROOT}" \( -name .git -o -name target -o -name .venv \) -prune -o -type f -name "*.plantuml" -print | sort)
+PLANTUML_FILES=()
+while IFS= read -r source; do PLANTUML_FILES[${#PLANTUML_FILES[@]}]="$source"; done < <(find "${PROJECT_ROOT}" \( -name .git -o -name target -o -name .venv \) -prune -o -type f -name "*.plantuml" -print | sort)
 echo
-echo "=== PlantUML Attribution Test ==="
+echo "=== PlantUML Shared Style Test ==="
+PLANTUML_STYLE="${PROJECT_ROOT}/documentation/images/plantuml-style.puml"
+if grep -Fqx 'footer (C)2026 Sean Donnellan' "${PLANTUML_STYLE}"; then
+  echo "[ PASS ] Shared PlantUML footer"
+else
+  echo "[ FAIL ] Shared PlantUML footer missing"
+  FAILED=$((FAILED + 1))
+fi
 for source in "${PLANTUML_FILES[@]}"; do
   rel_path="${source#${PROJECT_ROOT}/}"
-  if grep -Fqx 'footer (C)2026 Sean Donnellan' "${source}"; then
+  if grep -Eq '^!include .*plantuml-style\.puml$' "${source}"; then
     echo "[ PASS ] ${rel_path}"
   else
-    echo "[ FAIL ] ${rel_path} (missing exact attribution footer)"
+    echo "[ FAIL ] ${rel_path} (missing shared style include)"
     FAILED=$((FAILED + 1))
   fi
 done
@@ -177,10 +164,17 @@ if [[ -f "${PROJECT_ROOT}/README.asciidoc" ]]; then
         FAILED=$((FAILED + 1))
       fi
 
-      if grep -q 'Permission is hereby granted' "${TEMP_DIR}/README.html" && grep -q 'Creative Commons Zero v1.0' "${TEMP_DIR}/README.html"; then
-        echo "[ PASS ] Code and documentation license texts are embedded"
+      if grep -q 'Wainlux Pi Personal Non-Commercial and No-AI-Training License' "${TEMP_DIR}/README.html" && grep -q 'id="project-license"' "${TEMP_DIR}/README.html"; then
+        echo "[ PASS ] Single project license is embedded"
       else
-        echo "[ FAIL ] A full license text is missing from the single-page HTML"
+        echo "[ FAIL ] Project license text or anchor is missing from the single-page HTML"
+        FAILED=$((FAILED + 1))
+      fi
+
+      if grep -q '<meta name="robots" content="noindex, nofollow, noarchive">' "${TEMP_DIR}/README.html" && grep -Fqx 'User-agent: *' "${PROJECT_ROOT}/robots.txt" && grep -Fqx 'Disallow: /' "${PROJECT_ROOT}/robots.txt"; then
+        echo "[ PASS ] Advisory crawler requests are present"
+      else
+        echo "[ FAIL ] HTML robots metadata or root robots.txt is missing"
         FAILED=$((FAILED + 1))
       fi
     else

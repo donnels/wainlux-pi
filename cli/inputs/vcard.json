@@ -1,0 +1,13 @@
+{
+  "job": {
+    "template": "vcard",
+    "piece": "bamboo-ntag215-light",
+    "backing": "backing-first",
+    "placement": "left",
+    "guide": false,
+    "items": [
+      {"id":"contact-qr","side":"front","content":{"kind":"qr","text":"https://example.com/cv"}},
+      {"id":"logo-back","side":"back","content":{"kind":"image","asset_id":"tiger"}}
+    ]
+  }
+}

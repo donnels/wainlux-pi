@@ -6,10 +6,14 @@ Accepted; current.
 == Decision
 Build the Pi ARMv6 container away from the Pi. The Rust cross-build targets `arm-unknown-linux-musleabihf`; the runtime image copies in the binary and configuration. GitHub Actions also builds the ARMv6 image from `docker/docker-wainlux-rs/Dockerfile`.
 
-The Pi Compose file in `docker/docker-wainlux-rs/compose.yaml` runs the loaded `localhost/laser-app:arm` image, mounts `/dev/ttyUSB0` and persistent `data/`, and serves port 8081. Compose does not compile the service on the Pi.
+The root-level `./scripts/build_laser.sh` is the canonical workstation workflow: it runs `cargo test --workspace --locked` in a pinned Rust container, then builds the Dockerfile as `linux/arm/v6` and tags it `localhost/laser-app:arm`. The release binary targets the Pi Zero W's `arm1176jzf-s` CPU. It auto-selects a running Docker or Podman engine; `CONTAINER_ENGINE` can select one explicitly. Inside Flatpak, host commands use `flatpak-spawn --host` or `host-spawn`. The Dockerfile pins the cross-compiler and Alpine multi-platform image indexes; Cargo dependencies are locked.
+
+The target is the original Raspberry Pi Zero W (`armv6l`), not the Zero 2 W. After a successful workstation build, `./scripts/deploy_laser.sh --target USER@PI-HOST --confirm` streams the finished image to the explicitly selected host, loads it with the Pi's Docker runtime, and recreates the Compose service only after checking the exact board and that the API is idle, in Simulator mode, and has no in-memory review. It verifies the loaded image ID and service state. Neither script starts a laser job; deployment is explicit and separate from building.
+
+The Pi Compose file in `docker/docker-wainlux-rs/compose.yaml` runs the loaded `localhost/laser-app:arm` image, mounts `/dev/ttyUSB0` and persistent `data/`, and serves port 8081. Compose does not compile the service on the Pi, and the build script does not transfer or deploy the image.
 
 == Consequences
 
-* Pi Zero W is a runtime target, not a Rust build host.
+* Pi Zero W is a runtime target, not a Rust build host; no compilation occurs on the Pi.
 * Keep image architecture, target triple and serial-device mapping aligned with the actual Pi deployment.
-* Build and deployment commands belong with the service README and workflow; the retired Bash deployment scripts are not part of this decision.
+* Build and deployment commands belong in the repository's root-level scripts and central Getting Started guide.

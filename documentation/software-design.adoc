@@ -1,0 +1,63 @@
+[[software-design]]
+= Reading and Changing the Software
+
+The design separates decisions from effects. A review does not move hardware, a completed operation is not a human verdict, and a transport request does not own the machine. These distinctions matter more than the number of source files.
+
+== Follow One Attempt
+
+. Startup loads materials, templates and the test catalog. TOML owns configured values; the client does not calculate machine powers or raster content.
+. `job.rs` composes card stages; `ladder.rs` prepares test recipes. `prepared.rs` represents explicit operations with resolved settings and shared raster pixels. Normal burns and calibration are different operations.
+. `workflow.rs` admits a plan only while idle. The retained attempt contains its operational record and private prepared work; JSON is a transport projection, not the state machine.
+. An explicit start changes Planned to Running. The browser sends the displayed attempt ID, so a stale page cannot start a different plan accidentally.
+. One device worker owns the machine for its entire lifetime. It receives commands through a bounded channel and runs the retained program without recomposing its pixels. STOP uses its separate handle and cancellation latch, not the ordinary command queue.
+. Execution reports an outcome, and the workflow waits for a verdict. Only a software-successful run with an operator OK accepts a card stage. Each side still requires a separate reviewed start.
+
+== State Carries Its Evidence
+
+`Workflow` has four alternatives: Idle, Planned(attempt), Running(attempt), and AwaitingVerdict(attempt, outcome). There is no independent running flag that can disagree with an optional outcome. Its transitions know nothing about HTTP, clocks, files or USB. Rejected transitions leave the current attempt intact.
+
+The review remains separate because it can survive several attempts. Changing a review or mode invalidates acceptance; it never silently authorizes another burn. The HTTP state response preserves the existing `attempt`, `running` and `outcome` fields and adds `phase` as a projection of this one authoritative state.
+
+`AttemptRecord` deliberately has no request payload or raster field. Audit serialization uses that record, while `Attempt::view` adds the request projection needed by the operator. Do not solve privacy by adding another list of JSON keys to delete. Operator-entered observations remain audit data and should not contain credentials.
+
+== One Program, One Runner
+
+`Prepared` owns a closed list of operations: Talk, Home, Pointer, Frame, Burn and Calibrate. Its constructor validates normal raster geometry and settings before device access. Raster data is shared through `Arc`, so retaining a review and a plan does not require copying all pixels. Execution stops at the first failed operation and checks cancellation between operations.
+
+Card and test previews composite the same positioned raster artifacts used by execution. Frame previews describe a laser-off bounds operation, not a burn. A preview is not a simulation of physical darkness or a guarantee of placement. Calibration remains explicitly bounded by the driver's firmware envelope; it must not enlarge normal working reach.
+
+The device worker catches unwinding execution panics, drops uncertain device handles and records failure rather than leaving Running set forever. This does not recover an abort, power loss or hardware fault, and it does not prove physical rest. No software STOP path is a certified emergency stop.
+
+== Make a Change Locally
+
+* A new card type belongs in a use-case TOML file plus synthetic input/API tests. Do not add a renderer to the CLI or browser.
+* A new test recipe prepares existing operation types and states its goal. Do not add another device execution loop or hand-drawn raster preview.
+* A new physical operation extends the closed operation type and its runner, with an explicit cancellation/failure test. It is not a string command interpreted from TOML.
+* A new driver implements the `laser` contract. Keep packet details and measured device quirks out of workflow transitions.
+* A new transport calls the same workflow and preparation code. It must not bypass start, side acceptance or placement gates.
+
+Small prepare-and-run helpers remain for isolated tests; production retains the prepared artifact before starting. Avoid introducing a plugin framework, event bus or generic persistence layer merely to rename these existing responsibilities.
+
+== Tests Explain the Contract
+
+Pure workflow tests demonstrate rejected transitions, stale starts/completions, verdict rules and failed-stage acceptance. Prepared-program tests record the pixels actually sent to a fake machine, change the original parameters afterward, and inject a failure to prove later operations are not run. Real-HTTP simulator tests verify the same boundaries through the public API; UI tests check which attempt ID the browser sends.
+
+Run `./scripts/build_laser.sh` and `./scripts/test_docs.sh` from the repository root. The build tests the CLI and service and creates the ARM image; it does not deploy. Simulator success is not hardware acceptance. Test STOP, placement, calibration and physical results separately under operator supervision.
+
+== Interfaces Are Clients
+
+The operator UI has four visible phases: Prepare, Review and place, Run, Inspect. Its indicator projects server state; it is not permission to move hardware. Content is primary, while numeric layout/font controls and material/placement settings are disclosures. The exact pixels and full goal remain available without repeating the same preview twice on the main surface.
+
+Review submission sits beside the input form; physical starts sit beside the reviewed output and placement acknowledgement. Guide inspection is explicit: accepting markings never starts the card, and clicking the next start never silently records the previous verdict. Front acceptance and back placement remain separate requirements enforced by the API.
+
+Browser, CLI and machine clients use the same review/plan/start/verdict contract. Template fields declare `file_input=true` for editable multiline payloads; the browser renders this capability without knowing whether a field belongs to GitHub or vCard. Local file loading does not submit or start anything, and does not trim the file text. Privacy masks and independently hidden raster content remain presentation controls, not encryption.
+
+STOP bypasses the browser's ordinary busy-action guard. A generation check prevents a pending plan or audio cue from continuing into a later start after STOP. This complements the server cancellation latch; it is not a hardware emergency-stop guarantee. Test both delayed-request paths rather than only testing whether a red button is clickable.
+
+Workspace tabs support arrow keys and Home/End. New active phases are brought into view once, not on every poll. Progress stays scoped to the current operation or band, never relabelled as whole-card completion. Options contains appearance and session clearing; machine mode and STOP stay visible. A clear-session command must not be labelled sign-out while authentication does not exist.
+
+== Boundaries Still to Complete
+
+Authentication, authorization, transport protection and session ownership are not implemented. An optional `attempt_id` is a stale-request check, not an access credential; legacy clients may still omit it. The next security change should introduce a verified actor and one command-permission policy, not more browser-only checks.
+
+Template kind/binding strings still need startup resolution into validated types. Machine-specific configuration still uses display-model keys. Audit history still needs bounded queries and rotation, and general HTTP input/concurrency limits need explicit policy. The browser still has presentation/workflow flags to simplify using the server phase. These are remaining changes, not guarantees supplied by this refactor.

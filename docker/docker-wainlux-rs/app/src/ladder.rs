@@ -3,10 +3,10 @@
 //! Knows only the `laser` contract, never a model.
 
 use compose::qr::qr;
-use laser::{Done, Info, Job, Machine, Progress, Raster, Rect, Values};
+use laser::{Info, Machine, Progress, Raster, Rect, Values};
+use crate::prepared::{Burn, Operation, Prepared};
 use serde::{Deserialize, Serialize};
-use std::thread::sleep;
-use std::time::Duration;
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -25,9 +25,15 @@ pub enum Step {
     VerticalComparisonD,
     Registration,
     Qr,
+    PowerSweep,
+    AudioPowerSweepLow,
+    AudioPowerSweepFull,
 }
 
-pub const LADDER: [Step; 14] = [Step::Talk, Step::Home, Step::Pointer, Step::Frame, Step::Square, Step::Limits, Step::LimitSquares, Step::BlankRows, Step::Corners, Step::CornersContinuous, Step::VerticalComparison, Step::VerticalComparisonD, Step::Registration, Step::Qr];
+const POWER_SWEEP_COUNT: u8 = 10;
+const POWER_SWEEP_PITCH_MM: f32 = 2.0;
+const POWER_REFERENCE_SIZE_MM: f32 = 20.0;
+const POWER_SWEEP_X_INSET_MM: f32 = 0.5;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
@@ -38,6 +44,8 @@ pub struct Params {
     pub text: String,
     /// Driver settings by key. Missing keys take the driver's defaults.
     pub values: Values,
+    #[serde(skip)]
+    pub power_values: Vec<u32>,
     pub limit_start_mm: f32,
     pub limit_end_mm: f32,
     pub limit_width_mm: f32,
@@ -49,28 +57,25 @@ fn default_border() -> f32 { 77.45 }
 
 impl Default for Params {
     fn default() -> Self {
-        Params { x_mm: 0.0, y_mm: 0.0, size_mm: 19.0, text: "https://github.com/donnels".into(), values: Values::new(), limit_start_mm: 74.0, limit_end_mm: 80.0, limit_width_mm: 80.0, limit_border_mm: default_border() }
+        Params { x_mm: 0.0, y_mm: 0.0, size_mm: 19.0, text: "https://github.com/donnels".into(), values: Values::new(), power_values: Vec::new(), limit_start_mm: 74.0, limit_end_mm: 80.0, limit_width_mm: 80.0, limit_border_mm: default_border() }
     }
 }
 
 impl Step {
-    pub fn title(self) -> &'static str {
-        match self {
-            Step::Talk => "Talk",
-            Step::Home => "Home",
-            Step::Pointer => "Pointer",
-            Step::Frame => "Frame",
-            Step::Square => "First burn",
-            Step::Limits => "Limit stairs",
-            Step::LimitSquares => "Limit squares",
-            Step::BlankRows => "Blank rows",
-            Step::Corners => "Corner positions",
-            Step::CornersContinuous => "9b: continuous perimeter",
-            Step::VerticalComparison => "9b: three vertical strips",
-            Step::VerticalComparisonD => "9b D: 75 mm continuous",
-            Step::Registration => "Registration: short vs full line",
-            Step::Qr => "QR",
+    fn check_size(self, p: &Params, info: &Info) -> Result<(), String> {
+        if matches!(self, Step::Frame | Step::Square | Step::Qr | Step::BlankRows) {
+            if [p.x_mm, p.y_mm, p.size_mm].iter().any(|value| !value.is_finite()) || p.size_mm <= 0.0 {
+                return Err("test position and size must be finite; size must be positive".into());
+            }
+            let scale = if self == Step::BlankRows { 3 } else { 1 };
+            let extent = p.size_mm * scale as f32;
+            info.check_fits(Rect { x: p.x_mm, y: p.y_mm, w: extent, h: extent }).map_err(|error| error.to_string())?;
+            let side = info.px(p.size_mm);
+            if side == 0 { return Err("test size is smaller than one pixel".into()); }
+            let extent = info.mm(side * scale);
+            info.check_fits(Rect { x: p.x_mm, y: p.y_mm, w: extent, h: extent }).map_err(|error| error.to_string())?;
         }
+        Ok(())
     }
 
     pub fn supported(self, i: &Info) -> bool {
@@ -78,6 +83,7 @@ impl Step {
             Step::Pointer => i.pointer,
             Step::Frame => i.frame,
             Step::VerticalComparison => i.reach_mm.0 >= 32.0 && i.reach_mm.1 >= 77.45,
+            Step::PowerSweep | Step::AudioPowerSweepLow | Step::AudioPowerSweepFull => i.settings.iter().any(|setting| setting.key == "power" && setting.min == 0 && setting.max > 0),
             _ => true,
         }
     }
@@ -85,11 +91,32 @@ impl Step {
     /// What should happen, in the operator's terms. Stated before running.
     pub fn goal(self, p: &Params, i: &Info) -> Result<String, String> {
         if !self.supported(i) {
-            return Err(format!("{} cannot do {}", i.model, self.title()));
+            return Err(format!("{} cannot execute {:?}", i.model, self));
         }
-        let v = i.resolve(&p.values).map_err(|e| e.to_string())?;
-        let settings = describe(i, &v);
+        self.check_size(p, i)?;
+        let mut values = p.values.clone();
+        if matches!(self, Step::PowerSweep | Step::AudioPowerSweepLow | Step::AudioPowerSweepFull) {
+            let power = p.power_values.first().copied().ok_or("audio test has no configured power value")?;
+            values.insert("power".into(), power);
+        }
+        let v = i.resolve(&values).map_err(|e| e.to_string())?;
+        let settings = i.describe(&v);
         let at = format!("top-left at {} mm, {} mm", p.x_mm, p.y_mm);
+        if self == Step::PowerSweep {
+            let jobs = sweep_jobs(p, i)?;
+            let (frame, cases) = jobs.split_first().unwrap();
+            let powers = cases.iter().map(|case| case.power.to_string()).collect::<Vec<_>>().join(", ");
+            let (frame_x, frame_y, frame_power) = (frame.x_mm, frame.y_mm, frame.power);
+            return Ok(format!("HOME first. One run starts with a {:.1} x {:.1} mm full-power frame at ({frame_x:.1}, {frame_y:.1}) mm, power {frame_power} ({settings}). Its top edge replaces the duplicate full-power line. Then submit {} separately initialized {:.2} mm one-row lines, starting at X={:.2} mm on a 2 mm vertical pitch. Commanded powers: {powers}. Keep unit and stock in place. Do not inspect or intervene between jobs; a device/software error stops the remaining submissions. After physical rest, inspect and judge the full pattern. Power 0 is not assumed laser-off; every mark may be active.", i.mm(frame.raster.width), i.mm(frame.raster.height), cases.len(), i.mm(cases[0].raster.width), cases[0].x_mm));
+        }
+        if matches!(self, Step::AudioPowerSweepLow | Step::AudioPowerSweepFull) {
+            let jobs = sweep_jobs(p, i)?;
+            let line_mm = i.mm(jobs[1].raster.width);
+            let full_power = self == Step::AudioPowerSweepFull;
+            let power = p.power_values.first().copied().ok_or("audio test has no configured power value")?;
+            let profile = if full_power { "full power; marking expected" } else { "minimum nonzero power; nominally no-mark, not guaranteed" };
+            return Ok(format!("HOME first. One audio-recorded {profile} comparison run at power {power}/{}, using the same fixed power for the 20 mm box and nine sequential {line_mm} mm one-row lines. Lines start at X={:.1} mm, Y=2, 4, ..., 18 mm. Keep stock in place, inspect only after all jobs physically stop, and compare the recording/log with the other profile. A device/software error stops remaining jobs. {settings}.", i.settings.iter().find(|setting| setting.key == "power").map(|setting| setting.max).unwrap_or(power), jobs[1].x_mm));
+        }
         if self == Step::VerticalComparisonD {
             vertical_d(i)?;
             return Ok(format!("HOME first. D only on stock base at X=40 mm, Y=0: a continuous 75 mm line with four filled 2 mm squares. Inner marker edges align with A/B/C at Y=28.70 and 48.70 mm. {settings}. Expected total height 75 mm, top outer span 28.70 mm, middle inner span 20 mm, middle outer span 24 mm, bottom outer span 26.30 mm. Compare D with C after motion stops; do not reposition between their burns. No working-limit change."));
@@ -136,95 +163,62 @@ impl Step {
             Step::VerticalComparison => unreachable!(),
             Step::VerticalComparisonD => unreachable!(),
             Step::Registration => unreachable!(),
+            Step::PowerSweep => unreachable!(),
+            Step::AudioPowerSweepLow => unreachable!(),
+            Step::AudioPowerSweepFull => unreachable!(),
             Step::BlankRows => format!(
                 "Burns two {s} mm squares in one image, {at}. The second {s} mm right of and below the first's corner. Both burn fully, nothing between. {settings}.",
                 s = p.size_mm
             ),
             Step::Qr => format!(
-                "Burns a {} mm QR of \"{}\", {at}. {settings}. Phone scans it.",
-                p.size_mm, p.text
+                "Burns a {} mm QR of the supplied private payload, {at}. {settings}. Phone scans it.",
+                p.size_mm
             ),
         })
     }
 
-    /// Runs the step. Returns what the software saw.
-    pub fn run(self, m: &mut dyn Machine, p: &Params, progress: &mut dyn FnMut(Progress)) -> Result<String, String> {
-        let e = |e: laser::Error| e.to_string();
-        let i = m.info();
-        let square = Rect { x: p.x_mm, y: p.y_mm, w: p.size_mm, h: p.size_mm };
-        match self {
-            Step::Talk => m.connect().map_err(e),
-            Step::Home => m.home().map(|_| "home acknowledged".into()).map_err(e),
-            Step::Pointer => {
-                // Off first: on the K6 the dot is already on when idle.
-                m.pointer(false).map_err(e)?;
-                sleep(Duration::from_secs(3));
-                m.pointer(true).map_err(e)?;
-                Ok("pointer off/on acknowledged".into())
-            }
-            Step::Frame => {
-                m.frame(square).map_err(e)?;
-                sleep(Duration::from_secs(8));
-                m.stop().map_err(e)?;
-                Ok("frame acknowledged, stop sent".into())
-            }
-            Step::Square => burn(m, &Raster::square(i.px(p.size_mm)), p, progress),
-            Step::VerticalComparisonD => {
-                let placement = Params { x_mm: 40.0, y_mm: 0.0, ..p.clone() };
-                burn(m, &vertical_d(&i)?, &placement, progress)
-            }
-            Step::VerticalComparison => {
-                let mut observations = Vec::new();
-                for (name, x_mm, raster) in vertical_strips(&i)? {
-                    m.home().map_err(|error| format!("{}; {name} HOME: {error}", observations.join("; ")))?;
-                    let started = std::time::Instant::now();
-                    let job = Job { raster: &raster, x_mm, y_mm: 0.0, values: &p.values };
-                    let done = m.burn(&job, progress).map_err(|error| format!("{}; {name}: {error}", observations.join("; ")))?;
-                    observations.push(format!("{name} {:.0} s: {}", started.elapsed().as_secs_f32(), done_text(&done)));
-                }
-                Ok(format!("{}. All three jobs returned; operator must confirm motion stopped, then inspect A/B/C together.", observations.join("; ")))
-            }
+    pub(crate) fn prepare(self, p: &Params, info: &Info) -> Result<Prepared, String> {
+        if !self.supported(info) { return Err(format!("{} cannot execute {:?}", info.model, self)); }
+        self.check_size(p, info)?;
+        let values = info.resolve(&p.values).map_err(|error| error.to_string())?;
+        let burn = |raster, x_mm, y_mm| Operation::Burn(Burn::new(raster, x_mm, y_mm), values.clone());
+        let operations = match self {
+            Step::Talk => vec![Operation::Talk],
+            Step::Home => vec![Operation::Home],
+            Step::Pointer => vec![Operation::Pointer],
+            Step::Frame => vec![Operation::Frame(Rect { x:p.x_mm, y:p.y_mm, w:p.size_mm, h:p.size_mm })],
+            Step::Square => vec![burn(Raster::square(info.px(p.size_mm)), p.x_mm, p.y_mm)],
+            Step::Qr => vec![burn(qr(&p.text, info.px(p.size_mm))?, p.x_mm, p.y_mm)],
+            Step::BlankRows => vec![burn(compose::pattern::blank_rows(info.px(p.size_mm), info.px(p.size_mm)), p.x_mm, p.y_mm)],
+            Step::Corners => vec![burn(corners(info)?, p.x_mm, p.y_mm)],
+            Step::CornersContinuous => vec![burn(continuous_corners(info)?, p.x_mm, p.y_mm)],
+            Step::VerticalComparisonD => vec![burn(vertical_d(info)?, 40.0, 0.0)],
+            Step::VerticalComparison => vertical_strips(info)?.into_iter().map(|(_, x, raster)| burn(raster, x, 0.0)).collect(),
             Step::Registration => {
-                let (short, long) = registration(p, &i)?;
-                let mut outcomes = Vec::new();
-                for (name, raster, origin_y) in [("A", &short, p.y_mm), ("B", &long, 0.0)] {
-                    m.home().map_err(e)?;
-                    let job = Job { raster, x_mm: p.x_mm, y_mm: origin_y, values: &p.values };
-                    let done = m.burn(&job, progress).map_err(e)?;
-                    outcomes.push(format!("{name}: {}", done_text(&done)));
-                }
-                Ok(format!("{}. Operator must compare the overlaid square and witness line.", outcomes.join("; ")))
+                let (short, long) = registration(p, info)?;
+                vec![burn(short, p.x_mm, p.y_mm), burn(long, p.x_mm, 0.0)]
             }
-            Step::Corners => burn(m, &corners(&i)?, p, progress),
-            Step::CornersContinuous => burn(m, &continuous_corners(&i)?, p, progress),
-            Step::LimitSquares => {
-                let (raster, origin_y, _) = squares(p, &i)?;
-                let job = Job { raster: &raster, x_mm: p.x_mm, y_mm: origin_y, values: &p.values };
-                m.home().map_err(e)?;
-                let done = m.calibrate_limits(&job, progress).map_err(e)?;
-                Ok(format!("Seven limit squares in one raster: {}. Operator must confirm motion stopped and compare all seven.", done_text(&done)))
-            }
+            Step::PowerSweep | Step::AudioPowerSweepLow | Step::AudioPowerSweepFull => sweep_jobs(p, info)?.into_iter().map(|job| Operation::Burn(Burn::new(job.raster, job.x_mm, job.y_mm), job.values)).collect(),
             Step::Limits => {
-                let (raster, origin_y, rows) = stairs(p, &i)?;
-                let job = Job { raster: &raster, x_mm: p.x_mm, y_mm: origin_y, values: &p.values };
-                m.home().map_err(e)?;
-                let done = m.calibrate_limits(&job, progress).map_err(e)?;
-                Ok(format!("Combined locator and stairs: {} stair rows, {} px per step: {}. Operator must confirm motion stopped and measure the kink.", rows, raster.width / rows, done_text(&done)))
+                let (raster, y, _) = stairs(p, info)?;
+                vec![Operation::Calibrate(Burn::new(raster, p.x_mm, y), values)]
             }
-            Step::BlankRows => burn(m, &compose::pattern::blank_rows(i.px(p.size_mm), i.px(p.size_mm)), p, progress),
-            Step::Qr => burn(m, &qr(&p.text, i.px(p.size_mm))?, p, progress),
+            Step::LimitSquares => {
+                let (raster, y, _) = squares(p, info)?;
+                vec![Operation::Calibrate(Burn::new(raster, p.x_mm, y), values)]
+            }
+        };
+        let mut homed = Vec::new();
+        for operation in operations {
+            if matches!(operation, Operation::Burn(..) | Operation::Calibrate(..)) { homed.push(Operation::Home); }
+            homed.push(operation);
         }
+        Prepared::new(homed, info)
     }
-}
 
-fn burn(m: &mut dyn Machine, r: &Raster, p: &Params, progress: &mut dyn FnMut(Progress)) -> Result<String, String> {
-    let job = Job { raster: r, x_mm: p.x_mm, y_mm: p.y_mm, values: &p.values };
-    let i = m.info();
-    i.check_fits(job.rect(&i)).map_err(|e| e.to_string())?;
-    m.home().map_err(|e| e.to_string())?;
-    let t = std::time::Instant::now();
-    let done = m.burn(&job, progress).map_err(|e| e.to_string())?;
-    Ok(format!("{}x{} px, done after {:.0} s: {}", r.width, r.height, t.elapsed().as_secs_f32(), done_text(&done)))
+    pub fn run(self, m: &mut dyn Machine, p: &Params, progress: &mut dyn FnMut(Progress)) -> Result<String, String> {
+        self.prepare(p, &m.info())?.run(m, progress, &|| false)
+    }
 }
 
 fn registration(p: &Params, info: &Info) -> Result<(Raster, Raster), String> {
@@ -260,20 +254,55 @@ fn vertical_d(info: &Info) -> Result<Raster, String> {
     compose::pattern::vertical_strip(info.px(75.0), info.px(2.0), info.px(28.70), info.px(20.0), true)
 }
 
-pub fn preview_raster(step: Step, params: &Params, info: &Info) -> Result<Option<Raster>, String> {
-    Ok(match step {
-        Step::Square => Some(Raster::square(info.px(params.size_mm))),
-        Step::Qr => Some(qr(&params.text, info.px(params.size_mm))?),
-        Step::BlankRows => Some(compose::pattern::blank_rows(info.px(params.size_mm), info.px(params.size_mm))),
-        Step::Limits => Some(stairs(params, info)?.0),
-        Step::LimitSquares => Some(squares(params, info)?.0),
-        Step::Corners => Some(corners(info)?),
-        Step::CornersContinuous => Some(continuous_corners(info)?),
-        Step::VerticalComparison => None,
-        Step::VerticalComparisonD => Some(vertical_d(info)?),
-        Step::Registration => Some(registration(params, info)?.1),
-        _ => None,
-    })
+pub fn preview_raster(step: Step, params: &Params, info: &Info) -> Result<Option<Arc<Raster>>, String> {
+    step.check_size(params, info)?;
+    if step == Step::Frame { return frame_raster(params, info).map(|raster| Some(Arc::new(raster))); }
+    Ok(step.prepare(params, info)?.preview(info)?.map(|burn| burn.raster))
+}
+
+struct PowerSweepCase {
+    power: u32,
+    x_mm: f32,
+    y_mm: f32,
+    raster: Raster,
+    values: Values,
+}
+
+fn sweep_jobs(p: &Params, info: &Info) -> Result<Vec<PowerSweepCase>, String> {
+    if !p.x_mm.is_finite() || p.x_mm < 0.0 || p.y_mm != 0.0 || !p.size_mm.is_finite() || p.size_mm <= 0.0 {
+        return Err("power sweep block X must be finite and nonnegative, Y is fixed at 0; line length must be finite and positive".into());
+    }
+    if ![1, usize::from(POWER_SWEEP_COUNT)].contains(&p.power_values.len()) {
+        return Err("sweep needs one fixed power or exactly 10 configured power values".into());
+    }
+    let width = info.px(p.size_mm);
+    if width == 0 { return Err("power sweep line is smaller than one pixel".into()); }
+    info.check_fits(Rect { x: p.x_mm + POWER_SWEEP_X_INSET_MM, y: f32::from(POWER_SWEEP_COUNT - 1) * POWER_SWEEP_PITCH_MM, w: info.mm(width), h: info.mm(1) }).map_err(|error| error.to_string())?;
+    let mut jobs = Vec::with_capacity(usize::from(POWER_SWEEP_COUNT));
+    for index in 0..POWER_SWEEP_COUNT {
+        let x_mm = p.x_mm + if index == 0 { 0.0 } else { POWER_SWEEP_X_INSET_MM };
+        let y_mm = f32::from(index) * POWER_SWEEP_PITCH_MM;
+        let power = p.power_values[if p.power_values.len() == 1 { 0 } else { usize::from(index) }];
+        let mut values = p.values.clone();
+        values.insert("power".into(), power);
+        let values = info.resolve(&values).map_err(|error| error.to_string())?;
+        let raster = if index == 0 { frame_raster(&Params { size_mm: POWER_REFERENCE_SIZE_MM, ..p.clone() }, info)? } else { Raster::filled(width, 1) };
+        jobs.push(PowerSweepCase { power, x_mm, y_mm, raster, values });
+    }
+    Ok(jobs)
+}
+
+fn frame_raster(p: &Params, info: &Info) -> Result<Raster, String> {
+    Step::Frame.check_size(p, info)?;
+    let side = info.px(p.size_mm);
+    let mut raster = Raster::new(side, side);
+    for position in 0..side {
+        raster.set(position, 0, true);
+        raster.set(position, side - 1, true);
+        raster.set(0, position, true);
+        raster.set(side - 1, position, true);
+    }
+    Ok(raster)
 }
 
 fn squares(p: &Params, info: &Info) -> Result<(Raster, f32, Vec<f32>), String> {
@@ -303,23 +332,34 @@ fn stairs(p: &Params, info: &Info) -> Result<(Raster, f32, u32), String> {
     Ok((raster, info.mm(origin), rows))
 }
 
-/// Settings in the operator's words: "Power 1000, Depth 10".
-pub fn describe(i: &Info, v: &Values) -> String {
-    i.settings.iter().map(|s| format!("{} {}", s.label, v.get(s.key).copied().unwrap_or(s.default))).collect::<Vec<_>>().join(", ")
-}
-
-pub fn done_text(d: &Done) -> String {
-    match d {
-        Done::Complete => "status reached 100%".into(),
-        Done::Stalled { last_pct } => format!("status stalled at {last_pct}%"),
-        Done::Silent { last_pct } => format!("assumed complete after 90 seconds without a response; last status {last_pct:?}"),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use laser::{Done, done_text};
     use laser::sim::Sim;
+
+    fn configured_params(step: Step, info: &Info, mut params: Params) -> Params {
+        let definition = crate::test_catalog::load(concat!(env!("CARGO_MANIFEST_DIR"), "/../tests.toml"), info).unwrap()
+            .into_iter().find(|definition| definition.step == step).unwrap();
+        params.power_values = definition.power_values_for(info).to_vec();
+        if let Some(power) = params.power_values.first() { params.values.insert("power".into(), *power); }
+        params
+    }
+
+    #[test]
+    fn invalid_sizes_are_rejected_before_rendering_or_machine_calls() {
+        for step in [Step::Frame, Step::Square, Step::Qr, Step::BlankRows] {
+            for size_mm in [f32::NAN, f32::INFINITY, f32::MAX, -1.0, 0.0, 0.00001] {
+                let mut machine = Sim::default();
+                let params = Params { size_mm, ..Params::default() };
+                let info = machine.info();
+                assert!(step.goal(&params, &info).is_err());
+                assert!(preview_raster(step, &params, &info).is_err());
+                assert!(step.run(&mut machine, &params, &mut |_| {}).is_err());
+                assert!(machine.calls.is_empty());
+            }
+        }
+    }
 
     #[test]
     fn silence_outcome_is_labelled_as_an_assumption() {
@@ -329,15 +369,124 @@ mod tests {
     }
 
     #[test]
+    fn power_sweep_levels_come_from_catalog_and_include_both_endpoints() {
+        let info = k6::info();
+        let levels = configured_params(Step::PowerSweep, &info, Params::default()).power_values;
+        assert_eq!(levels, [1000, 889, 778, 667, 556, 444, 333, 222, 111, 0]);
+    }
+
+    #[test]
+    fn power_sweep_runs_twenty_mm_frame_and_nine_remaining_lines_in_one_attempt() {
+        let info = k6::info();
+        let params = configured_params(Step::PowerSweep, &info, Params { x_mm: 20.0, values: [("power".into(), 500), ("depth".into(), 10)].into(), ..Params::default() });
+        let jobs = sweep_jobs(&params, &info).unwrap();
+        let (frame, cases) = jobs.split_first().unwrap();
+        let reference = &frame.raster;
+        let (reference_x, reference_y, reference_power) = (frame.x_mm, frame.y_mm, frame.power);
+        assert_eq!(cases.iter().map(|case| case.power).collect::<Vec<_>>(), [889, 778, 667, 556, 444, 333, 222, 111, 0]);
+        assert_eq!(cases.iter().map(|case| case.y_mm).collect::<Vec<_>>(), [2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 14.0, 16.0, 18.0]);
+        assert!(cases.iter().all(|case| case.x_mm == 20.5));
+        assert!(cases.iter().all(|case| case.raster.width == 380 && case.raster.height == 1 && case.raster.get(0, 0)));
+        assert_eq!(cases[0].values["power"], 889);
+        assert_eq!((reference.width, reference.height, reference_x, reference_y, reference_power), (400, 400, 20.0, 0.0, 1000));
+        assert!((0..reference.width).all(|x| reference.get(x, 0) && reference.get(x, reference.height - 1)));
+        assert!((0..reference.height).all(|y| reference.get(0, y) && reference.get(reference.width - 1, y)));
+        assert!(!reference.get(100, 100));
+
+        let mut machine = Sim::with_info(info);
+        Step::PowerSweep.run(&mut machine, &params, &mut |_| {}).unwrap();
+        assert_eq!(machine.calls.len(), 20);
+        assert_eq!(machine.calls[0], "home");
+        assert_eq!(machine.calls[1], "burn 400x400 power 1000");
+        for (index, power) in [889, 778, 667, 556, 444, 333, 222, 111, 0].into_iter().enumerate() {
+            assert_eq!(machine.calls[index * 2 + 2], "home");
+            assert_eq!(machine.calls[index * 2 + 3], format!("burn 380x1 power {power}"));
+        }
+    }
+
+    #[test]
+    fn audio_profiles_run_identical_box_and_nine_lines_at_fixed_power() {
+        let info = k6::info();
+        let base = Params { x_mm:20.0, y_mm:0.0, size_mm:19.0, ..Params::default() };
+        let params = configured_params(Step::AudioPowerSweepLow, &info, base.clone());
+        let raster = preview_raster(Step::AudioPowerSweepLow, &params, &info).unwrap().unwrap();
+        assert_eq!((raster.width, raster.height), (400, 400));
+        assert!((0..400).all(|x| raster.get(x, 0) && raster.get(x, 399)));
+        assert!((0..400).all(|y| raster.get(0, y) && raster.get(399, y)));
+        for y in [40,80,120,160,200,240,280,320,360] {
+            assert!((10..390).all(|x| raster.get(x, y)));
+            assert!(!raster.get(9, y) && !raster.get(390, y));
+        }
+
+        for (step, power) in [(Step::AudioPowerSweepLow, 1), (Step::AudioPowerSweepFull, 1000)] {
+            let params = configured_params(step, &info, base.clone());
+            assert!(sweep_jobs(&params, &info).unwrap().iter().all(|job| job.power == power));
+            let mut machine = Sim::with_info(info.clone());
+            let outcome = step.run(&mut machine, &params, &mut |_| {}).unwrap();
+            assert_eq!(machine.calls.len(), 20);
+            assert_eq!(machine.calls[0], "home");
+            assert_eq!(machine.calls[1], format!("burn 400x400 power {power}"));
+            for index in 0..9 {
+                assert_eq!(machine.calls[index * 2 + 3], format!("burn 380x1 power {power}"));
+            }
+            assert!(outcome.contains(&format!("Power {power}")));
+        }
+    }
+
+    #[test]
+    fn power_sweep_refuses_invalid_indices_and_out_of_reach_layouts() {
+        let info = k6::info();
+        let invalid_y = configured_params(Step::PowerSweep, &info, Params { y_mm: 0.5, ..Params::default() });
+        assert!(Step::PowerSweep.goal(&invalid_y, &info).unwrap_err().contains("Y is fixed at 0"));
+        let params = configured_params(Step::PowerSweep, &info, Params { x_mm: 61.0, ..Params::default() });
+        assert!(Step::PowerSweep.goal(&params, &info).is_err());
+    }
+
+    #[test]
+    fn sweep_preview_matches_job_pixels_at_offsets_and_variable_lengths() {
+        let info = k6::info();
+        for x_mm in [0.0, 20.0, 40.025] { for size_mm in [10.0, 19.0, 25.0] {
+            let params = configured_params(Step::PowerSweep, &info, Params { x_mm, size_mm, ..Params::default() });
+            let preview = preview_raster(Step::PowerSweep, &params, &info).unwrap().unwrap();
+            let mut expected = Raster::new(preview.width, preview.height);
+            for job in sweep_jobs(&params, &info).unwrap() {
+                let column = info.px(job.x_mm) - info.px(x_mm);
+                let row = info.px(job.y_mm);
+                for y in 0..job.raster.height { for x in 0..job.raster.width {
+                    if job.raster.get(x, y) { expected.set(column + x, row + y, true); }
+                } }
+            }
+            assert_eq!(preview.as_ref(), &expected);
+            assert_eq!(preview.width, info.px(20.0).max(info.px(x_mm + 0.5) - info.px(x_mm) + info.px(size_mm)));
+            assert!((0..preview.width).filter(|x| preview.get(*x, 40)).count() >= info.px(size_mm) as usize);
+            assert!(!preview.get(10, 41));
+        } }
+    }
+
+    #[test]
     fn every_step_has_a_goal() {
-        for s in LADDER {
-            let params = Params { y_mm: 20.0, ..Params::default() };
+        let info = laser::sim::info();
+        for definition in crate::test_catalog::load(concat!(env!("CARGO_MANIFEST_DIR"), "/../tests.toml"), &info).unwrap() {
+            let s = definition.step;
+            let mut params = Params { y_mm: if matches!(s, Step::PowerSweep | Step::AudioPowerSweepLow | Step::AudioPowerSweepFull) { 0.0 } else { 20.0 }, ..Params::default() };
+            params.power_values = definition.power_values_for(&info).to_vec();
+            if let Some(power) = params.power_values.first() { params.values.insert("power".into(), *power); }
             if s == Step::Corners || s == Step::CornersContinuous {
-                assert!(s.goal(&Params::default(), &laser::sim::info()).is_ok());
+                assert!(s.goal(&Params::default(), &info).is_ok());
             } else {
-                assert!(s.goal(&params, &laser::sim::info()).is_ok());
+                assert!(s.goal(&params, &info).is_ok());
             }
         }
+    }
+
+    #[test]
+    fn power_sweep_goal_describes_one_run_and_all_power_levels() {
+        let params = configured_params(Step::PowerSweep, &k6::info(), Params { x_mm: 20.0, ..Params::default() });
+        let goal = Step::PowerSweep.goal(&params, &k6::info()).unwrap();
+        assert!(goal.contains("20.0 x 20.0 mm full-power frame at (20.0, 0.0)"));
+        assert!(goal.contains("Its top edge replaces the duplicate full-power line."));
+        assert!(goal.contains("Then submit 9 separately initialized"));
+        assert!(goal.contains("error stops the remaining submissions"));
     }
 
     #[test]

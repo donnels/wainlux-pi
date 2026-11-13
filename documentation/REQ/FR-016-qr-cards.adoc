@@ -14,9 +14,12 @@ Accept a typed card job, compose and return separate reviewed stages, and requir
 * Only separate plan and run requests execute a stage. Software outcome and operator verdict remain distinct.
 * Private job/review data stays in process memory and is omitted from operational logs; restart loses the review.
 
-== Trust Limit
-
-The producer submission and machine APIs are unauthenticated and intended for a trusted LAN. There is no per-client ownership, lease or producer/operator authorization. Masking is a UI convenience, not access control. Do not expose this service publicly.
+ifdef::single-page[]
+See <<adr-019-http-review-boundary,ADR-019>> for the trusted-LAN and authentication limits.
+endif::single-page[]
+ifndef::single-page[]
+See link:../ADR/ADR-019-http-review-boundary.adoc[ADR-019] for the trusted-LAN and authentication limits.
+endif::single-page[]
 
 .Current API submission, review, and operator-controlled run sequence
 image::../images/card-api-clients.png[API submission, review and manual run sequence]

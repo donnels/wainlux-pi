@@ -1,10 +1,11 @@
 //! A job: a piece, an optional guide on the backing, items on the piece.
 //! Pure: request and material list in, stages out. Each stage gets its own goal and verdict.
 
-use crate::ladder::{describe, done_text};
 use crate::materials::{Material, Role};
 use compose::place::{Placement, GUIDE_GAP, GUIDE_T, LEFT_MARGIN};
 use laser::{Info, Machine, Progress, Raster, Rect, Values};
+pub use crate::prepared::Burn;
+use crate::prepared::{merge, Operation, Prepared};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq)]
@@ -108,13 +109,6 @@ impl JobReq {
 }
 
 #[derive(Debug)]
-pub struct Burn {
-    pub raster: Raster,
-    pub x_mm: f32,
-    pub y_mm: f32,
-}
-
-#[derive(Debug)]
 pub struct Stage {
     pub side: Option<Side>,
     pub name: String,
@@ -138,63 +132,6 @@ pub fn placement(job: &JobReq, list: &[Material], info: &Info) -> Result<Placeme
         Where::Left => Placement::left(info.reach_mm, width, height, LEFT_MARGIN),
         Where::Centred => Placement::centred(info.reach_mm, width, height),
     })
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct CardFile { card: CardMaterial, wifi: Option<WifiFile>, content: CardContent }
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct CardMaterial { material: String, backing: Option<String>, #[serde(default)] placement: Where }
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct WifiFile {
-    ssid: String,
-    #[serde(default)] password: String,
-    #[serde(default = "wpa")] security: String,
-    #[serde(default)] hidden: bool,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct CardContent {
-    qr_kind: String,
-    #[serde(default)] url_or_text: String,
-    #[serde(default)] text: String,
-    font_size_mm: f32,
-}
-
-pub fn from_toml(source: &str, template: &crate::templates::Template, list: &[Material], info: &Info) -> Result<JobReq, String> {
-    let file: CardFile = toml::from_str(source).map_err(|error: toml::de::Error| format!("invalid card TOML: {}", error.message()))?;
-    let content = match file.content.qr_kind.as_str() {
-        "wifi" => {
-            let wifi = file.wifi.ok_or("WiFi QR needs a [wifi] section")?;
-            Content::Wifi { ssid: wifi.ssid, password: wifi.password, security: wifi.security, hidden: wifi.hidden }
-        }
-        "qr" | "url" => Content::Qr { text: file.content.url_or_text },
-        _ => return Err("qr_kind must be wifi, qr or url".into()),
-    };
-    let mut items = vec![Item {
-        side: Side::Front,
-        id: None,
-        content, x_mm: None, y_mm: None,
-        size_mm: None, width_mm: None, height_mm: None,
-    }];
-    if !file.content.text.trim().is_empty() {
-        items.push(Item {
-            side: Side::Front,
-            id: None,
-            content: Content::Text { text: file.content.text, font_size_mm: file.content.font_size_mm, font:None },
-            x_mm: None, y_mm: None,
-            size_mm: None, width_mm: None, height_mm: None,
-        });
-    }
-    let job = JobReq { template: Some(template.id.clone()), piece: file.card.material, backing: file.card.backing, placement: file.card.placement, guide: true, items, values: Values::new() };
-    let job = template.compose(&job, &template.values(&job)?)?;
-    stages(&job, list, info)?;
-    Ok(job)
 }
 
 pub fn stages(job: &JobReq, list: &[Material], i: &Info) -> Result<Vec<Stage>, String> {
@@ -246,9 +183,9 @@ fn side_stages(job: &JobReq, list: &[Material], i: &Info) -> Result<Vec<Stage>, 
                     "Burns {shape} on {}, {GUIDE_GAP} mm outside where {} will lie. {}. Markings visible with the card in place.",
                     backing.name,
                     piece.name,
-                    describe(i, &bv)
+                    i.describe(&bv)
                 ),
-                burns: vec![merge(&strips.iter().map(|s| Burn { raster: Raster::filled(i.px(s.w), i.px(s.h)), x_mm: s.x, y_mm: s.y }).collect::<Vec<_>>(), i)?],
+                burns: vec![merge(&strips.iter().map(|s| Burn::new(Raster::filled(i.px(s.w), i.px(s.h)), s.x, s.y)).collect::<Vec<_>>(), i)?],
                 values: bv,
             });
         }
@@ -298,9 +235,9 @@ fn side_stages(job: &JobReq, list: &[Material], i: &Info) -> Result<Vec<Stage>, 
                 "Burns a {:.1} mm {what} on {}, top-left at ({x:.1}, {y:.1}) mm on the card. {}. {proof}",
                 i.mm(raster.width),
                 piece.name,
-                describe(i, &values)
+                i.describe(&values)
             ),
-            burns: vec![Burn { raster, x_mm: on_bed.x + pad_x, y_mm: on_bed.y + pad_y }],
+            burns: vec![Burn::new(raster, on_bed.x + pad_x, on_bed.y + pad_y)],
             values: values.clone(),
         });
     }
@@ -320,35 +257,15 @@ fn side_stages(job: &JobReq, list: &[Material], i: &Info) -> Result<Vec<Stage>, 
     Ok(out)
 }
 
-fn merge(burns: &[Burn], info: &Info) -> Result<Burn, String> {
-    let left = burns.iter().map(|burn| info.px(burn.x_mm)).min().ok_or("nothing to compose")?;
-    let top = burns.iter().map(|burn| info.px(burn.y_mm)).min().unwrap();
-    let right = burns.iter().map(|burn| info.px(burn.x_mm) + burn.raster.width).max().unwrap();
-    let bottom = burns.iter().map(|burn| info.px(burn.y_mm) + burn.raster.height).max().unwrap();
-    let mut raster = Raster::new(right - left, bottom - top);
-    for burn in burns {
-        let offset_x = info.px(burn.x_mm) - left;
-        let offset_y = info.px(burn.y_mm) - top;
-        for row in 0..burn.raster.height {
-            for column in 0..burn.raster.width {
-                if burn.raster.get(column, row) { raster.set(offset_x + column, offset_y + row, true); }
-            }
-        }
-    }
-    Ok(Burn { raster, x_mm: info.mm(left), y_mm: info.mm(top) })
+pub(crate) fn prepare(stage: &Stage, info: &Info) -> Result<Prepared, String> {
+    let mut operations = vec![Operation::Home];
+    operations.extend(stage.burns.iter().map(|burn| Operation::Burn(burn.clone(), stage.values.clone())));
+    Prepared::new(operations, info)
 }
 
 /// Runs every burn of one stage. Returns what the software saw.
 pub fn run(m: &mut dyn Machine, s: &Stage, progress: &mut dyn FnMut(Progress)) -> Result<String, String> {
-    m.home().map_err(|error| error.to_string())?;
-    let t = std::time::Instant::now();
-    let mut seen = Vec::new();
-    for b in &s.burns {
-        let job = laser::Job { raster: &b.raster, x_mm: b.x_mm, y_mm: b.y_mm, values: &s.values };
-        let done = m.burn(&job, progress).map_err(|e| e.to_string())?;
-        seen.push(done_text(&done));
-    }
-    Ok(format!("{}: {} burn(s) in {:.0} s: {}", s.name, s.burns.len(), t.elapsed().as_secs_f32(), seen.join("; ")))
+    prepare(s, &m.info())?.run(m, progress, &|| false)
 }
 
 #[cfg(test)]

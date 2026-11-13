@@ -1,2 +1,0 @@
-GitHub recovery codes. Keep private.
-Sign in with your username and password. At the two-factor prompt, use one unused recovery code. Each code works once.

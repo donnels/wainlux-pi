@@ -9,6 +9,9 @@ on:
       - 'README.asciidoc'
       - 'CLEAN_ROOM.md'
       - 'LICENSE*'
+      - 'robots.txt'
+      - 'docinfo.html'
+      - 'cli/README.adoc'
       - 'scripts/generate_diagrams.sh'
       - 'scripts/test_docs.sh'
       - 'docker/docker-bytefield/**'
@@ -82,7 +85,7 @@ jobs:
           done
 
       - name: Prepare output directory
-        run: mkdir -p docs
+        run: mkdir -p docs && cp robots.txt docs/robots.txt
       
       - name: Build AsciiDoc HTML
         uses: docker://asciidoctor/docker-asciidoctor:latest

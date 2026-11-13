@@ -22,10 +22,13 @@ endif::github-env[]
 :localdir: .
 endif::flag-book[]
 
-Current documentation for the Rust K6 service on Pi Zero W. Superseded implementation history is omitted here; retained protocol observations are evidence, not descriptions of the current application.
+Current documentation for the Rust K6 service on Pi Zero W. Protocol observations are evidence, not descriptions of vendor code.
 
-The current HTTP API contract is link:../docker/docker-wainlux-rs/README.adoc[documented with the service] and served by `GET /api`. Its OpenAPI 3.1 spec is served at `GET /openapi.yaml`; bundled Swagger UI is at `GET /docs`. Contract tests live in `app/tests/api.rs`.
+The service README documents the HTTP API, served at `GET /api`. OpenAPI 3.1 is at `GET /openapi.yaml`; Swagger UI is at `GET /docs`.
 
+The canonical build and test command is `./scripts/build_laser.sh` from the repository root.
+
+[[first-card]]
 == Card Placement and Reuse
 
 The drawings use the current measured card, K6 working reach and template geometry. The QR symbol is a generic placeholder; exact private pixels are shown only in the live app preview.
@@ -42,7 +45,7 @@ image::card-guide.svg[U markings on bare backing without the card,align="center"
 .Rust operator UI preview using synthetic input in simulator mode; no burn started
 image::ui-simulator-preview.png[Simulator card and raster preview,align="center"]
 
-For a new backing, place the bare backing and start the optional markings stage first. Confirm the machine has stopped, then place the card against those marks. Edit the card fields and positions in the UI; the card drawing and laser raster preview reflect the current values. Review the exact raster before starting the content stage. A repeat card can reuse the same markings without burning them again. For a second side, inspect the first side, confirm rest, flip the card into the same guide, confirm placement and start that stage separately.
+For a new backing, place the bare backing and start the optional markings stage first. Confirm physical rest, inspect the markings and explicitly accept or record a deviation. Only then place the card against those marks and acknowledge placement. Edit content in the primary form and positions under Layout and sizing; Review output requests the Pi's exact raster. A repeat card can reuse the same markings without burning them again. For a second side, inspect and accept the first side, confirm rest, flip the card into the same guide, confirm placement and start that stage separately. No verdict starts the next stage.
 
 == Architecture Diagrams
 
@@ -54,32 +57,52 @@ image::system-context.png[System context,align="center"]
 .Runtime components and ownership
 image::architecture-rust.png[Rust service architecture,align="center"]
 
+.Source files, client paths and cross-feature dependencies
+image::code-topology.png[Codebase source topology,align="center"]
+
 .One reviewed stage from API submission through physical verdict
 image::sequence-stage-run.png[Reviewed card stage sequence,align="center"]
 
 .External clients and the operator UI share the same API
 image::card-api-clients.png[Card API client sequence,align="center"]
 
+.The Pi coordinates local recording and laser events while an external worker analyzes audio
+image::sequence-audio-capture.png[Pi capture and external audio analysis sequence,align="center"]
+
+.Phone-driven audio test and analyzer pass-through
+image::activity-audio-test.png[Phone-driven audio test swimlane,align="center"]
+
 .Clean-room Ghidra analysis and implementation handoff
 image::sequence-ghidra-analysis.png[Ghidra-assisted protocol analysis,align="center"]
 
 include::GETTING_STARTED.adoc[leveloffset=+1]
 
+include::software-design.adoc[leveloffset=+1]
+
+[[protocol-reference]]
 include::reference-k6_protocol.adoc[leveloffset=+1]
 
+[[hardware-observations]]
 include::hardware-observations.adoc[leveloffset=+1]
 
+include::nfc-cards.adoc[leveloffset=+1]
+
+[[burn-timing]]
 include::doing-debugging.adoc[leveloffset=+1]
 
-Current decision and requirement indexes: link:ADR/README.adoc[Architecture Decisions] and link:REQ/README.adoc[Requirements].
+[[next-steps]]
+include::next-steps.adoc[leveloffset=+1]
 
 [appendix]
+[[adr-index]]
 include::ADR/README.adoc[leveloffset=+1]
 
 [appendix]
+[[req-index]]
 include::REQ/README.adoc[leveloffset=+1]
 
 [appendix]
+[[image-sources]]
 include::images/README.adoc[leveloffset=+1]
 
 ifdef::flag-book[]

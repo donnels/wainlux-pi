@@ -22,11 +22,9 @@ endif::github-env[]
 :localdir: .
 endif::flag-book[]
 
-Container definitions for the Rust laser service and supporting tools live here.
+Docker Compose projects for the laser service and supporting tools live here.
 
-== Compose Files
-
-The current K6 service and its Pi deployment compose file are in `docker/docker-wainlux-rs/`.
+The Pi runs a prebuilt ARMv6 image. Compose does not build it.
 
 .Start the preloaded Rust service on the Pi
 [source,bash]
@@ -35,16 +33,19 @@ cd docker/docker-wainlux-rs
 docker compose up -d
 ----
 
-The image is cross-built and loaded on the Pi; compose does not build it. The service uses `/dev/ttyUSB0` and port `8081`.
+The service uses `/dev/ttyUSB0` and port `8081`.
+ifdef::single-page[]
+Build and deployment: <<build-and-test-the-rust-service>>.
+endif::single-page[]
+ifndef::single-page[]
+Build and deployment: link:../documentation/GETTING_STARTED.adoc[Getting Started].
+endif::single-page[]
 
-== MCP Client Draft
+== Components
 
-`docker/docker-mcp/` contains a separate Streamable HTTP MCP service, assumed to run on the Pi Zero host for now. It exposes discovery and preview only; it cannot start or stop laser work. See its README before deployment.
-
-== Bytefield SVG
-
-Generates protocol diagrams from JSON/EDN specs. Documentation tooling.
-
+[[api-contract]]
+include::docker-wainlux-rs/README.adoc[leveloffset=+2]
+include::docker-mcp/README.adoc[leveloffset=+2]
 include::docker-bytefield/README.adoc[leveloffset=+2]
 
 ifdef::flag-book[]

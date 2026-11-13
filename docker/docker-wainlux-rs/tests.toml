@@ -1,0 +1,133 @@
+version = 1
+
+[[tests]]
+step = "talk"
+title = "Talk"
+
+[[tests]]
+step = "home"
+title = "Home"
+
+[[tests]]
+step = "pointer"
+title = "Pointer"
+
+[[tests]]
+step = "frame"
+title = "Frame"
+controls = ["x_mm", "y_mm", "size_mm"]
+
+[[tests]]
+step = "square"
+title = "First burn"
+controls = ["x_mm", "y_mm", "size_mm"]
+settings = ["power", "depth"]
+materials = true
+
+[[tests]]
+step = "limits"
+title = "Limit stairs"
+controls = ["x_mm", "limit_start_mm", "limit_end_mm", "limit_width_mm", "limit_border_mm"]
+settings = ["power", "depth"]
+materials = true
+
+[[tests]]
+step = "limit_squares"
+title = "Limit squares"
+controls = ["x_mm", "limit_border_mm"]
+settings = ["power", "depth"]
+materials = true
+
+[[tests]]
+step = "blank_rows"
+title = "Blank rows"
+controls = ["x_mm", "y_mm", "size_mm"]
+settings = ["power", "depth"]
+materials = true
+
+[[tests]]
+step = "corners"
+title = "Corner positions"
+settings = ["power", "depth"]
+materials = true
+fixed_x_mm = 0
+fixed_y_mm = 0
+stock_confirmation = "Confirm sacrificial stock is in the working area."
+
+[[tests]]
+step = "corners_continuous"
+title = "9b: continuous perimeter"
+settings = ["power", "depth"]
+materials = true
+fixed_x_mm = 0
+fixed_y_mm = 0
+stock_confirmation = "Confirm sacrificial stock is in the working area."
+
+[[tests]]
+step = "vertical_comparison"
+title = "9b: three vertical strips"
+settings = ["power", "depth"]
+materials = true
+stock_confirmation = "Confirm sacrificial stock is in the working area."
+
+[[tests]]
+step = "vertical_comparison_d"
+title = "9b D: 75 mm continuous"
+settings = ["power", "depth"]
+materials = true
+stock_confirmation = "Confirm sacrificial stock is in the working area."
+
+[[tests]]
+step = "registration"
+title = "Registration: short vs full line"
+controls = ["x_mm", "y_mm"]
+settings = ["power", "depth"]
+materials = true
+stock_confirmation = "Confirm sacrificial stock is in the working area."
+
+[[tests]]
+step = "qr"
+title = "QR"
+controls = ["text", "x_mm", "y_mm", "size_mm"]
+settings = ["power", "depth"]
+materials = true
+
+[[tests]]
+step = "power_sweep"
+title = "Power sweep + 100% reference (one run)"
+controls = ["x_mm", "size_mm"]
+settings = ["power", "depth"]
+materials = true
+fixed_y_mm = 0
+power_values = { "Wainlux K6" = [1000, 889, 778, 667, 556, 444, 333, 222, 111, 0], Simulator = [100, 89, 78, 67, 56, 44, 33, 22, 11, 0] }
+stock_confirmation = "Confirm sacrificial stock and a clear beam path. Every mark, including power 0, may be active. A device/software error stops the remaining jobs."
+
+[[tests]]
+step = "audio_power_sweep_low"
+title = "Audio compare: minimum power (nominal no-mark)"
+controls = ["x_mm"]
+settings = ["power", "depth"]
+materials = true
+requires_real = true
+requires_analyzer = true
+requires_sync_marker = true
+requires_recording_ack = true
+fixed_y_mm = 0
+fixed_size_mm = 19
+power_values = { "Wainlux K6" = [1], Simulator = [1] }
+stock_confirmation = "Confirm sacrificial stock and a clear beam path. Minimum power is not guaranteed laser-off; every mark may be active."
+
+[[tests]]
+step = "audio_power_sweep_full"
+title = "Audio compare: full power (marking)"
+controls = ["x_mm"]
+settings = ["power", "depth"]
+materials = true
+requires_real = true
+requires_analyzer = true
+requires_sync_marker = true
+requires_recording_ack = true
+fixed_y_mm = 0
+fixed_size_mm = 19
+power_values = { "Wainlux K6" = [1000], Simulator = [100] }
+stock_confirmation = "Confirm sacrificial stock and a clear beam path. Full-power marking is expected."

@@ -1,7 +1,6 @@
 //! Material list: what we etch on and what lies under it. Loaded from a TOML file.
 //! Burn settings are kept per machine model, so the list works for any driver.
 
-use crate::ladder::Params;
 use laser::{Info, Values};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -62,11 +61,11 @@ impl Material {
 }
 
 /// Material settings first, then anything the caller set explicitly on top.
-pub fn apply(p: &mut Params, id: &str, list: &[Material], i: &Info) -> Result<(), String> {
+pub fn apply(values: &mut Values, id: &str, list: &[Material], i: &Info) -> Result<(), String> {
     let m = list.iter().find(|m| m.id == id).ok_or_else(|| format!("no material '{id}'"))?;
     let mut v = m.values(i)?;
-    v.extend(p.values.clone());
-    p.values = v;
+    v.extend(std::mem::take(values));
+    *values = v;
     Ok(())
 }
 
@@ -97,10 +96,9 @@ mod tests {
     #[test]
     fn explicit_values_win_over_material() {
         let list = parse(SHIPPED).unwrap();
-        let mut p = Params::default();
-        p.values.insert("depth".into(), 5);
-        apply(&mut p, "bamboo-ntag215-light", &list, &k6::info()).unwrap();
-        assert_eq!((p.values["power"], p.values["depth"]), (1000, 5));
+        let mut values = Values::from([("depth".into(), 5)]);
+        apply(&mut values, "bamboo-ntag215-light", &list, &k6::info()).unwrap();
+        assert_eq!((values["power"], values["depth"]), (1000, 5));
     }
 
     #[test]

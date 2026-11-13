@@ -1,12 +1,4 @@
 {
-  "inputs": [
-    {
-      "type": "promptString",
-      "id": "wainluxMcpHubUrl",
-      "description": "Trusted Pi MCP URL, including /mcp",
-      "default": "http://piz-k6:8082/mcp"
-    }
-  ],
   "servers": {
     "pyghidra-mcp": {
       "type": "http",
@@ -14,7 +6,7 @@
     },
     "wainlux-k6-preview": {
       "type": "http",
-      "url": "${input:wainluxMcpHubUrl}"
+      "url": "http://127.0.0.1:8082/mcp"
     }
   }
 }

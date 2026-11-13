@@ -1,10 +1,9 @@
 id = "github-recovery"
 name = "GitHub recovery codes"
-legacy_items = []
 
 fields = [
   { id="font-face", label="Text font", type="select", default="sans-bold", options=["sans-bold","mono"], editable=true, revealable=true, masked=false },
-  { id="recovery-payload", label="Recovery payload from mfa-backup or phone", type="multiline", default="", editable=true, revealable=true, masked=true },
+  { id="recovery-payload", label="Recovery codes", type="multiline", default="", editable=true, revealable=true, masked=true, file_input=true },
   { id="recovery-x", label="Recovery QR X mm", type="number", default=19.725, step=0.05, editable=true, revealable=true, masked=false },
   { id="recovery-y", label="Recovery QR Y mm", type="number", default=6.5, step=0.05, editable=true, revealable=true, masked=false },
   { id="recovery-size", label="Recovery QR side mm", type="number", default=46.0, min=1.0, step=0.5, editable=true, revealable=true, masked=false },

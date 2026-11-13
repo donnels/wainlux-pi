@@ -1,19 +1,18 @@
 @startuml card-api-clients
+!include plantuml-style.puml
 title API-fed card examples - no automatic laser execution
-skinparam BackgroundColor #fff/aaf
-skinparam participantBackgroundColor #fff/aaf
-skinparam noteBackgroundColor #fff/aaf
-skinparam shadowing true
 hide footbox
 actor User
-participant "neocv / mfa-backup client" as Client
+participant "Card CLI / neocv" as Client
 participant "Laser API" as API
 participant Browser
 participant "Actual laser" as Laser
 
 Client -> API: GET /api, /api/templates, /api/materials, /api/assets
 API --> Client: Contract; definitions, dimensions, public asset IDs
-alt vCard / contact card
+alt Wi-Fi card
+  Client -> API: POST /api/jobs/review\nNetwork QR + optional public label
+else vCard / contact card
   Client -> API: POST /api/jobs/review\nvCard/CV URL front + optional public tiger back
 else GitHub recovery card
   Client -> API: POST /api/jobs/review\nRecovery payload QR front + login URL QR back
@@ -21,7 +20,7 @@ end
 API -> API: Validate template and side bindings\nCompose separate guide/front/back pixels in RAM
 API --> Client: Review ID; projected fields; per-side exact PNG/SVG
 note over Client,API
-  Demo uses synthetic mfa-backup data only.
+  CLI examples use fictional data only; text-file overrides stay in RAM.
   The producer supplies vCard serialization, logo asset reference and recovery QR payload.
   Recovery codes are never a printed text element.
   Captions identify the recovery-card front and login-card back; URL text is optional.
@@ -49,5 +48,4 @@ note over User,Laser
   STOP/errors never authorize automatic retry or a side change.
   No new real-device run is authorized by this example.
 end note
-footer (C)2026 Sean Donnellan
 @enduml

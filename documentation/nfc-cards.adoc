@@ -1,0 +1,192 @@
+[[nfc-cards]]
+= NFC Cards and Recovery Backups
+:author: Sean Donnellan
+ifndef::flag-book[]
+:toc: right
+:sectnums:
+:imagesdir: images
+endif::flag-book[]
+
+Recovery codes and short instructions can share one text payload in a QR and an NFC Text record on a wooden NTAG215 card. A phone can read either. Neither format encrypts the data.
+
+ifdef::single-page[]
+The <<cli-client>> owns submission commands and sample inputs. The Pi renders the cards; the CLI has no PDF or QR generator. The same <<project-license>> covers this guidance and the code.
+endif::single-page[]
+ifndef::single-page[]
+See link:../cli/README.adoc[Card CLI Client] for submission commands and examples and link:../LICENSE[the root project license]. The Pi renders the cards; the CLI has no PDF or QR generator.
+endif::single-page[]
+
+== Reader/Writer Integration
+
+The proposed HW-147 board has visible SCK/MISO/MOSI/SS SPI pins and a separate TXD/RXD UART header. Its controller, protocol, supply/logic voltage, tag compatibility, GPIO assignment and sharing with the proposed audio/display HAT remain unverified. Do not infer a supported UART or SPI driver from the pin labels. Hardware photos are in the Next Steps hardware section.
+
+There is no NFC reader/writer adapter in the service or CLI yet. Implement it separately from laser control: detect the supported tag and capacity, read existing records, require an explicit operator-confirmed write, then read back and compare the complete payload. A read or write must never start a laser job. Reject incompatible or insufficient-capacity tags without silently truncating data or overwriting unrelated records. Test with synthetic data first.
+
+The capacity reference below covers only one English NDEF Text record on a Type 2 tag. Neither the CLI nor service currently validates NFC storage. Future Wi-Fi or vCard records may use other NDEF record types and overhead; these limits must not be reused unchanged for them. The service's Wi-Fi QR and vCard QR are not themselves an NFC writer implementation.
+
+== Synthetic Demo
+
+Use `cli/inputs/synthetic-codes.txt`, not a private file. The fictional values cannot unlock GitHub. Submit the file through the CLI, review the Pi-generated QR, and scan it with QRbot in text view, not a detected link. Test phone reading and NFC read-back before real codes.
+
+.Historical synthetic recovery-code QR, not a current Pi rendering
+image::recovery-demo-qr.png[Synthetic recovery-code QR,420]
+
+This retained illustration includes fictional instructions and codes. It does not update with the sample file and is not the raster to engrave. Use the live Pi preview for the exact submitted payload and geometry.
+
+[WARNING]
+====
+Never replace this synthetic example with a real-code QR.
+====
+
+== Capacity
+
+[format=csv,options=header,cols="1,1,1"]
+|===
+Tag,User memory (bytes),Maximum text (UTF-8 bytes)
+NTAG213,144,134
+NTAG215,504,489
+NTAG216,888,873
+|===
+
+These limits count UTF-8 bytes, one English NDEF Text record, and Type 2 TLV overhead.
+Maximum text includes codes, instructions, and separators under this layout.
+Use one Text record with language `en`. Add no other records.
+NFC Tools may use a different layout. Its write check and a read-back are final.
+Shorten instructions if the payload does not fit. Do not drop codes.
+
+== Make The Card
+
+. Scan the QR on screen with QRbot. Open its text view, not a detected link.
+. Compare all codes and instructions with the source. (Do not spend a code to test it unless you want to test the codes too).
+. Transfer the source payload to the phone through a trusted channel if needed.
+. Keep an independently prepared, checked paper backup in a secure place separate from the NFC card. The CLI does not create it.
+. In NFC Tools, choose Write, Add a record, Text. Paste the whole payload. Use language `en`.
+. Write one record to the NTAG215. Read it back and compare the full text.
+. Submit the card content, inspect the Pi's exact raster and test engraving on scrap. Use strong contrast and keep the QR border.
+. Engrave a separate wooden cover before fitting an NFC inlay; do not laser the antenna or chip. Each side requires its own operator-reviewed start, inspection and verdict.
+. Scan the finished QR and read the assembled NFC card again.
+. Store the card in an opaque, RF-shielded, credit-card-size holder. Check that NFC cannot be read while enclosed.
+
+The service owns QR encoding, fonts, sizing and exact per-side pixels. Submit a codes-only UTF-8 file for a recovery card; do not encode a login password with recovery codes. Review the Pi preview and physical size before starting. Wood grain, surface finish, contrast and module size affect scanning.
+
+== Recover
+
+Remove the card from its holder.
+Read its NFC Text record with NFC Tools, or scan its QR with QRbot.
+Display or copy the codes and instructions. Follow the service's recovery steps.
+Stock iPhone Camera and background NFC reading may not display plain text.
+The reader apps are required for this workflow. Reading works offline.
+
+== Protect
+
+Anyone who reads the QR or NFC can read the codes. An opaque holder hides the QR; RF shielding limits NFC access but does not encrypt the tag. Test the holder. Neither the wood nor holder is waterproof or indestructible.
+
+=== Theft And Password Separation
+
+Treat the card and paper backup as secrets. Store them under lock, not in an everyday
+wallet. A thief can photograph the QR or copy the NFC record without leaving a mark.
+The holder does not protect the contents after it is opened.
+
+Keep the login password in a secure password manager, separate from these backups.
+Do not include it in the recovery input, instructions, QR, NFC, or paper backup.
+For GitHub's password-and-recovery-code flow, a leaked code set alone does not
+provide the password. Storing both together can give a thief both login factors.
+Separation reduces that risk; it does not make stolen codes harmless.
+For some services a recovery code alone is enough. Check the service's rules.
+The CLI cannot detect a password mistakenly included in an input file.
+
+=== Workflow Leaks
+
+Every plaintext step can leave a copy: downloaded codes, generated files, phone
+Photos and cloud sync, QRbot history, NFC Tools records, the clipboard, print queues,
+and laser job files. The apps and devices must be trusted. Offline use alone does
+not prove that they will never retain or upload data.
+Use a trusted local printer and laser. Do not send real jobs to a shop.
+Check app retention and sync settings. Remove temporary files, scan history,
+clipboard contents, and job copies when done. Deletion is not secure erasure.
+
+=== Loss And The Paper Backup
+
+Keep an independently prepared paper backup in a separately secured location, not in the card holder.
+Readable codes and instructions provide another way back in if the card is lost, damaged,
+or unreadable, without needing an NFC or QR reader. Verify the paper against the source.
+An extra copy improves availability but creates another secret to secure.
+
+If the card, paper backup, or a digital copy is lost, stolen, or possibly copied,
+use the remaining recovery method to secure the account. Generate a new code set
+promptly and replace every backup, including the paper copy and engraved QR.
+Do not wait for proof of misuse. The remaining backup restores access; it does not
+revoke the lost one. Keep a spare authentication method too.
+
+Track spent codes separately. When you replace the code set, rewrite NFC and replace
+the engraved QR or the card. A rewritten tag does not update an old engraving.
+Marking a spent code on paper does not update NFC or the QR.
+
+=== Optional Access Protection And Encryption
+
+The card has no read password or PIN. The tool relies on physical custody to keep recovery simple.
+
+NTAG215 supports optional 32-bit read protection, but the CLI does not configure it. Write-only protection does not hide codes. A tag password is not encryption and cannot protect the printed or engraved QR. It also adds a secret that must be retained.
+
+An NFC-only card could omit the QR and printed codes, then use tag read protection. Keep the separate paper backup secure. Without read protection, NFC data remains readable.
+
+Encryption would require encrypting both QR and NFC payloads and using a local phone decryptor. It adds a key, a recovery step and tag-space overhead; losing the key can make recovery impossible. The tool does not implement encryption. This design instead separates the login password and secures the card and paper copy. Higher-risk accounts may need stronger protection.
+
+== Security Review
+
+This personal backup is not a certified authenticator.
+
+https://pages.nist.gov/800-63-4/sp800-63b.html[NIST SP 800-63B-4], section 4.2.1.1,
+allows saved recovery codes in QR form. It says to keep them offline and store them
+securely. The chosen format fits that advice. Safe custody still depends on the owner.
+NIST's server-side hashing rules are for the service's verifier. Hashing the backup
+would make the original codes unrecoverable; it is not a backup protection method.
+
+https://docs.github.com/en/authentication/securing-your-account-with-two-factor-authentication-2fa/configuring-two-factor-authentication-recovery-methods[GitHub's recovery guidance]
+supports printed copies, recommends a secure password manager, and warns against
+sharing codes. It recommends two or more authentication methods. Keep a spare
+security key or another supported method separate from the primary phone.
+
+https://www.cac.mil/Common-Access-Card/Managing-Your-CAC/[DoD CAC guidance]
+protects the PIN and requires revocation of lost or compromised cards.
+A CAC gates access with a PIN and locks after failed attempts.
+The QR and plain NFC record have no such gate. NTAG215 is not a CAC replacement.
+I do not claim DoD, FIPS, or NIST assurance-level compliance.
+
+=== Local Files
+
+[TIP]
+====
+Digital copies are plaintext. Unix permissions do not protect against the file owner, administrators, malware, backups or theft of an unlocked device. Use encrypted storage and trusted, updated devices. Keep unnecessary copies out of Photos, cloud sync, shared folders, email and chat.
+
+Local permissions: use directory mode `0700` and file mode `0600` for `cli/private/`. The CLI does not create outputs or enforce input permissions. Keep these restrictions when replacing files. Permissions do not encrypt data.
+====
+
+Run from the repository root on Unix:
+
+.Restrict permissions on private inputs
+[source,shell]
+----
+chmod 700 cli/private
+chmod 600 cli/private/github-recovery-codes.txt
+----
+
+[WARNING]
+====
+Suitable only as a physically secured personal backup with controlled
+processing and prompt replacement after loss. It is not theft-resistant storage.
+Source permissions, device encryption, app retention, holder shielding, and physical
+custody are not all enforced or verified by this tool. It is your choice to use or not use it.
+====
+
+== Workflow
+
+.Backup creation, card writing, and recovery workflow
+image::recovery-workflow.png[Recovery code backup and use]
+
+ifdef::single-page[]
+Edit `documentation/images/recovery-workflow.plantuml` and render locally. Never send real codes to a public diagram server.
+endif::single-page[]
+ifndef::single-page[]
+Edit link:images/recovery-workflow.plantuml[the PlantUML source] and render locally. Never send real codes to a public diagram server.
+endif::single-page[]

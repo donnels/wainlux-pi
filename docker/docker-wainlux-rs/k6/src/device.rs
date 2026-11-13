@@ -1,11 +1,11 @@
 //! Device sequences over a serial port. Timings follow the first working burn.
 
 use crate::protocol::{self as p, ACK, HEARTBEAT, NACK};
-use laser::{Done, Job, Machine, Progress, ProgressPhase, Raster, Rect};
+use laser::{Done, Job, Machine, Progress, ProgressPhase, Raster, ReceiveTrace, ReceiveTraceEvent, Rect};
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
 use std::thread::sleep;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 #[derive(Debug)]
 pub enum Error {
@@ -73,15 +73,65 @@ pub struct Device<P: Port> {
     port: P,
     cancelled: Arc<AtomicBool>,
     write_gate: Arc<Mutex<()>>,
+    receive_trace_enabled: bool,
+    receive_trace_started: Option<Instant>,
+    receive_trace: ReceiveTrace,
+    receive_trace_job: u16,
 }
 
 /// Bed size the firmware accepts, in pixels (0.05 mm). Mechanics reach less.
 pub const BED: u16 = 1600;
 const SILENT: Duration = Duration::from_secs(90);
+const MAX_TRACE_BYTES: usize = 1024;
+const MAX_TRACE_EVENTS: usize = 2048;
 
 impl<P: Port> Device<P> {
     pub fn new(port: P) -> Self {
-        Device { port, cancelled: Arc::new(AtomicBool::new(false)), write_gate: Arc::new(Mutex::new(())) }
+        Device { port, cancelled: Arc::new(AtomicBool::new(false)), write_gate: Arc::new(Mutex::new(())), receive_trace_enabled: false, receive_trace_started: None, receive_trace: ReceiveTrace::default(), receive_trace_job: 0 }
+    }
+
+    fn trace_event(&mut self, phase: &'static str, kind: &'static str, byte: Option<u8>, frame: Option<&'static str>, frame_bytes: Option<Vec<u8>>, percent: Option<u8>, quiet_ms: Option<u64>) {
+        if !self.receive_trace_enabled { return; }
+        let started = match self.receive_trace_started {
+            Some(started) => started,
+            None => {
+                let started = Instant::now();
+                self.receive_trace.started_at_unix_ms = Some(SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64);
+                self.receive_trace_started = Some(started);
+                started
+            }
+        };
+        if self.receive_trace.events.len() >= MAX_TRACE_EVENTS {
+            self.receive_trace.truncated = true;
+            return;
+        }
+        if byte.is_some() {
+            if self.receive_trace.bytes_captured >= MAX_TRACE_BYTES {
+                self.receive_trace.truncated = true;
+                return;
+            }
+            self.receive_trace.bytes_captured += 1;
+        }
+        self.receive_trace.events.push(ReceiveTraceEvent {
+            at_ms: started.elapsed().as_millis() as u64,
+            job_index: Some(self.receive_trace_job),
+            phase,
+            kind,
+            byte,
+            frame,
+            frame_bytes,
+            percent,
+            quiet_ms,
+        });
+    }
+
+    fn take_trace(&mut self) -> ReceiveTrace {
+        if let Some(started) = self.receive_trace_started {
+            self.receive_trace.duration_ms = started.elapsed().as_millis() as u64;
+        }
+        self.receive_trace_enabled = false;
+        self.receive_trace_started = None;
+        std::mem::take(&mut self.receive_trace)
     }
 
     fn check_cancelled(&self) -> Result<()> {
@@ -107,10 +157,20 @@ impl<P: Port> Device<P> {
             self.check_cancelled()?;
             let Some(b) = self.port.recv(Duration::from_millis(50))? else { continue };
             rx.push(b);
+            if name == "INIT" {
+                self.trace_event("init", "rx_byte", Some(b), None, None, None, None);
+            }
             if ack && (b == ACK || b == NACK) {
                 break;
             }
             if !ack && is_frame(&rx) {
+                if name == "INIT" {
+                    if rx.ends_with(&HEARTBEAT) {
+                        self.trace_event("init", "heartbeat_frame", None, Some("heartbeat"), Some(HEARTBEAT.to_vec()), None, None);
+                    } else if let [.., 0xFF, 0xFF, 0x00, pct] = rx[..] {
+                        self.trace_event("init", "status_frame", None, Some("progress"), Some(vec![0xFF, 0xFF, 0x00, pct]), Some(pct), None);
+                    }
+                }
                 break;
             }
         }
@@ -184,6 +244,8 @@ impl<P: Port> Device<P> {
         progress: &mut dyn FnMut(Progress),
         band: (usize, usize, u32, u32, bool),
     ) -> Result<Done> {
+        if self.receive_trace_enabled { self.receive_trace_job = self.receive_trace_job.saturating_add(1); }
+        self.trace_event("job", "job_start", None, None, None, None, None);
         let band_started = Instant::now();
         let (w, h) = match (u16::try_from(r.width), u16::try_from(r.height)) {
             (Ok(w), Ok(h)) if x as u32 + w as u32 <= BED as u32 && y as u32 + h as u32 <= BED as u32 => (w, h),
@@ -212,7 +274,14 @@ impl<P: Port> Device<P> {
         sleep(Duration::from_millis(500));
         self.cmd("INIT", &p::INIT, Duration::from_secs(3), false)?;
         let setup_ms = (band_started.elapsed().as_millis() as u64).saturating_sub(transfer_ms);
-        self.wait_done(progress, band, band_started, transfer_ms, setup_ms)
+        let result = self.wait_done(progress, band, band_started, transfer_ms, setup_ms);
+        match &result {
+            Ok(Done::Complete) => self.trace_event("job", "reported_complete", None, None, None, Some(100), None),
+            Ok(Done::Stalled { last_pct }) => self.trace_event("job", "stalled", None, None, None, Some(*last_pct), None),
+            Ok(Done::Silent { last_pct }) => self.trace_event("job", "silence_assumed", None, None, None, *last_pct, Some(SILENT.as_millis() as u64)),
+            Err(_) => self.trace_event("job", "receive_error", None, None, None, None, None),
+        }
+        result
     }
 
     fn send_chunk(&mut self, chunk: &[u8], offset: usize) -> Result<()> {
@@ -240,25 +309,34 @@ impl<P: Port> Device<P> {
         loop {
             self.check_cancelled()?;
             if let Some(b) = self.port.recv(Duration::from_millis(200))? {
+                let quiet_ms = last_rx.elapsed().as_millis() as u64;
                 last_rx = Instant::now();
+                self.trace_event("completion_wait", "rx_byte", Some(b), None, None, None, Some(quiet_ms));
                 buf.push(b);
                 if buf.len() > 8 {
                     buf.remove(0);
                 }
                 if let [.., 0xFF, 0xFF, 0x00, pct] = buf[..] {
+                    self.trace_event("completion_wait", "status_frame", None, Some("progress"), Some(vec![0xFF, 0xFF, 0x00, pct]), Some(pct), None);
                     if last_pct != Some(pct) {
                         last_pct = Some(pct);
                         progress(Progress::band(if pct >= 100 { ProgressPhase::ReportedComplete } else { ProgressPhase::Waiting }, band.0, band.1, band.2, band.3, Some(pct), band.4).timings(transfer_ms, setup_ms, wait_started.elapsed().as_millis() as u64, band_started.elapsed().as_millis() as u64));
                     }
                     self.check_cancelled()?;
                     if pct >= 100 {
+                        self.trace_event("completion_wait", "reported_complete", None, None, None, Some(pct), None);
                         return Ok(Done::Complete);
                     }
+                } else if buf.ends_with(&HEARTBEAT) {
+                    self.trace_event("completion_wait", "heartbeat_frame", None, Some("heartbeat"), Some(HEARTBEAT.to_vec()), None, None);
                 }
                 continue;
             }
             if let Some(done) = silence_completion(last_pct, last_rx.elapsed()) {
-                if matches!(done, Done::Silent { .. }) { progress(Progress::band(ProgressPhase::AssumedComplete, band.0, band.1, band.2, band.3, last_pct, band.4).timings(transfer_ms, setup_ms, wait_started.elapsed().as_millis() as u64, band_started.elapsed().as_millis() as u64)); }
+                if matches!(done, Done::Silent { .. }) {
+                    self.trace_event("completion_wait", "quiet_timeout", None, None, None, last_pct, Some(last_rx.elapsed().as_millis() as u64));
+                    progress(Progress::band(ProgressPhase::AssumedComplete, band.0, band.1, band.2, band.3, last_pct, band.4).timings(transfer_ms, setup_ms, wait_started.elapsed().as_millis() as u64, band_started.elapsed().as_millis() as u64));
+                }
                 return Ok(done);
             }
         }
@@ -359,6 +437,19 @@ impl<P: Port + 'static> Machine for Device<P> {
         Ok(done)
     }
 
+    fn set_receive_trace(&mut self, enabled: bool) {
+        self.receive_trace_enabled = enabled;
+        if enabled {
+            self.receive_trace = ReceiveTrace::default();
+            self.receive_trace_started = None;
+            self.receive_trace_job = 0;
+        }
+    }
+
+    fn take_receive_trace(&mut self) -> ReceiveTrace {
+        self.take_trace()
+    }
+
     fn calibrate_limits(&mut self, job: &Job, progress: &mut dyn FnMut(Progress)) -> laser::Result<Done> {
         let info = crate::info();
         let rect = job.rect(&info);
@@ -441,6 +532,50 @@ mod tests {
             assert_eq!(silence_completion(last_pct, Duration::from_secs(90)), Some(Done::Silent { last_pct }));
             assert_eq!(silence_completion(last_pct, Duration::from_secs(91)), Some(Done::Silent { last_pct }));
         }
+    }
+
+    #[test]
+    fn receive_trace_records_rx_bytes_and_decoded_completion_without_changing_result() {
+        let mut device = script(&[]);
+        device.port.pending.extend([0xFF, 0xFF, 0x00, 100]);
+        Machine::set_receive_trace(&mut device, true);
+        let done = device.wait_done(&mut |_| {}, (1, 1, 0, 1, false), Instant::now(), 0, 0).unwrap();
+        assert_eq!(done, Done::Complete);
+        let trace = Machine::take_receive_trace(&mut device);
+        assert_eq!(trace.bytes_captured, 4);
+        assert!(!trace.truncated);
+        assert!(trace.started_at_unix_ms.is_some());
+        assert!(trace.events.iter().any(|event| event.kind == "status_frame" && event.frame_bytes.as_deref() == Some(&[0xFF, 0xFF, 0, 100][..])));
+        assert!(trace.events.iter().any(|event| event.kind == "reported_complete"));
+    }
+
+    #[test]
+    fn receive_trace_captures_both_init_replies_and_job_index() {
+        let mut init_and_status = HEARTBEAT.to_vec();
+        init_and_status.extend([0xFF, 0xFF, 0x00, 100]);
+        let mut device = script(&[&[ACK], &HEARTBEAT, &[ACK], &[ACK], &[ACK], &HEARTBEAT, &init_and_status]);
+        Machine::set_receive_trace(&mut device, true);
+        let done = device.burn(&Raster::square(8), 0, 0, 1000, 10, &mut |_| {}, (1, 1, 0, 8, false)).unwrap();
+        assert_eq!(done, Done::Complete);
+        let trace = Machine::take_receive_trace(&mut device);
+        assert_eq!(trace.events.first().unwrap().kind, "job_start");
+        assert_eq!(trace.events.first().unwrap().job_index, Some(1));
+        assert_eq!(trace.events.iter().filter(|event| event.phase == "init" && event.kind == "rx_byte").count(), 8);
+        assert_eq!(trace.events.iter().filter(|event| event.phase == "init" && event.kind == "heartbeat_frame").count(), 2);
+        assert!(trace.events.iter().all(|event| event.job_index == Some(1)));
+    }
+
+    #[test]
+    fn receive_trace_is_bounded_and_marks_truncation() {
+        let mut device = script(&[]);
+        Machine::set_receive_trace(&mut device, true);
+        for _ in 0..MAX_TRACE_BYTES + 1 {
+            device.trace_event("completion_wait", "rx_byte", Some(0xAA), None, None, None, None);
+        }
+        let trace = Machine::take_receive_trace(&mut device);
+        assert_eq!(trace.bytes_captured, MAX_TRACE_BYTES);
+        assert_eq!(trace.events.len(), MAX_TRACE_BYTES);
+        assert!(trace.truncated);
     }
 
     #[test]

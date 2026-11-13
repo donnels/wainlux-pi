@@ -21,6 +21,16 @@ Sean Donnellan triggered and verified the physical tests summarized here. This p
 | Backing board dimensions | Not measured. `backing-first` dimensions are a planning placeholder, not a physical measurement.
 |===
 
+=== Backing Board Power Sweep
+
+The `backing-first` material note in `docker/docker-wainlux-rs/materials.toml` keeps the starting QR settings with the dated sweep observations. The starting profile remains power 500 / depth 10; the sweep used depth 10 and a 20 mm full-power frame plus descending-power lines.
+
+On the X=0 block, Sean reported five visible lines, a faint sixth, a partly visible seventh under magnification, and no visible marks for the last three. The frame overlapped/covered the first line. On the adjacent X=20 block, the first line was visible and the frame appeared high relative to lines matching the first block. Alignment is therefore unresolved; do not infer a calibrated power threshold from these blocks.
+
+The X=20 software trace reported 99% for the frame and first row, then 0% for rows 3-10. All ten jobs ended through the 90-second silence assumption, not a distinct completion response. The bounded trace reached its 1,024-byte cap during job 1; decoded progress/quiet events remain available for all jobs. The exact physical stop time per job was not instrumented.
+
+The square-based material/depth test remains pending. Keep the existing QR baseline until that test is reviewed; no new material setting is recommended from the line sweep alone.
+
 == Executed Rust Ladder Tests
 
 Sean Donnellan triggered the real-device runs and supplied the observations/verdicts below. Software status and elapsed time are reported separately from the physical observation.

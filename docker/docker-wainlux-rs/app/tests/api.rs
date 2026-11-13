@@ -9,7 +9,6 @@ use std::time::{Duration, Instant};
 fn start() -> (SocketAddr, String) {
     start_with_driver("sim")
 }
-
 fn start_with_driver(driver: &str) -> (SocketAddr, String) {
     start_with_template(driver, None)
 }
@@ -33,9 +32,50 @@ fn start_with_template(driver: &str, source: Option<&str>) -> (SocketAddr, Strin
         port_path: String::new(),
         materials_path: concat!(env!("CARGO_MANIFEST_DIR"), "/../materials.toml").into(),
         templates_path,
+        test_catalog_path: concat!(env!("CARGO_MANIFEST_DIR"), "/../tests.toml").into(),
+        audio_analyzer_url: None,
+        audio_analyzer_token: None,
     })
     .unwrap();
     (addr, data.join("runs.jsonl").to_string_lossy().into())
+}
+
+fn start_with_analyzer(driver: &str, url: String, token: &str) -> (SocketAddr, String) {
+    static N: AtomicUsize = AtomicUsize::new(0);
+    let data = std::env::temp_dir().join(format!("laser-api-audio-{}-{}", std::process::id(), N.fetch_add(1, Ordering::SeqCst)));
+    let _ = std::fs::remove_dir_all(&data);
+    std::fs::create_dir_all(&data).unwrap();
+    let addr = app::serve(app::Config {
+        listen: "127.0.0.1:0".into(),
+        data_dir: data.to_string_lossy().into(),
+        driver: driver.into(),
+        port_path: String::new(),
+        materials_path: concat!(env!("CARGO_MANIFEST_DIR"), "/../materials.toml").into(),
+        templates_path: concat!(env!("CARGO_MANIFEST_DIR"), "/../use-cases").into(),
+        test_catalog_path: concat!(env!("CARGO_MANIFEST_DIR"), "/../tests.toml").into(),
+        audio_analyzer_url: Some(url),
+        audio_analyzer_token: Some(token.into()),
+    }).unwrap();
+    (addr, data.join("runs.jsonl").to_string_lossy().into())
+}
+
+#[test]
+fn catalog_power_values_are_selected_for_machine_model() {
+    for (driver, sweep, full) in [
+        ("k6", json!([1000, 889, 778, 667, 556, 444, 333, 222, 111, 0]), json!([1000])),
+        ("sim", json!([100, 89, 78, 67, 56, 44, 33, 22, 11, 0]), json!([100])),
+    ] {
+        let (addr, _) = start_with_driver(driver);
+        let (code, catalog) = call(addr, "GET", "/api/steps", None);
+        assert_eq!(code, 200);
+        let definitions = catalog["steps"].as_array().unwrap();
+        let values = |step: &str| {
+            definitions.iter().find(|test| test["step"] == step).unwrap()["power_values"].clone()
+        };
+        assert_eq!(values("power_sweep"), sweep);
+        assert_eq!(values("audio_power_sweep_low"), json!([1]));
+        assert_eq!(values("audio_power_sweep_full"), full);
+    }
 }
 
 fn call(addr: SocketAddr, method: &str, path: &str, body: Option<Value>) -> (u16, Value) {
@@ -54,7 +94,7 @@ fn wifi_job() -> Value {
         "template":"wifi-login",
         "piece": "bamboo-ntag215-light",
         "backing": "backing-first",
-        "items": [{"content": {"kind": "wifi", "ssid": "Guest", "password": "s3cret"}}]
+        "items": [{"id":"wifi","content": {"kind": "wifi", "ssid": "Guest", "password": "s3cret"}}]
     })
 }
 
@@ -72,7 +112,7 @@ fn attempt(addr: SocketAddr, plan: Value) -> (Value, Value, Value) {
         assert!(Instant::now() < end, "no outcome: {s}");
         std::thread::sleep(Duration::from_millis(20));
     };
-    let (code, v) = call(addr, "POST", "/api/verdict", Some(json!({"ok": true, "comment": "contract test"})));
+    let (code, v) = call(addr, "POST", "/api/verdict", Some(json!({"status": "ok", "comment": "contract test"})));
     assert_eq!(code, 200);
     assert_eq!(v["status"], "ok");
     (a, outcome, v)
@@ -98,8 +138,24 @@ fn openapi_document_is_served_by_the_rust_api() {
     let document = response.into_string().unwrap();
     assert!(document.starts_with("openapi: 3.1.0"));
     assert!(document.contains("/api/jobs/preview:"));
+    assert!(!document.contains("/api/cards/import:"));
     assert!(document.contains("/api/state:") && document.contains("operationId: clearIdleState"));
     assert!(document.contains("/api/stop:"));
+    assert!(document.contains("/api/audio-analyses:") && document.contains("uploadAudioForAnalysis"));
+    assert!(document.contains("/api/audio-analyses/{attempt_id}/report:") && document.contains("getAudioAnalysisReport"));
+    assert!(document.contains("/api/audio-analyses/availability:") && document.contains("getAudioAnalyzerAvailability"));
+    assert!(document.contains("maxLength: 67108864"));
+    assert!(document.contains("audio/x-m4a:"));
+}
+
+#[test]
+fn standalone_web_app_manifest_is_served() {
+    let (addr, _) = start();
+    let response = ureq::get(&format!("http://{addr}/manifest.webmanifest")).call().unwrap();
+    assert_eq!(response.header("Content-Type"), Some("application/manifest+json; charset=utf-8"));
+    let manifest = response.into_string().unwrap();
+    assert!(manifest.contains("\"display\": \"standalone\""));
+    assert!(manifest.contains("\"start_url\": \"/\""));
 }
 
 #[test]
@@ -156,6 +212,183 @@ fn test_preview_returns_expected_pattern_or_no_pattern_note() {
     assert_eq!(code, 200, "{talk}");
     assert!(talk["svg"].is_null());
     assert!(talk["goal"].as_str().unwrap().contains("answers"));
+
+    let (code, corners) = call(addr, "POST", "/api/tests/preview", Some(json!({"step":"corners","params":{"x_mm":5.0,"y_mm":5.0}})));
+    assert_eq!(code, 200, "{corners}");
+    assert!(corners["goal"].as_str().unwrap().contains("perimeter"));
+
+    for (size, width, run) in [(10.0, 400, 200), (25.0, 510, 500)] {
+        let (code, sweep) = call(addr, "POST", "/api/tests/preview", Some(json!({"step":"power_sweep","params":{"x_mm":20.0,"size_mm":size}})));
+        assert_eq!(code, 200, "{sweep}");
+        let svg = sweep["svg"].as_str().unwrap();
+        assert!(svg.contains(&format!("viewBox=\"0 0 {width} 400\"")));
+        assert!(svg.contains(&format!("M10 40h{run}v1h-{run}z")));
+    }
+}
+
+#[test]
+fn oversized_test_geometry_is_refused_before_allocation() {
+    let (addr, _) = start();
+    for step in ["square", "qr", "blank_rows", "frame", "power_sweep"] {
+        for size in [1.0e30, -1.0, 0.0, 0.00001] {
+            for route in ["/api/tests/preview", "/api/plan"] {
+                let (code, response) = call(addr, "POST", route, Some(json!({"step":step,"params":{"size_mm":size}})));
+                assert_eq!(code, 400, "{step} {size} {route}: {response}");
+            }
+        }
+    }
+    assert!(call(addr, "GET", "/api/state", None).1["attempt"].is_null());
+}
+
+#[test]
+fn audio_power_profiles_are_separate_real_mode_steps_with_identical_patterns() {
+    let analyzer = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let analyzer_addr = analyzer.server_addr().to_ip().unwrap();
+    let analyzer_thread = std::thread::spawn(move || {
+        let request = analyzer.recv().unwrap();
+        assert_eq!(request.url(), "/health");
+        assert_eq!(request.headers().iter().find(|header| header.field.to_string().eq_ignore_ascii_case("Authorization")).unwrap().value.as_str(), "Bearer plan-test-token");
+        request.respond(tiny_http::Response::from_string("{\"ready\":1}")).unwrap();
+    });
+    let (addr, _) = start_with_analyzer("k6", format!("http://{analyzer_addr}/api/analyze"), "plan-test-token");
+    let params = json!({"x_mm":20.0,"y_mm":0.0,"size_mm":19.0});
+    let (code, regular) = call(addr, "POST", "/api/tests/preview", Some(json!({"step":"power_sweep","params":params})));
+    assert_eq!(code, 200, "{regular}");
+    let (code, low) = call(addr, "POST", "/api/tests/preview", Some(json!({"step":"audio_power_sweep_low","params":params})));
+    assert_eq!(code, 200, "{low}");
+    let (code, full) = call(addr, "POST", "/api/tests/preview", Some(json!({"step":"audio_power_sweep_full","params":params})));
+    assert_eq!(code, 200, "{full}");
+    assert_eq!(low["svg"], full["svg"]);
+    assert!(low["goal"].as_str().unwrap().contains("power 1/1000"));
+    assert!(full["goal"].as_str().unwrap().contains("power 1000/1000"));
+    assert_ne!(low["goal"], full["goal"]);
+    let (code, catalog) = call(addr, "GET", "/api/steps", None);
+    assert_eq!(code, 200);
+    let definitions = catalog["steps"].as_array().unwrap();
+    let low_index = definitions.iter().position(|test| test["step"] == "audio_power_sweep_low").unwrap();
+    let full_index = definitions.iter().position(|test| test["step"] == "audio_power_sweep_full").unwrap();
+    assert!(low_index < full_index);
+    let low_definition = &definitions[low_index];
+    assert_eq!(low_definition["title"], "Audio compare: minimum power (nominal no-mark)");
+    assert_eq!(low_definition["controls"], json!(["x_mm"]));
+    assert_eq!(low_definition["settings"], json!(["power", "depth"]));
+    assert_eq!(low_definition["requires_analyzer"], true);
+    assert_eq!(low_definition["requires_sync_marker"], true);
+    assert_eq!(low_definition["requires_recording_ack"], true);
+    assert_eq!(low_definition["fixed_size_mm"], 19.0);
+    assert_eq!(call(addr, "POST", "/api/mode", Some(json!({"real":true}))).0, 200);
+    let (code, planned) = call(addr, "POST", "/api/plan", Some(json!({"step":"audio_power_sweep_low","params":{"x_mm":20.0,"y_mm":30.0,"size_mm":77.0,"values":{"power":999}}})));
+    assert_eq!(code, 200, "{planned}");
+    assert_eq!(planned["params"]["x_mm"], 20.0);
+    assert_eq!(planned["params"]["y_mm"], 0.0);
+    assert_eq!(planned["params"]["size_mm"], 19.0);
+    assert_eq!(planned["params"]["values"]["power"], 1);
+    let (code, refused) = call(addr, "POST", "/api/run", None);
+    assert_eq!(code, 409);
+    assert!(refused["error"].as_str().unwrap().contains("requires its recording-ID sync marker"));
+    analyzer_thread.join().unwrap();
+}
+
+#[test]
+fn audio_upload_forwards_only_matching_run_events_and_serves_report_same_origin() {
+    let analyzer = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let analyzer_addr = analyzer.server_addr().to_ip().unwrap();
+    let (captured_tx, captured_rx) = std::sync::mpsc::channel();
+    let analyzer_thread = std::thread::spawn(move || {
+        let mut request = analyzer.recv().unwrap();
+        assert_eq!(request.headers().iter().find(|header| header.field.to_string().eq_ignore_ascii_case("Authorization")).unwrap().value.as_str(), "Bearer test-analyzer-token");
+        let mut body = Vec::new();
+        std::io::Read::read_to_end(&mut request.as_reader(), &mut body).unwrap();
+        captured_tx.send(body).unwrap();
+        let content_type = tiny_http::Header::from_bytes("Content-Type", "text/html; charset=utf-8").unwrap();
+        let timing = tiny_http::Header::from_bytes("X-Audio-Timing", r#"{"persistence_ms":3,"analysis_process_ms":40,"analysis":{"signal_analysis_ms":12}}"#).unwrap();
+        request.respond(tiny_http::Response::from_string("<!doctype html><title>mock report</title>").with_header(content_type).with_header(timing)).unwrap();
+        let report_request = analyzer.recv().unwrap();
+        assert_eq!(report_request.method(), &tiny_http::Method::Get);
+        assert!(report_request.url().ends_with("/api/reports/1794321995-wifi-content/report"));
+        assert_eq!(report_request.headers().iter().find(|header| header.field.to_string().eq_ignore_ascii_case("Authorization")).unwrap().value.as_str(), "Bearer test-analyzer-token");
+        let content_type = tiny_http::Header::from_bytes("Content-Type", "text/html; charset=utf-8").unwrap();
+        report_request.respond(tiny_http::Response::from_string("<!doctype html><title>mock report</title>").with_header(content_type)).unwrap();
+    });
+    let (addr, log_path) = start_with_analyzer("sim", format!("http://{analyzer_addr}/api/analyze"), "test-analyzer-token");
+    let attempt_id = "1794321995-wifi-content";
+    let recording_id = "321995";
+    let events = [
+        json!({"event":"sync_marker","attempt_id":attempt_id,"recording_id":recording_id,"at_ms":1794322161889i64}),
+        json!({"event":"ran","attempt":{"id":attempt_id,"mode":"real","target":{"Card":{"stage_name":"content"}}},"outcome":{"ok":true,"saw":"complete"}}),
+        json!({"event":"verdict","id":"unrelated-attempt","status":"ok","comment":"must not be forwarded"}),
+    ];
+    std::fs::write(&log_path, events.iter().map(Value::to_string).collect::<Vec<_>>().join("\n") + "\n").unwrap();
+
+    let upload_page = ureq::get(&format!("http://{addr}/audio-upload/{attempt_id}")).call().unwrap();
+    assert_eq!(upload_page.header("Content-Type"), Some("text/html; charset=utf-8"));
+    let upload_html = upload_page.into_string().unwrap();
+    assert!(upload_html.contains("type=\"file\""));
+    assert!(upload_html.contains("X-Attempt-ID"));
+    assert!(upload_html.contains(attempt_id));
+    let qr = ureq::get(&format!("http://{addr}/api/audio-analyses/{attempt_id}/upload-qr.svg")).call().unwrap();
+    assert_eq!(qr.header("Content-Type"), Some("image/svg+xml; charset=utf-8"));
+    assert!(qr.into_string().unwrap().contains("<svg"));
+    assert!(matches!(ureq::get(&format!("http://{addr}/audio-upload/unmatched-attempt")).call(), Err(ureq::Error::Status(404, _))));
+
+    let invalid = ureq::post(&format!("http://{addr}/api/audio-analyses"))
+        .set("Content-Type", "audio/mp4")
+        .set("X-Attempt-ID", "1794321995-other")
+        .send_bytes(b"not accepted");
+    assert!(matches!(invalid, Err(ureq::Error::Status(409, _))));
+
+    let upload = ureq::post(&format!("http://{addr}/api/audio-analyses"))
+        .set("Content-Type", "audio/x-m4a")
+        .set("X-Attempt-ID", attempt_id)
+        .send_bytes(b"synthetic recording")
+        .unwrap();
+    let response: Value = serde_json::from_reader(upload.into_reader()).unwrap();
+    let report_path = response["report_url"].as_str().unwrap();
+    assert_eq!(report_path, format!("/api/audio-analyses/{attempt_id}/report"));
+    assert_eq!(response["timing"]["persistence_ms"], 3);
+    assert_eq!(response["timing"]["analysis_process_ms"], 40);
+    assert_eq!(response["timing"]["analysis"]["signal_analysis_ms"], 12);
+    assert!(response["timing"]["pi_receive_ms"].as_u64().is_some());
+    assert!(response["timing"]["pi_prepare_ms"].as_u64().is_some());
+    assert!(response["timing"]["analyzer_http_ms"].as_u64().is_some());
+    assert!(response["timing"]["pi_total_ms"].as_u64().is_some());
+    let forwarded = String::from_utf8(captured_rx.recv_timeout(Duration::from_secs(2)).unwrap()).unwrap();
+    assert!(forwarded.contains("name=\"audio\"; filename=\"recording.m4a\""));
+    assert!(forwarded.contains(attempt_id) && forwarded.contains(recording_id));
+    assert!(!forwarded.contains("unrelated-attempt") && !forwarded.contains("must not be forwarded"));
+    let (_, entries) = call(addr, "GET", "/api/log", None);
+    let analysis = entries.as_array().unwrap().iter().find(|entry| entry["event"] == "audio_analysis").unwrap();
+    assert_eq!(analysis["attempt_id"], attempt_id);
+    assert_eq!(analysis["timing"]["pi_total_ms"], response["timing"]["pi_total_ms"]);
+    assert_eq!(analysis["report_url"], report_path);
+    assert!(!std::path::Path::new(&log_path).parent().unwrap().join("audio-analyses").exists(), "Pi must not retain audio or analysis reports");
+
+    let report = ureq::get(&format!("http://{addr}{report_path}")).call().unwrap();
+    assert_eq!(report.header("Content-Type"), Some("text/html; charset=utf-8"));
+    assert!(report.header("Content-Security-Policy").unwrap().contains("default-src 'none'"));
+    assert!(report.into_string().unwrap().contains("mock report"));
+    analyzer_thread.join().unwrap();
+}
+
+#[test]
+fn audio_analyzer_availability_is_optional_and_authenticated() {
+    let (addr, _) = start();
+    let (_, unavailable) = call(addr, "GET", "/api/audio-analyses/availability", None);
+    assert_eq!(unavailable["available"], false);
+
+    let analyzer = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let analyzer_addr = analyzer.server_addr().to_ip().unwrap();
+    let analyzer_thread = std::thread::spawn(move || {
+        let request = analyzer.recv().unwrap();
+        assert_eq!(request.url(), "/health");
+        assert_eq!(request.headers().iter().find(|header| header.field.to_string().eq_ignore_ascii_case("Authorization")).unwrap().value.as_str(), "Bearer availability-token");
+        let content_type = tiny_http::Header::from_bytes("Content-Type", "application/json").unwrap();
+        request.respond(tiny_http::Response::from_string("{\"ready\":1}").with_header(content_type)).unwrap();
+    });
+    let (addr, _) = start_with_analyzer("sim", format!("http://{analyzer_addr}/api/analyze"), "availability-token");
+    let (_, available) = call(addr, "GET", "/api/audio-analyses/availability", None);
+    assert_eq!(available["available"], true);
+    analyzer_thread.join().unwrap();
 }
 
 
@@ -201,8 +434,10 @@ fn preview_lists_stages_without_running() {
 #[test]
 fn wifi_card_runs_stage_by_stage_and_logs_no_secrets() {
     let (addr, log) = start();
+    let (code, review) = call(addr, "POST", "/api/jobs/review", Some(json!({"job":wifi_job()})));
+    assert_eq!(code, 200, "{review}");
     for stage in 0..2 {
-        let (a, outcome, v) = attempt(addr, json!({"job": wifi_job(), "stage": stage}));
+        let (a, outcome, v) = attempt(addr, json!({"review_id":review["review_id"],"stage":stage}));
         assert_eq!(outcome["ok"], true, "{outcome}");
         assert_eq!(v["goal"], a["goal"]);
     }
@@ -360,7 +595,10 @@ fn submitted_review_returns_one_bit_png_and_never_starts_the_laser() {
     let response = ureq::get(&format!("http://{addr}/api/jobs/review")).call().unwrap();
     assert_eq!(response.header("Cache-Control"), Some("no-store"));
     let loaded: Value = serde_json::from_str(&response.into_string().unwrap()).unwrap();
-    assert_eq!(loaded, review);
+    assert_eq!(loaded["stages"], review["stages"]);
+    assert_eq!(loaded["timing"]["raster_generation_ms"], review["timing"]["raster_generation_ms"]);
+    assert!(review["timing"]["preview_encoding_ms"].as_u64().is_some());
+    assert!(loaded["timing"]["preview_encoding_ms"].as_u64().is_some());
     let burn = &review["stages"][0]["burns"][0];
     let bytes = base64::engine::general_purpose::STANDARD.decode(burn["png"].as_str().unwrap().strip_prefix("data:image/png;base64,").unwrap()).unwrap();
     let mut reader = png::Decoder::new(std::io::Cursor::new(bytes)).read_info().unwrap();
@@ -396,10 +634,12 @@ fn template_visibility_and_exact_active_preview_survive_a_new_client() {
     assert_eq!(template["display"]["markings_visible"], true);
     assert!(template["display"]["masked_fields"].as_array().unwrap().contains(&json!("ssid")));
     assert_eq!(call(addr, "GET", "/api/attempt/preview", None).0, 404);
-    let mut job = wifi_job();
-    job["template"] = json!("wifi-login");
-    let (_, preview) = call(addr, "POST", "/api/jobs/preview", Some(json!({"job":job})));
-    let (code, attempt) = call(addr, "POST", "/api/plan", Some(json!({"job":job,"stage":1})));
+    let job = wifi_job();
+    let (code, submitted) = call(addr, "POST", "/api/jobs/review", Some(json!({"job":job})));
+    assert_eq!(code, 200, "{submitted}");
+    let (_, review) = call(addr, "GET", "/api/jobs/review", None);
+    attempt(addr, json!({"review_id":review["review_id"],"stage":0}));
+    let (code, attempt) = call(addr, "POST", "/api/plan", Some(json!({"review_id":review["review_id"],"stage":1})));
     assert_eq!(code, 200);
     let response = ureq::get(&format!("http://{addr}/api/attempt/preview")).call().unwrap();
     assert_eq!(response.header("Cache-Control"), Some("no-store"));
@@ -407,19 +647,43 @@ fn template_visibility_and_exact_active_preview_survive_a_new_client() {
     assert_eq!(active["attempt_id"], attempt["id"]);
     assert_eq!(active["display"], template["display"]);
     assert_eq!(active["stages"].as_array().unwrap().len(), 1);
-    assert_eq!(active["stages"][0], preview["stages"][1]);
+    assert_eq!(active["stages"][0]["goal"], review["stages"][1]["goal"]);
+    assert_eq!(active["stages"][0]["burns"], review["stages"][1]["burns"]);
     assert!(active.get("job").is_none());
-    job["template"] = json!("does-not-exist");
-    assert_eq!(call(addr, "POST", "/api/jobs/preview", Some(json!({"job":job}))).0, 400);
-    assert_eq!(call(addr, "POST", "/api/plan", Some(json!({"job":job}))).0, 400);
+    let mut invalid_job = wifi_job();
+    invalid_job["template"] = json!("does-not-exist");
+    assert_eq!(call(addr, "POST", "/api/jobs/preview", Some(json!({"job":invalid_job}))).0, 400);
 }
 
 #[test]
 fn ladder_step_with_material_still_works() {
     let (addr, _) = start();
-    let (a, outcome, _) = attempt(addr, json!({"step": "talk"}));
+    let (_, materials) = call(addr, "GET", "/api/materials", None);
+    let material = materials.as_array().unwrap().iter().find(|entry| entry["material"]["id"] == "backing-first").unwrap();
+    assert!(material["material"]["note"].as_str().unwrap().contains("Baseline: a QR scanned at power 500, depth 10."));
+    let (preview_code, preview) = call(addr, "POST", "/api/tests/preview", Some(json!({"step":"square","material":"backing-first","params":{"size_mm":5.0}})));
+    assert_eq!(preview_code, 200, "{preview}");
+    assert!(preview["goal"].as_str().unwrap().contains("Power % 50"), "simulator uses its own defaults: {preview}");
+    let (a, outcome, verdict) = attempt(addr, json!({"step":"square","material":"backing-first","params":{"size_mm":5.0}}));
     assert_eq!(outcome["ok"], true);
-    assert!(a["goal"].as_str().unwrap().contains("Simulator"));
+    assert_eq!(a["material"], "backing-first");
+    assert!(a["goal"].as_str().unwrap().contains("Power % 50"));
+    assert_eq!(verdict["material"], "backing-first");
+    let (_, log) = call(addr, "GET", "/api/log", None);
+    let run = log.as_array().unwrap().iter().find(|entry| entry["event"] == "ran").unwrap();
+    assert_eq!(run["attempt"]["material"], "backing-first");
+}
+
+#[test]
+fn qr_step_does_not_log_payload() {
+    let (addr, log_path) = start();
+    let payload = "SYNTHETIC-PRIVATE-QR-PAYLOAD";
+    let (planned, outcome, _) = attempt(addr, json!({"step":"qr","params":{"text":payload,"size_mm":19.0}}));
+    assert_eq!(outcome["ok"], true);
+    assert!(!planned["goal"].as_str().unwrap().contains(payload));
+    let (_, log) = call(addr, "GET", "/api/log", None);
+    assert!(!log.to_string().contains(payload));
+    assert!(!std::fs::read_to_string(log_path).unwrap().contains(payload));
 }
 
 #[test]
@@ -436,6 +700,44 @@ fn api_reports_structured_non_banded_progress() {
 }
 
 #[test]
+fn sync_marker_is_logged_against_the_run_attempt() {
+    let (addr, _) = start();
+    let (plan_code, planned) = call(addr, "POST", "/api/plan", Some(json!({"step":"talk"})));
+    assert_eq!(plan_code, 200, "{planned}");
+    let attempt_prefix = planned["id"].as_str().unwrap().split('-').next().unwrap();
+    let recording_id = attempt_prefix[attempt_prefix.len() - 6..].to_string();
+    let (malformed_code, _) = call(addr, "POST", "/api/run", Some(json!({"sync_marker":true,"recording_id":"12A456","cue_duration_ms":2000,"post_cue_lead_ms":700})));
+    assert_eq!(malformed_code, 400);
+    let (mismatch_code, _) = call(addr, "POST", "/api/run", Some(json!({"sync_marker":true,"recording_id":"000000","cue_duration_ms":2000,"post_cue_lead_ms":700})));
+    assert_eq!(mismatch_code, 409);
+    let (run_code, started) = call(addr, "POST", "/api/run", Some(json!({"sync_marker":true,"recording_id":recording_id,"cue_duration_ms":2000,"post_cue_lead_ms":700})));
+    assert_eq!(run_code, 202, "{started}");
+    assert_eq!(started["attempt_id"], planned["id"]);
+    assert_eq!(started["sync_marker"], true);
+    assert_eq!(started["recording_id"], recording_id);
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let (_, state) = call(addr, "GET", "/api/state", None);
+        if !state["outcome"].is_null() { break; }
+        assert!(Instant::now() < deadline, "no outcome: {state}");
+        std::thread::yield_now();
+    }
+    let (_, log) = call(addr, "GET", "/api/log", None);
+    let events = log.as_array().unwrap();
+    let marker_index = events.iter().position(|event| event["event"] == "sync_marker").unwrap();
+    let marker = &events[marker_index];
+    assert_eq!(marker["attempt_id"], planned["id"]);
+    assert_eq!(marker["recording_id"], recording_id);
+    assert_eq!(marker["cue"], "preamble_dtmf6");
+    assert_eq!(marker["cue_duration_ms"], 2000);
+    assert_eq!(marker["post_cue_lead_ms"], 700);
+    assert_eq!(marker["cue_to_request_ms"], 2700);
+    assert!(marker["at_ms"].as_u64().is_some());
+    assert!(events.iter().position(|event| event["event"] == "ran").unwrap() > marker_index);
+}
+
+#[test]
 fn idle_stop_does_not_cancel_the_next_explicit_attempt() {
     let (addr, _) = start();
     let (code, stopped) = call(addr, "POST", "/api/stop", None);
@@ -447,14 +749,55 @@ fn idle_stop_does_not_cancel_the_next_explicit_attempt() {
 }
 
 #[test]
+fn workflow_preserves_plans_and_rejects_stale_starts() {
+    let (addr, _) = start();
+    assert_eq!(call(addr, "GET", "/api/state", None).1["phase"], "idle");
+    let (code, planned) = call(addr, "POST", "/api/plan", Some(json!({"step":"talk"})));
+    assert_eq!(code, 200);
+    assert_eq!(call(addr, "POST", "/api/plan", Some(json!({"step":"home"}))).0, 409);
+    assert_eq!(call(addr, "POST", "/api/run", Some(json!({"attempt_id":"stale"}))).0, 409);
+    let state = call(addr, "GET", "/api/state", None).1;
+    assert_eq!(state["phase"], "planned");
+    assert_eq!(state["attempt"]["id"], planned["id"]);
+    assert_eq!(call(addr, "POST", "/api/run", Some(json!({"attempt_id":planned["id"]}))).0, 202);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let state = call(addr, "GET", "/api/state", None).1;
+        if state["phase"] == "awaiting_verdict" { break; }
+        assert!(Instant::now() < deadline);
+        std::thread::yield_now();
+    }
+    assert_eq!(call(addr, "POST", "/api/plan", Some(json!({"step":"talk"}))).0, 409);
+    assert_eq!(call(addr, "POST", "/api/verdict", Some(json!({"status":"ok"}))).0, 200);
+    assert_eq!(call(addr, "GET", "/api/state", None).1["phase"], "idle");
+
+    let (_, review) = call(addr, "POST", "/api/jobs/review", Some(json!({"job":wifi_job()})));
+    let (code, card) = call(addr, "POST", "/api/plan", Some(json!({"review_id":review["review_id"],"stage":0})));
+    assert_eq!(code, 200, "{card}");
+    assert_eq!(call(addr, "POST", "/api/plan", Some(json!({"step":"talk"}))).0, 409);
+    assert_eq!(call(addr, "GET", "/api/state", None).1["attempt"]["id"], card["id"]);
+}
+
+#[test]
+fn real_audio_analysis_example_is_read_only_and_self_contained() {
+    let (addr, log_path) = start();
+    let response = ureq::get(&format!("http://{addr}/examples/audio-analysis")).call().unwrap();
+    assert_eq!(response.header("Content-Type"), Some("text/html; charset=utf-8"));
+    assert!(response.header("Cache-Control").unwrap().contains("max-age=3600"));
+    let html = response.into_string().unwrap();
+    assert!(html.contains("Decoded ID: 321995 (match)"));
+    assert!(html.contains("data:audio/wav;base64,"));
+    assert!(html.contains("First activity candidate begins +0.55 s"));
+    assert!(!std::path::Path::new(&log_path).exists(), "serving an example must not create a laser run log");
+}
+
+#[test]
 fn bad_requests_are_refused_with_a_reason() {
     let (addr, _) = start();
     let cases = [
-        json!({"job": {"piece": "nope", "items": []}}),
-        json!({"job": wifi_job(), "stage": 5}),
         json!({"step": "talk", "job": wifi_job()}),
         json!({}),
-        json!({"job": wifi_job(), "colour": "red"}),
+        json!({"step": "talk", "colour": "red"}),
     ];
     for c in cases {
         let (code, r) = call(addr, "POST", "/api/plan", Some(c.clone()));
@@ -462,7 +805,7 @@ fn bad_requests_are_refused_with_a_reason() {
         assert!(r["error"].is_string(), "{r}");
     }
     assert_eq!(call(addr, "POST", "/api/run", None).0, 409, "nothing planned");
-    assert_eq!(call(addr, "POST", "/api/verdict", Some(json!({"ok": true}))).0, 409, "nothing ran");
+    assert_eq!(call(addr, "POST", "/api/verdict", Some(json!({"status":"ok"}))).0, 409, "nothing ran");
 }
 
 #[test]
@@ -474,7 +817,7 @@ fn skipped_is_only_for_an_unperformed_test() {
     assert_eq!(code, 200);
     assert_eq!(entry["status"], "skipped");
     assert_eq!(entry["goal"], planned["goal"]);
-    assert!(entry["ok"].is_null());
+    assert!(entry.get("ok").is_none());
     let (_, entries) = call(addr, "GET", "/api/log", None);
     assert_eq!(entries.as_array().unwrap().len(), 1);
     assert_eq!(entries[0]["event"], "verdict");
@@ -531,27 +874,14 @@ fn mode_switch_is_idle_only_and_does_not_run_the_laser() {
 }
 
 #[test]
-fn imported_card_guide_then_qr_and_multiline_text_share_layout() {
-    let (addr, log_path) = start_with_driver("k6");
-    let source = "[card]\nmaterial='bamboo-ntag215-light'\nbacking='backing-first'\nplacement='left'\n[wifi]\nssid='Synthetic guest'\npassword='synthetic-private-value'\nsecurity='WPA2'\n[content]\nqr_kind='wifi'\nurl_or_text=''\ntext=\"\"\"Gärtringen\nHome WLAN\"\"\"\nfont_size_mm=2.5\n";
-    let (code, imported) = call(addr, "POST", "/api/cards/import", Some(json!({"toml":source,"template":"wifi-login"})));
-    assert_eq!(code, 200, "{}", imported["error"]);
-    let job = imported["job"].clone();
-    assert_eq!(job["items"].as_array().unwrap().len(), 2);
-    assert_eq!(job["items"][1]["content"]["kind"], "text");
-    let (code, preview) = call(addr, "POST", "/api/jobs/preview", Some(json!({"job":job})));
-    assert_eq!(code, 200, "{}", preview["error"]);
-    assert_eq!(preview["stages"][0]["name"], "guide");
-    assert_eq!(preview["stages"][1]["name"], "content");
-    assert_eq!(preview["stages"][1]["burns"].as_array().unwrap().len(), 1);
-    assert_eq!(preview["layout"]["reach_mm"], json!([80.0,75.0]));
-    assert!(!std::path::Path::new(&log_path).exists());
-    let mut guide = job.clone();
-    guide["items"] = json!([]);
-    attempt(addr, json!({"job":guide,"stage":0}));
-    let mut content = job;
-    content["guide"] = json!(false);
-    attempt(addr, json!({"job":content,"stage":0}));
-    let log = std::fs::read_to_string(log_path).unwrap();
-    assert!(!log.contains("synthetic-private-value") && !log.contains("Gärtringen"));
+fn removed_card_import_route_is_not_registered() {
+    let (addr, _) = start();
+    assert_eq!(call(addr, "POST", "/api/cards/import", Some(json!({}))).0, 404);
+    assert_eq!(call(addr, "GET", "/api/cards/import", None).0, 404);
+}
+#[test]
+fn removed_client_request_shapes_are_rejected() {
+    let (addr, _) = start();
+    assert_eq!(call(addr, "POST", "/api/plan", Some(json!({"job":wifi_job()}))).0, 400);
+    assert_eq!(call(addr, "POST", "/api/verdict", Some(json!({"ok":true}))).0, 400);
 }

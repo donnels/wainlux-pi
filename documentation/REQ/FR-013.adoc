@@ -1,15 +1,16 @@
-= FR-013: Hardware-Independent Testing
+= FR-013: Hardware-Independent Tests
 
 == Status
-Implemented through the Rust simulator and workspace tests.
+Implemented for simulator-backed tests. No real-device dry run exists.
 
 == Requirement
-Run API, composition and workflow tests without opening a physical K6 serial port.
+Run API, composition and workflow tests without connecting to or moving a K6.
 
 == Acceptance
 
-* Tests select the simulator driver and bind only to a local test HTTP port.
-* Tests cover review, plan, run, verdict, stage gating and redacted logs with synthetic data.
-* Simulator results cannot be treated as evidence of burn quality, device stop or physical completion.
+* Tests use the simulator, a local HTTP port and synthetic data.
+* Simulator mode never opens `/dev/ttyUSB0` or sends machine commands.
+* Tests cover review, plan, run, verdict, stage gating and redacted logs.
+* Simulator results do not prove burn quality, device stop or physical completion.
 
-This is simulator testing, not a real-device dry-run mode.
+Preview is not a real-device dry run. Real mode can move and burn.

@@ -1,6 +1,6 @@
-= K6 MCP Client Draft
+= K6 MCP Preview Client
 
-This is a networked Streamable HTTP MCP server for the current Rust API. It runs as a separate service on the Pi Zero host for now and can move to another MCP hub later. It never owns the serial port.
+This is a networked Streamable HTTP MCP server for the current Rust API. It runs separately from the laser service on a trusted operator host and never owns the serial port. The current Deck-local instance calls the Pi API over Wi-Fi and binds MCP to Deck loopback for VS Code.
 
 == Scope
 
@@ -10,12 +10,14 @@ Tools exposed:
 * `list_materials`: configured pieces, backings and settings.
 * `list_templates`: declared card templates.
 * `preview_job`: calls `POST /api/jobs/preview` and returns layout/stage geometry only.
+* `get_updates`: polls state and new redacted run-log entries using an integer `cursor`; pass `next_cursor` on the next call.
+* `get_audio_analysis`: returns analyzer availability and the latest timing/report metadata event for an attempt. It never returns audio bytes or report HTML.
 
-The preview tool does not save a review, open serial, plan, run, stop, or record a verdict. It omits submitted content and raster pixels from its result. The operator UI remains the place to inspect exact pixels and start physical work. No MCP tool can trigger a burn.
+All MCP tools are read-only. There is no push-notification path in this integration; `get_updates` is cursor polling. The operator UI remains the place to inspect exact pixels, start work and record the physical verdict. No MCP tool can create a review, plan, run, stop, or record a verdict.
 
 == Run
 
-Build and run the MCP container on the Pi Zero host:
+Build and run the MCP container on a trusted host. When running on the Deck, point it at the Pi API and bind the published port to loopback; a Pi-hosted deployment can use the Pi-local API address instead:
 
 .Build and start the network MCP service
 [source,bash]
@@ -23,7 +25,11 @@ Build and run the MCP container on the Pi Zero host:
 docker compose -f docker/docker-mcp/compose.yaml up -d --build
 ----
 
-The host bind is on the private network at port 8082. The MCP container calls the Rust API at `127.0.0.1:8081`. The VS Code entry prompts for the Pi MCP URL, for example `http://piz-k6:8082/mcp`. Neither this MCP service nor the Rust API authenticates clients; keep them on a trusted network and restrict access with firewall/TLS controls as appropriate.
+For a Deck-hosted service, set `LASER_API_BASE_URL=http://PI-HOST:8081` and `MCP_BIND_ADDRESS=127.0.0.1` in the Compose environment. The workspace's `.vscode/mcp.json` connects to `http://127.0.0.1:8082/mcp`.
+
+The host bind is port 8082. Neither the MCP service nor the Rust API authenticates clients; keep them on a trusted network and restrict non-loopback binds with firewall/TLS controls.
+
+After a successful optional audio upload, the Rust API appends an `audio_analysis` event containing only the attempt ID, timing values and same-origin report URL. `get_audio_analysis` exposes that metadata and analyzer availability, not the recording or HTML report.
 
 == API
 

@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 820" role="img" aria-labelledby="title description">
+  <title id="title">Adjacent power-sweep blocks and receive-traced test</title>
+  <desc id="description">The completed first 20 by 20 millimeter sweep block starts at X=0. The next block starts at X=20 with a 20 millimeter full-power frame and nine inset 19 millimeter lines at Y=2 through 18 millimeters. The frame top edge replaces the duplicate first line.</desc>
+  <defs>
+    <linearGradient id="signature" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff"/>
+      <stop offset="1" stop-color="#aaf"/>
+    </linearGradient>
+  </defs>
+  <rect width="1120" height="820" fill="url(#signature)"/>
+  <text x="52" y="54" font-family="sans-serif" font-size="27" font-weight="700" fill="#18232b">K6 power sweep projection</text>
+  <text x="52" y="84" font-family="sans-serif" font-size="16" fill="#40515c">Adjacent 20 mm blocks | next block X=20 | bounded receive trace</text>
+
+  <rect x="140" y="130" width="640" height="600" fill="#ffffff" stroke="#33434d" stroke-width="2"/>
+  <text x="140" y="116" font-family="sans-serif" font-size="16" fill="#33434d">X increases right</text>
+  <text x="790" y="146" font-family="sans-serif" font-size="16" fill="#33434d">80 mm</text>
+  <text x="148" y="756" font-family="sans-serif" font-size="16" fill="#33434d">75 mm</text>
+
+  <path d="M140 130h640 M140 290h640 M140 450h640 M140 610h640" stroke="#d5dde1" stroke-width="1"/>
+  <path d="M300 130v600 M460 130v600 M620 130v600" stroke="#e1e6e9" stroke-width="1"/>
+  <text x="132" y="126" text-anchor="end" font-family="sans-serif" font-size="13" fill="#52636d">0</text>
+  <text x="300" y="750" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#52636d">20</text>
+  <text x="460" y="750" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#52636d">40</text>
+  <text x="620" y="750" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#52636d">60</text>
+  <text x="780" y="750" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#52636d">80 mm</text>
+
+  <circle cx="140" cy="130" r="5" fill="#a33b2f"/>
+  <text x="151" y="124" font-family="sans-serif" font-size="14" font-weight="700" fill="#a33b2f">ORIGIN (0,0)</text>
+
+  <rect x="140" y="130" width="160" height="160" fill="#fff" fill-opacity="0.22" stroke="#71808a" stroke-width="2" stroke-dasharray="6 4"/>
+  <text x="148" y="306" font-family="sans-serif" font-size="13" font-weight="700" fill="#52636d">Block 1 | X=0 | completed; material judgment pending</text>
+  <rect x="300" y="130" width="160" height="160" fill="#fff" fill-opacity="0.5" stroke="#a33b2f" stroke-width="3"/>
+  <text x="468" y="145" font-family="sans-serif" font-size="13" font-weight="700" fill="#7a2d24">Block 2 | X=20 | frame top edge = line 01 at power 1000</text>
+
+  <g fill="none" stroke="#89959c" stroke-width="2" stroke-linecap="round">
+    <path d="M144 146h152"/>
+    <path d="M144 162h152"/>
+    <path d="M144 178h152"/>
+    <path d="M144 194h152"/>
+    <path d="M144 210h152"/>
+    <path d="M144 226h152"/>
+    <path d="M144 242h152"/>
+    <path d="M144 258h152"/>
+    <path d="M144 274h152"/>
+  </g>
+
+  <g fill="none" stroke="#18232b" stroke-width="3" stroke-linecap="round">
+    <path d="M304 146h152"/>
+    <path d="M304 162h152"/>
+    <path d="M304 178h152"/>
+    <path d="M304 194h152"/>
+    <path d="M304 210h152"/>
+    <path d="M304 226h152"/>
+    <path d="M304 242h152"/>
+    <path d="M304 258h152"/>
+    <path d="M304 274h152"/>
+  </g>
+
+  <g font-family="sans-serif" font-size="14" fill="#18232b">
+    <text x="480" y="151">02  Power 889  |  Y=2 mm</text>
+    <text x="480" y="167">03  Power 778  |  Y=4 mm</text>
+    <text x="480" y="183">04  Power 667  |  Y=6 mm</text>
+    <text x="480" y="199">05  Power 556  |  Y=8 mm</text>
+    <text x="480" y="215">06  Power 444  |  Y=10 mm</text>
+    <text x="480" y="231">07  Power 333  |  Y=12 mm</text>
+    <text x="480" y="247">08  Power 222  |  Y=14 mm</text>
+    <text x="480" y="263">09  Power 111  |  Y=16 mm</text>
+    <text x="480" y="279">10  Power 0    |  Y=18 mm</text>
+  </g>
+
+  <rect x="814" y="130" width="260" height="174" rx="4" fill="#fff7e6" stroke="#a36514" stroke-width="2"/>
+  <text x="834" y="162" font-family="sans-serif" font-size="17" font-weight="700" fill="#6c4310">Detection status</text>
+  <text x="834" y="192" font-family="sans-serif" font-size="15" fill="#3b3429">Block 2 uses a bounded RX trace</text>
+  <text x="834" y="214" font-family="sans-serif" font-size="15" fill="#3b3429">with per-job indices.</text>
+  <text x="834" y="246" font-family="sans-serif" font-size="15" fill="#3b3429">90 s silence stays assumed;</text>
+  <text x="834" y="268" font-family="sans-serif" font-size="15" fill="#3b3429">trace is not proof of rest.</text>
+
+  <text x="814" y="354" font-family="sans-serif" font-size="15" font-weight="700" fill="#18232b">Scale</text>
+  <path d="M814 382h80" stroke="#18232b" stroke-width="4"/>
+  <path d="M814 375v14 M894 375v14" stroke="#18232b" stroke-width="2"/>
+  <text x="904" y="387" font-family="sans-serif" font-size="14" fill="#40515c">10 mm</text>
+  <text x="814" y="428" font-family="sans-serif" font-size="14" fill="#40515c">Work area: 80 x 75 mm</text>
+  <text x="814" y="452" font-family="sans-serif" font-size="14" fill="#40515c">Block 2 lines: 19 mm, 0.5 mm inset</text>
+  <text x="814" y="476" font-family="sans-serif" font-size="14" fill="#40515c">Pitch: 2 mm</text>
+
+  <rect x="52" y="780" width="12" height="12" fill="#a33b2f"/>
+  <text x="74" y="791" font-family="sans-serif" font-size="13" fill="#40515c">Power 0 is not assumed to be laser-off. All lines are potentially active.</text>
+  <text x="814" y="530" font-family="sans-serif" font-size="13" fill="#52636d">Positions are to scale.</text>
+  <text x="814" y="550" font-family="sans-serif" font-size="13" fill="#52636d">Stroke width is enlarged for visibility;</text>
+  <text x="814" y="570" font-family="sans-serif" font-size="13" fill="#52636d">line darkness is not predicted.</text>
+  <text x="1068" y="800" text-anchor="end" font-family="sans-serif" font-size="11" fill="#40515c">Copyright (c) 2026 Sean Donnellan</text>
+</svg>

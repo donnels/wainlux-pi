@@ -36,6 +36,23 @@ def api_request(path: str, payload: dict[str, Any] | None = None) -> Any:
         raise RuntimeError(f"Invalid or timed-out Laser API response for {path}") from error
 
 
+def updates_since(events: list[dict[str, Any]], cursor: int, limit: int) -> dict[str, Any]:
+    if cursor < 0:
+        raise ValueError("cursor must be non-negative")
+    if limit < 1 or limit > 500:
+        raise ValueError("limit must be between 1 and 500")
+    start = min(cursor, len(events))
+    end = min(start + limit, len(events))
+    return {"events": events[start:end], "next_cursor": end, "has_more": end < len(events)}
+
+
+def audio_analysis_for_attempt(events: list[dict[str, Any]], attempt_id: str) -> dict[str, Any] | None:
+    for event in reversed(events):
+        if event.get("event") == "audio_analysis" and event.get("attempt_id") == attempt_id:
+            return event
+    return None
+
+
 @mcp.tool()
 def get_machine() -> dict[str, Any]:
     """Return the connected service's machine profile and accepted settings."""
@@ -52,6 +69,41 @@ def list_materials() -> list[dict[str, Any]]:
 def list_templates() -> list[dict[str, Any]]:
     """List declared card templates and their static field/element policies."""
     return api_request("/api/templates")
+
+
+@mcp.tool()
+def get_updates(cursor: int = 0, limit: int = 100) -> dict[str, Any]:
+    """Poll new redacted run-log events since a prior cursor and return current state.
+
+    Pass the returned next_cursor on the next call. This is read-only and has no
+    plan, run, stop, review, or verdict operation.
+    """
+    events = api_request("/api/log")
+    if not isinstance(events, list):
+        raise RuntimeError("Laser API returned an invalid run log")
+    page = updates_since(events, cursor, limit)
+    page["state"] = api_request("/api/state")
+    return page
+
+
+@mcp.tool()
+def get_audio_analysis(attempt_id: str) -> dict[str, Any]:
+    """Return analyzer availability and timing/report metadata for an uploaded attempt.
+
+    The result contains no recording bytes and does not fetch report HTML.
+    """
+    allowed = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_"
+    if not attempt_id or any(character not in allowed for character in attempt_id):
+        raise ValueError("invalid attempt ID")
+    availability = api_request("/api/audio-analyses/availability")
+    events = api_request("/api/log")
+    if not isinstance(events, list):
+        raise RuntimeError("Laser API returned an invalid run log")
+    return {
+        "attempt_id": attempt_id,
+        "analyzer_available": bool(availability.get("available")),
+        "analysis": audio_analysis_for_attempt(events, attempt_id),
+    }
 
 
 @mcp.tool()

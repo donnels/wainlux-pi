@@ -1,0 +1,52 @@
+@startuml sequence-audio-capture
+!include plantuml-style.puml
+title Pi-coordinated capture with external analysis
+hide footbox
+autonumber
+
+actor Operator
+participant Browser
+participant "Pi Rust API\nRun coordinator" as Pi
+participant "Pi camera/microphone\nCapture" as Capture
+participant "Wainlux K6" as Device
+database "runs.jsonl" as Log
+participant "External audio\nanalysis API" as Analyzer
+
+Operator -> Browser: Review attempt and confirm run
+Browser -> Pi: POST /api/run-check
+Pi -> Capture: Start recording with pre-roll
+Capture --> Pi: Ready + monotonic capture origin
+Pi -> Log: Bind capture ID and attempt ID
+Pi -> Device: Execute approved run
+Device --> Pi: Status and receive events
+Pi -> Capture: Stop after bounded post-run tail
+Capture --> Pi: Recording + capture timing
+Pi -> Log: Append outcome and capture metadata
+Pi -> Analyzer: POST /analyses (audio + filtered events)
+Analyzer --> Pi: analysis_id accepted
+
+loop Until report is ready
+  Pi -> Analyzer: GET /analyses/{analysis_id}
+  Analyzer --> Pi: status + report reference
+end
+
+Browser -> Pi: GET /api/run-check/{attempt_id}
+Pi --> Browser: Run outcome + logs + analysis status
+Browser -> Pi: GET /api/analysis/{analysis_id}/report
+Pi -> Analyzer: Fetch report and media
+Analyzer --> Pi: Annotated HTML report
+Pi --> Browser: Same-origin report response
+
+alt Phone or independent capture source
+  Browser -> Pi: Enable optional sync cue
+  Pi --> Browser: Cue metadata + six-digit ID
+end
+
+note over Pi,Analyzer
+  The analyzer has no laser-control credentials
+  and cannot trigger a run.
+  Upload failure leaves the recording pending
+  for bounded retry on the Pi.
+end note
+
+@enduml

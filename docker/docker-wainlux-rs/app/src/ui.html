@@ -3,8 +3,12 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="author" content="Sean Donnellan">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Laser | VSR">
+<meta name="theme-color" content="#8b1e2d">
+<link rel="manifest" href="/manifest.webmanifest">
 <title>Laser | VSR</title>
 <script>
 (() => {
@@ -30,18 +34,58 @@
   :root[data-theme=dark] { color-scheme:dark; --ink:#edf4fa; --paper:#101820; --wash:#22224a; --panel:#17232e; --line:#718394; --accent:#dc7180; --on-accent:#101820; --danger:#f3a5ab; --muted:#b7c5d0; --focus:#f2c66d; --canvas:#0d141b; --card:#293532; --card-line:#87968e; --reach-line:#9aacb7; --burn-ink:#eee; --guide-ink:#2aba8e; }
   * { box-sizing:border-box; letter-spacing:0; }
   html { min-height:100%; background:var(--paper); }
-  body { margin:0; min-height:100vh; color:var(--ink); background:linear-gradient(145deg,var(--paper) 0 38%,var(--wash) 100%); font:15px 'DejaVu Sans',sans-serif; }
-  header { display:flex; flex-wrap:wrap; align-items:center; gap:16px; padding:16px 24px; border-bottom:3px solid var(--accent); background:var(--panel); }
-  .brand-logo { width:80px; height:52px; object-fit:contain; flex:0 0 auto; border-radius:3px; }
-  .brand-copy { min-width:0; flex:1 1 260px; }
+  body { margin:0; min-height:100vh; color:var(--ink); background:var(--paper); font:15px 'DejaVu Sans',sans-serif; line-height:1.5; }
+  header { position:sticky; top:0; z-index:10; display:flex; flex-wrap:wrap; align-items:center; gap:16px; padding:calc(12px + env(safe-area-inset-top)) calc(24px + env(safe-area-inset-right)) 12px calc(24px + env(safe-area-inset-left)); border-bottom:2px solid var(--accent); background:var(--panel); }
+  .brand-logo { width:56px; height:40px; object-fit:contain; flex:0 0 auto; border-radius:3px; }
+  .brand-copy { min-width:0; flex:1 1 210px; }
   .brand-name { color:var(--muted); font-size:12px; line-height:1.4; margin:0 0 4px; overflow-wrap:anywhere; }
   .theme-control { margin:0; }
+  .appearance { position:relative; margin:0; }
+  .appearance>div { position:absolute; right:0; top:100%; min-width:230px; padding:16px; background:var(--panel); border:1px solid var(--line); box-shadow:0 4px 12px #0002; }
   #clear-pi { padding:8px 10px; font-size:13px; color:var(--ink); background:transparent; border-color:var(--line); }
-  h1 { margin:0; font-size:24px; } h2 { font-size:18px; margin:0 0 16px; }
+  h1 { margin:0; font-size:20px; } h2 { font-size:17px; margin:0 0 12px; } h3 { font-size:15px; }
   #reach { margin:4px 0 0; font-size:13px; }
-  .spacer { flex:1; } main { max-width:1400px; margin:auto; padding:20px 24px; }
+  .spacer { flex:1; } main { max-width:1400px; margin:auto; padding:0 24px 24px; }
+  .mode-control { margin:0; min-width:150px; }
+  .workflow { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; padding:16px 0; border-bottom:1px solid var(--line); }
+  .workflow ol { display:flex; flex-wrap:wrap; gap:20px; padding:0; margin:0; list-style:none; counter-reset:workflow; }
+  .workflow li { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:13px; }
+  .workflow li::before { counter-increment:workflow; content:counter(workflow); display:grid; place-items:center; width:24px; height:24px; border:1px solid var(--line); border-radius:50%; font-size:12px; }
+  .workflow li[aria-current=step] { color:var(--ink); font-weight:bold; }
+  .workflow li[aria-current=step]::before { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+  .mode-badge { font-size:12px; font-weight:bold; color:var(--muted); }
+  :root[data-machine-mode=real] .mode-badge { color:var(--danger); }
+  .editor { min-width:0; }
+  .review-surface { min-width:0; scroll-margin-top:135px; }
+  .preview-stage { position:relative; }
+  #preview-empty { position:absolute; inset:0; display:grid; place-content:center; text-align:center; color:var(--muted); pointer-events:none; }
+  #preview-empty strong { font-size:16px; font-weight:normal; }
+  .section-heading { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:12px; }
+  .section-heading h2 { margin:0; }
+  .stage-status { font-size:13px; color:var(--muted); margin:0; }
+  .timing-line { margin:4px 0 12px; color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }
+  .timing-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(125px,1fr)); gap:8px; margin:8px 0 14px; }
+  .timing-grid>div { padding:8px; border-left:2px solid var(--line); background:var(--paper); }
+  .timing-grid dt { color:var(--muted); font-size:11px; }
+  .timing-grid dd { margin:2px 0 0; font-size:15px; font-weight:bold; font-variant-numeric:tabular-nums; }
+  .analysis-layout { display:grid; grid-template-columns:minmax(220px,320px) minmax(0,1fr); gap:28px; }
+  #analysis-runs { display:grid; gap:4px; align-content:start; }
+  .analysis-run { display:flex; justify-content:space-between; gap:12px; width:100%; text-align:left; background:transparent; border:0; border-bottom:1px solid var(--line); border-radius:0; }
+  .analysis-run[aria-pressed=true] { border-left:3px solid var(--accent); background:var(--panel); }
+  .analysis-run small { display:block; color:var(--muted); font-weight:normal; }
+  .analysis-bar { display:flex; width:100%; height:24px; overflow:hidden; border:1px solid var(--line); background:var(--paper); }
+  .analysis-segment { min-width:2px; height:100%; }
+  .analysis-segment[data-kind=transfer] { background:#367abe; }
+  .analysis-segment[data-kind=setup] { background:#d68a27; }
+  .analysis-segment[data-kind=wait] { background:#8b1e2d; }
+  .analysis-segment[data-kind=other] { background:#718394; }
+  .analysis-legend { display:flex; flex-wrap:wrap; gap:12px; margin:8px 0; font-size:12px; color:var(--muted); }
+  .analysis-legend span::before { content:''; display:inline-block; width:10px; height:10px; margin-right:5px; background:var(--swatch); }
+  @media(max-width:760px) { .analysis-layout { grid-template-columns:minmax(0,1fr); gap:16px; } }
+  #timing-example iframe { display:block; width:100%; height:72vh; margin-top:12px; border:1px solid var(--line); }
   button,input,select,textarea { font:inherit; border:1px solid var(--line); border-radius:3px; padding:8px; min-width:0; color:inherit; background:var(--panel); }
   button { cursor:pointer; padding:10px 16px; font-weight:bold; }
+  button,select,input:not([type=checkbox]) { min-height:44px; }
   button:disabled { opacity:.45; cursor:not-allowed; }
   button.primary { background:var(--accent); color:var(--on-accent); border-color:var(--accent); }
   #stop { background:#ac2632; color:white; border-color:#ac2632; font-size:17px; }
@@ -54,9 +98,15 @@
   .secret-field>input,.secret-field>textarea { width:100%; margin:0; }
   .secret-field>button { width:64px; padding:8px 4px; }
   .secret-field.multiline>input,.secret-field.multiline>textarea { height:84px; }
-  #template-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 12px; }
+  #template-fields,#layout-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 12px; }
   #template-fields>label { grid-column:span 2; }
   #template-fields>label[data-control=number] { grid-column:auto; }
+  #layout-fields>label { margin-top:10px; }
+  #card-inputs>details { border-top:1px solid var(--line); padding:12px 0; margin:0; }
+  #card-inputs>details>summary { font-size:13px; font-weight:bold; }
+  #card-inputs>details>div { padding-top:12px; }
+  summary { cursor:pointer; }
+  .appearance>summary { min-height:44px; align-content:center; }
   .preview-tools { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:10px; min-height:40px; }
   #laser-output { margin:18px 0; padding:16px 0; border-top:1px solid var(--line); }
   .output-stage { margin:12px 0 20px; }
@@ -64,77 +114,98 @@
   .output-image { display:block; width:100%; max-height:320px; object-fit:contain; image-rendering:pixelated; background:white; border:1px solid var(--line); }
   .output-hidden { color:var(--muted); font-size:13px; }
   :root[data-preview-polarity=light] .output-image { filter:invert(1); }
-  .tabs { display:flex; gap:0; border-bottom:1px solid var(--line); margin-bottom:20px; }
+  .tabs { display:flex; gap:0; border-bottom:1px solid var(--line); margin:12px 0 20px; }
   .tabs button { background:none; border:0; border-radius:0; border-bottom:3px solid transparent; }
   .tabs button[aria-selected=true] { border-bottom-color:var(--accent); color:var(--accent); }
-  .workspace { display:grid; grid-template-columns:310px minmax(0,1fr); gap:28px; }
+  .workspace { display:grid; grid-template-columns:minmax(260px,340px) minmax(0,1fr); gap:32px; }
   .row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
   .actions { display:flex; gap:10px; flex-wrap:wrap; margin:16px 0; }
   .meta { color:var(--muted); font-size:12px; overflow-wrap:anywhere; }
+  #audio-phone-upload { margin:12px 0; padding:12px; border:1px solid var(--line); background:var(--paper); }
+  #audio-phone-upload-qr { display:block; width:192px; height:192px; margin:10px auto; background:#fff; image-rendering:pixelated; }
+  #audio-report { display:block; width:100%; min-height:70vh; margin-top:12px; border:1px solid var(--line); background:var(--panel); }
   #cards { --burn-ink:#000; --guide-ink:#000; --card:#eee5d2; }
-  #card-scene { --canvas:#fff; --card:#eee5d2; --card-line:#958369; --reach-line:#687b88; --muted:#536574; display:block; width:100%; height:480px; background:var(--canvas); border:1px solid var(--line); }
+  #card-scene { --canvas:#fff; --card:#eee5d2; --card-line:#958369; --reach-line:#687b88; --muted:#536574; display:block; width:100%; aspect-ratio:100/85; max-height:350px; background:var(--canvas); border:1px solid var(--line); }
   :root[data-preview-polarity=light] #cards { --burn-ink:#fff; --guide-ink:#fff; --card:#26312d; }
   :root[data-preview-polarity=light] #card-scene { --canvas:#151a1e; --card:#26312d; --card-line:#9aacb7; --reach-line:#9aacb7; --muted:#b7c5d0; }
   :root[data-preview-polarity=light] image[data-preview-layer] { filter:invert(1); }
   .legend { display:flex; flex-wrap:wrap; gap:16px; font-size:12px; margin:12px 0; }
   .legend span::before { content:''; display:inline-block; width:10px; height:10px; margin-right:6px; background:var(--swatch); }
-  #status { padding:12px 0; min-height:46px; border-bottom:1px solid var(--line); margin-bottom:20px; overflow-wrap:anywhere; }
+  #status { padding:10px 0; min-height:42px; margin:0; overflow-wrap:anywhere; font-size:13px; }
   #status[data-error=true] { color:var(--danger); } progress { width:100%; accent-color:var(--accent); }
   .goal { border-left:3px solid var(--accent); background:var(--panel); padding:12px; margin:12px 0; overflow-wrap:anywhere; }
   #setup { max-width:540px; } #setup input { max-width:100%; }
   #test-preview { min-width:0; padding-top:16px; border-top:1px solid var(--line); }
   #test-pattern-image { display:block; width:100%; max-height:460px; object-fit:contain; background:#fff; border:1px solid var(--line); }
   #test-preview-note { max-width:70ch; color:var(--muted); font-size:13px; }
-  #planned,#running,#judge,#placement-check { margin:20px 0; padding:16px 0; border-top:1px solid var(--line); }
+  #planned,#running,#judge,#placement-check { margin:16px 0; padding:16px 0; border-top:1px solid var(--line); scroll-margin-top:130px; }
+  #planned,#running,#judge { border-top:3px solid var(--accent); }
+  #placement-check { margin:12px 0; padding:12px 0; }
+  #placement-check h2 { font-size:14px; margin-bottom:8px; }
+  #placement-check label { margin:0; }
+  #card-goal { margin:10px 0; padding:8px 12px; font-size:13px; }
+  #card-goal>div { padding-top:8px; }
+  #judge .goal,#planned .goal { max-height:180px; overflow:auto; }
+  #run-progress { height:10px; margin:8px 0; }
   pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; }
   footer { margin-top:28px; padding:12px 0; border-top:1px solid var(--line); color:var(--muted); font-size:12px; }
-  details { margin-top:28px; } .hidden,[hidden] { display:none !important; }
-  @media(max-width:760px) { header { padding:12px 16px; gap:12px; } main { padding:16px; } .workspace { grid-template-columns:minmax(0,1fr); } #card-scene { height:360px; } .spacer { display:none; } }
+  details { margin-top:20px; } .hidden,[hidden] { display:none !important; }
+  @media(max-width:760px) { header { padding:calc(10px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) 10px calc(16px + env(safe-area-inset-left)); gap:10px; } main { padding:0 16px calc(16px + env(safe-area-inset-bottom)); } .brand-copy { flex-basis:calc(100% - 76px); } .brand-name { font-size:10px; } .mode-control { flex:1; min-width:120px; } .appearance { position:static; } .appearance>div { left:16px; right:16px; top:100%; min-width:0; } #clear-pi { font-size:12px; padding:8px; } .workspace { grid-template-columns:minmax(0,1fr); gap:20px; } #card-scene { max-height:330px; } .workflow ol { gap:12px; } .workflow li { font-size:11px; gap:5px; } .workflow li::before { width:20px; height:20px; } .workflow { gap:8px; } .spacer { display:none; } .review-surface,#planned,#running,#judge { scroll-margin-top:180px; } }
+  @media(max-width:390px) { .workflow ol { gap:9px; } .brand-name { max-width:245px; } }
 </style>
 </head>
 <body>
 <header>
   <img class="brand-logo" src="/assets/vsr-logo.png" width="80" height="52" alt="VSR">
   <div class="brand-copy"><p class="brand-name">Virtual Space &amp; Global Communications Research</p><h1 id="model">Laser</h1><p id="reach"></p></div>
-  <label class="theme-control">Theme <select id="theme" onchange="setTheme(this.value)"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
-  <label style="margin:0">Mode <select id="mode" disabled><option value="simulator">Simulator</option><option value="real">Real laser</option></select></label>
-  <button id="clear-pi" type="button" onclick="clearPi()" title="Clear idle Pi state and sign out">Sign out / Clear Pi</button>
+  <label class="mode-control">Machine mode <select id="mode" disabled><option value="simulator">Simulator</option><option value="real">Real laser</option></select></label>
+  <details class="appearance"><summary>Options</summary><div><label class="theme-control">Theme <select id="theme" onchange="setTheme(this.value)"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label><label>Preview polarity<select id="preview-polarity" onchange="setPreviewPolarity(this.value)"><option value="dark">Dark marks on light</option><option value="light">Light marks on dark</option></select></label><button id="clear-pi" type="button" onclick="clearPi()" title="Discard the idle review and attempt; keep run history">Clear session</button></div></details>
+  <button id="fullscreen" type="button" onclick="toggleFullscreen()" aria-pressed="false">Full screen</button>
   <button id="stop" onclick="requestStop()">STOP</button>
 </header>
 <main>
+<div class="workflow" aria-label="Operator workflow"><ol><li data-workflow-step="0" aria-current="step">Prepare</li><li data-workflow-step="1">Review &amp; place</li><li data-workflow-step="2">Run</li><li data-workflow-step="3">Inspect</li></ol><span id="machine-mode" class="mode-badge">Connecting</span></div>
 <div id="status" role="status" aria-live="polite">Connecting...</div>
 <nav class="tabs" role="tablist" aria-label="Workspace">
   <button id="tab-cards" role="tab" aria-selected="true" aria-controls="cards" onclick="tab('cards')">Cards</button>
-  <button id="tab-tests" role="tab" aria-selected="false" aria-controls="tests" onclick="tab('tests')">Tests</button>
+  <button id="tab-tests" role="tab" aria-selected="false" aria-controls="tests" tabindex="-1" onclick="tab('tests')">Machine tests</button>
+  <button id="tab-analysis" role="tab" aria-selected="false" aria-controls="analysis" tabindex="-1" onclick="tab('analysis')">Analysis</button>
 </nav>
 <section id="cards" role="tabpanel" aria-labelledby="tab-cards">
   <div class="workspace">
-    <div>
+    <div class="editor">
+      <h2>Card content</h2>
       <fieldset id="card-inputs" disabled>
         <label>Use case <select id="template"><option value="">Select type</option></select></label>
         <div id="template-fields"></div>
-        <h2>Laser Setup</h2>
-        <label>Card file <input id="card-file" type="file" accept=".toml,.json"></label>
+        <details id="layout-controls" hidden><summary>Layout and sizing</summary><div id="layout-fields"></div></details>
+        <details id="machine-setup"><summary>Material and placement</summary><div>
         <div class="row"><label>Material <select id="piece"></select></label><label>Backing <select id="backing"></select></label></div>
         <label>Placement <select id="placement"><option value="left">Left</option><option value="centred">Centred</option></select></label>
         <label><input id="include-guide" type="checkbox" checked> Include position markings</label>
+        </div></details>
       </fieldset>
-      <div class="actions"><button id="edit-card" onclick="editCard()" disabled>Edit layout</button></div>
+      <div class="actions"><button id="preview-card" class="primary" onclick="prepareCard()" disabled>Review output</button></div>
       <div class="meta" id="profiles"></div>
     </div>
-    <div>
-      <div class="preview-tools"><button id="show-card" type="button" aria-pressed="false" onclick="setLayerVisible('content', !contentVisible)" disabled>Show card content</button><button id="show-markings" type="button" aria-pressed="true" onclick="setLayerVisible('guide', !markingsVisible)" disabled>Hide markings</button><label style="margin:0">Preview polarity<select id="preview-polarity" onchange="setPreviewPolarity(this.value)"><option value="dark">Dark marks on light</option><option value="light">Light marks on dark</option></select></label></div>
+    <div id="review-surface" class="review-surface">
+      <div class="section-heading"><h2>Reviewed output</h2><p id="stage-status" class="stage-status">No review</p></div>
+      <p id="review-timing" class="timing-line" hidden></p>
+      <div class="preview-tools"><button id="show-card" type="button" aria-pressed="false" onclick="setLayerVisible('content', !contentVisible)" disabled>Show card content</button><button id="show-markings" type="button" aria-pressed="true" onclick="setLayerVisible('guide', !markingsVisible)" disabled>Hide markings</button></div>
       <label id="side-control" hidden>Card side<select id="card-side" onchange="selectCardSide(this.value)"><option value="front">Front</option><option value="back">Back</option></select></label>
-      <svg id="card-scene" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Card and burn preview" viewBox="-5 -5 100 85"></svg>
+      <div class="preview-stage"><svg id="card-scene" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Card and burn preview" viewBox="-5 -5 100 85"></svg><div id="preview-empty"><strong>No reviewed output</strong></div></div>
       <div class="legend"><span style="--swatch:var(--card)">Card</span><span style="--swatch:var(--reach-line)">Reach</span><span style="--swatch:var(--guide-ink)">Markings</span><span style="--swatch:var(--burn-ink)">Content</span><span style="--swatch:#367abe">Item boxes</span></div>
-      <div id="card-goal" class="goal" hidden></div>
-      <div class="actions"><button id="preview-card" onclick="prepareCard()" disabled>Preview laser output</button><button id="burn-guide" class="primary" onclick="burnGuide()" disabled>Simulate markings</button><button id="burn-card" class="primary" onclick="burnCard()" disabled>Simulate card</button></div>
-      <section id="laser-output" hidden aria-label="Laser output raster"><h2>Laser Output</h2><div id="output-stages"></div></section>
+      <details id="card-goal" class="goal" hidden><summary>Run goal and settings</summary><div id="card-goal-text"></div></details>
+      <div id="audio-recording-ack" hidden>
+        <label><input id="audio-recording-started" type="checkbox"> Voice Memos is recording for this run (optional for ordinary burns)</label>
+        <p class="meta">Start the iPhone recording before checking this box. The Pi will play this attempt's ID cue after you choose Burn card.</p>
+      </div>
       <section id="placement-check" hidden>
-        <h2 id="placement-heading">Markings Reported Done</h2>
+        <h2 id="placement-heading">Card placement</h2>
         <label><input id="card-placed" type="checkbox"> <span id="placement-label">Guide matches; card is placed</span></label>
-        <button onclick="guideDeviation()">Deviation</button>
       </section>
+      <div class="actions"><button id="burn-guide" onclick="burnGuide()" disabled>Simulate markings</button><button id="burn-card" onclick="burnCard()" disabled>Simulate card</button></div>
+      <details id="laser-output" hidden aria-label="Laser output raster"><summary>Exact pixels and dimensions</summary><div id="output-stages"></div></details>
     </div>
   </div>
 </section>
@@ -142,11 +213,14 @@
 <div class="workspace test-workspace">
   <section id="setup">
     <label>Step <select id="step"></select></label>
-    <label>Text <input id="text" type="password" data-secret="test text" autocomplete="off" spellcheck="false" size="40"></label>
-    <label>Size mm <input id="size_mm" type="number" step="0.5"></label>
-    <label>X mm <input id="x_mm" type="number" step="0.5"> Y mm <input id="y_mm" type="number" step="0.5"></label>
+    <label id="test-text-control" data-test-control="text">Text <input id="text" type="password" data-secret="test text" autocomplete="off" spellcheck="false" size="40"></label>
+    <label id="test-size-control" data-test-control="size_mm">Size mm <input id="size_mm" type="number" step="0.5"></label>
+    <label data-test-control="x_mm">X mm <input id="x_mm" type="number" step="0.5"></label>
+    <label data-test-control="y_mm">Y mm <input id="y_mm" type="number" step="0.5"></label>
+    <label id="test-material-control">Material <select id="test-material"><option value="">Driver defaults</option></select></label>
+    <p id="test-material-note" class="meta" hidden></p>
     <div id="settings"></div>
-    <button onclick="plan()">Set goal</button>
+    <button class="primary" onclick="action(plan)">Review test plan</button>
   </section>
   <section id="test-preview" aria-live="polite">
     <h2>Expected pattern</h2>
@@ -154,29 +228,70 @@
     <img id="test-pattern-image" alt="Expected test pattern preview" hidden>
     <p id="test-pattern-empty" class="meta" hidden>This step has no raster pattern; use the stated goal to observe its result.</p>
     <p id="test-preview-note">The image is the requested/schematic pattern, not a camera image or burn result. QR previews visibly encode the supplied test text; use synthetic data.</p>
+    <details id="timing-example"><summary>Archived exploratory audio report</summary><p class="meta">This earlier 2 mm frame report includes exploratory sound annotations and is not the current analysis method, a benchmark, or evidence of laser motion. Current uploads show the recording, sync match, run logs, and measured timings only.</p><iframe id="timing-example-frame" title="Archived self-contained audio report example" data-src="/examples/audio-analysis" loading="lazy"></iframe></details>
   </section>
 </div>
 </section>
 
+<section id="analysis" role="tabpanel" aria-labelledby="tab-analysis" hidden>
+  <div class="section-heading"><h2>Recent run analysis</h2><button type="button" onclick="loadAnalysis()">Refresh</button></div>
+  <p id="analysis-status" class="meta" role="status" aria-live="polite">Select a run to inspect its measured timings.</p>
+  <div class="analysis-layout">
+    <nav id="analysis-runs" aria-label="Last 10 runs"></nav>
+    <section id="analysis-detail" hidden>
+      <h3 id="analysis-attempt"></h3>
+      <p id="analysis-summary" class="meta"></p>
+      <div id="analysis-chart" class="analysis-bar" role="img"></div>
+      <div class="analysis-legend"><span style="--swatch:#367abe">Transfer</span><span style="--swatch:#d68a27">Setup</span><span style="--swatch:#8b1e2d">Feedback wait</span><span style="--swatch:#718394">Other</span></div>
+      <dl id="analysis-timing" class="timing-grid"></dl>
+      <section id="analysis-audio" hidden>
+        <h3>Audio analysis</h3>
+        <div id="analysis-audio-timing" class="timing-grid"></div>
+        <a id="analysis-report-link" target="_blank" rel="noopener" hidden>Open annotated report</a>
+      </section>
+    </section>
+  </div>
+  <p id="analysis-empty" class="meta" hidden>No completed runs in the audit log.</p>
+</section>
+
 <section id="planned" class="hidden">
-  <div>Goal:</div>
+  <h2>Ready to start</h2>
   <div class="goal" id="goal"></div>
-  <button onclick="run()">Do it</button>
-  <button onclick="skip()">Skipped</button>
+  <label id="audio-sync-cue-control" hidden><input id="audio-sync-cue" type="checkbox" checked> Play sync cue (preamble + 6 DTMF digits; recording ID <code id="sync-recording-id"></code>)</label>
+  <button id="start-attempt" class="primary" onclick="action(run)">Start planned test</button>
+  <button onclick="skip()">Skip with reason</button>
 </section>
 
 <section id="running" class="hidden">
-  <p>Running... <span id="pct"></span></p>
+  <h2>Running</h2><progress id="run-progress" max="100" aria-label="Current band progress" hidden></progress><p id="pct"></p>
 </section>
 
 <section id="judge" class="hidden">
-  <div>Software saw:</div>
+  <h2>Inspection</h2>
   <div class="goal" id="saw"></div>
-  <details id="band-timing-details" hidden><summary>Band timing</summary><pre id="band-timing"></pre></details>
+  <section id="timing-panel" hidden aria-label="Run timing breakdown"><h3>Time breakdown</h3><dl class="timing-grid"><div><dt>Total operation</dt><dd id="time-total">-</dd></div><div><dt>Raster transfer</dt><dd id="time-transfer">-</dd></div><div><dt>Protocol setup</dt><dd id="time-setup">-</dd></div><div><dt>Laser feedback wait</dt><dd id="time-wait">-</dd></div><div><dt>Measured outside bands</dt><dd id="time-other">-</dd></div></dl><details id="band-timing-details" hidden><summary>Individual band measurements</summary><pre id="band-timing"></pre></details></section>
+  <details id="receive-trace-details" hidden><summary>Receive trace</summary><pre id="receive-trace"></pre></details>
+  <section id="audio-upload-panel" hidden>
+    <h3>iPhone recording</h3>
+    <div id="audio-phone-upload" hidden>
+      <p>Scan with the iPhone camera to open the upload page, then choose the Voice Memo exported to Files.</p>
+      <img id="audio-phone-upload-qr" alt="QR code for the iPhone Voice Memo upload page">
+      <a id="audio-phone-upload-link"></a>
+    </div>
+    <label>Voice Memo <input id="audio-recording-file" type="file" accept=".m4a,audio/mp4,.wav,audio/wav"></label>
+    <button id="audio-upload-button" onclick="uploadAudio()" disabled>Upload and analyze</button>
+    <p id="audio-upload-status" role="status" aria-live="polite"></p>
+    <p class="meta">Pi transport, analyzer processing and browser round-trip are separate boundaries. Analyzer sub-phases are included within its process time; do not sum overlapping rows.</p>
+    <div id="audio-timing" class="timing-grid" hidden></div>
+    <details id="audio-analysis-details" hidden><summary>Analyzer sub-phases</summary><div id="audio-analysis-timing" class="timing-grid"></div></details>
+    <p id="audio-report-status" class="meta" role="status" aria-live="polite"></p>
+    <iframe id="audio-report" title="Annotated audio report" hidden></iframe>
+  </section>
+  <p id="audio-analysis-unavailable" class="meta" hidden>Audio analysis is unavailable. Keep the original recording in Voice Memos; run logs and timings remain available.</p>
   <p>Did the observation match the expected result?</p>
-  <label>Observation<textarea id="comment" data-secret="observation" hidden rows="3" cols="40" autocomplete="off" spellcheck="false" placeholder="How? What did you see?"></textarea></label>
-  <button onclick="verdict('ok')">OK</button>
-  <button onclick="verdict('deviation')">Deviation</button>
+  <label>Observation<textarea id="comment" rows="3" cols="40" autocomplete="off" spellcheck="false" placeholder="What did you observe? Include measurements or differences."></textarea></label>
+  <button class="primary" onclick="verdict('ok')">Accept result</button>
+  <button onclick="verdict('deviation')">Record deviation</button>
 </section>
 
 <details><summary>Run Log</summary><pre id="log"></pre></details>
@@ -186,15 +301,35 @@
 const $ = id => document.getElementById(id);
 const fields = ["text", "size_mm", "x_mm", "y_mm"];
 let settings = [];
+let testDefinitions = [];
 let machine, materials = [], state = null, prepared = null, phase = null, ownedAttempt = null;
-let frozen = false, working = false, stopped = false, acceptedGuide = false;
+let frozen = false, working = false, stopped = false, plannedAttempt = null;
+let stopGeneration = 0;
 let modeInfo = {real:false, real_available:false};
+let audioAnalysisAvailable = false, audioAvailabilityCheckedAt = 0;
+let audioUploadEligibilityAttemptId = null, audioUploadEligible = false;
+const AUDIO_RECORDING_ATTEMPT_KEY = "laser_audio_recording_attempt_id";
 let templates = [], contentVisible = false, markingsVisible = true, displayedAttempt = null, loadedReviewId = null;
 let displayPolicy = {card_content_visible:false,markings_visible:true};
 let activeTemplate = null;
 let selectedSide = "front";
 const changedFields = new Set();
 let testPreviewTimer = null, testPreviewGeneration = 0;
+let powerSweepOriginInitialized = false;
+let analysisSelectedAttemptId = null;
+const SYNC_CUE_POST_LEAD_MS = 700;
+const SYNC_CUE_DURATION_MS = 2000;
+function storedAudioRecordingAttempt() {
+  try { return sessionStorage.getItem(AUDIO_RECORDING_ATTEMPT_KEY); } catch { return null; }
+}
+function rememberAudioRecordingAttempt(attemptId) {
+  try {
+    if (attemptId) sessionStorage.setItem(AUDIO_RECORDING_ATTEMPT_KEY, attemptId);
+    else sessionStorage.removeItem(AUDIO_RECORDING_ATTEMPT_KEY);
+  } catch {}
+}
+const SYNC_CUE_TO_REQUEST_MS = SYNC_CUE_DURATION_MS + SYNC_CUE_POST_LEAD_MS;
+const DTMF_FREQUENCIES = [[941,1336],[697,1209],[697,1336],[697,1477],[770,1209],[770,1336],[770,1477],[852,1209],[852,1336],[852,1477]];
 const secretFields = [];
 function setPreviewPolarity(value) {
   const polarity = value === "light" ? "light" : "dark";
@@ -261,15 +396,55 @@ function progressText(progress) {
   if (progress.percent == null) return `${band}: waiting for the laser's next status response. This is a band within the current stage, not a finished job.${timing}`;
   return `${band}: ${progress.percent}% of this band only, not the whole card. Waiting for the next laser response; 90 seconds of silence is temporarily assumed complete.${timing}`;
 }
-function seconds(milliseconds) { return `${(milliseconds / 1000).toFixed(1)}s`; }
+function seconds(milliseconds) {
+  const value = Number(milliseconds) || 0;
+  if (value >= 60000) return `${Math.floor(value / 60000)}m ${((value % 60000) / 1000).toFixed(1).padStart(4,"0")}s`;
+  return `${(value / 1000).toFixed(1)}s`;
+}
 function bandTimingText(events) {
   return events.map(event => `Band ${event.band}/${event.bands} (rows ${event.row_start + 1}-${event.row_end}): transfer ${seconds(event.transfer_ms)}, setup ${seconds(event.setup_ms)}, laser wait ${seconds(event.wait_ms)}; ${event.phase === "assumed_complete" ? "completion assumed" : "device reported complete"}.`).join("\n");
+}
+function msText(milliseconds) {
+  const value = Number(milliseconds) || 0;
+  if (value >= 60000) return `${Math.floor(value / 60000)}m ${((value % 60000) / 1000).toFixed(2).padStart(5,"0")}s`;
+  return `${(value / 1000).toFixed(2)} s`;
+}
+function showRunTiming(outcome) {
+  const bands = outcome.band_timings || [];
+  const sum = key => bands.reduce((total,event) => total + (Number(event[key]) || 0), 0);
+  const transfer = sum("transfer_ms"), setup = sum("setup_ms"), wait = sum("wait_ms");
+  const total = Number(outcome.elapsed_ms) || 0;
+  $("time-total").textContent = msText(total);
+  $("time-transfer").textContent = bands.length ? msText(transfer) : "n/a";
+  $("time-setup").textContent = bands.length ? msText(setup) : "n/a";
+  $("time-wait").textContent = bands.length ? msText(wait) : "n/a";
+  $("time-other").textContent = bands.length ? msText(Math.max(0,total-transfer-setup-wait)) : msText(total);
+  $("timing-panel").hidden = false;
+}
+function renderTimingGrid(id, values, labels) {
+  const grid = $(id); grid.replaceChildren();
+  for (const [key,label] of Object.entries(labels)) {
+    const value = values?.[key];
+    if (value == null) continue;
+    const item = document.createElement("div"), term = document.createElement("dt"), detail = document.createElement("dd");
+    term.textContent = label; detail.textContent = msText(value); item.append(term,detail); grid.append(item);
+  }
+  grid.hidden = !grid.children.length;
 }
 async function api(url, body, method) {
   const response = await fetch(url, {method:method || (body === undefined ? "GET" : "POST"),headers:{"Content-Type":"application/json"},...(body === undefined ? {} : {body:JSON.stringify(body)})});
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
   return result;
+}
+async function checkAudioAnalyzer(force = false) {
+  if (!force && Date.now() - audioAvailabilityCheckedAt < 5000) return audioAnalysisAvailable;
+  audioAvailabilityCheckedAt = Date.now();
+  try {
+    const response = await fetch("/api/audio-analyses/availability", {cache:"no-store"});
+    audioAnalysisAvailable = response.ok && Boolean((await response.json()).available);
+  } catch { audioAnalysisAvailable = false; }
+  return audioAnalysisAvailable;
 }
 async function action(work) {
   if (working) return;
@@ -278,37 +453,111 @@ async function action(work) {
   finally { working = false; controls(); }
 }
 function tab(name) {
-  for (const id of ["cards","tests"]) { $(id).hidden = id !== name; $("tab-" + id).setAttribute("aria-selected", id === name); }
+  for (const id of ["cards","tests","analysis"]) { $(id).hidden = id !== name; $("tab-" + id).setAttribute("aria-selected", id === name); $("tab-" + id).tabIndex = id === name ? 0 : -1; }
+  if (name === "analysis") loadAnalysis().catch(error => { $("analysis-status").textContent = error.message; });
+}
+async function loadAnalysis() {
+  const entries = await api("/api/log");
+  const runs = entries.filter(entry => entry.event === "ran" && entry.attempt?.id).slice(-10).reverse();
+  const list = $("analysis-runs"); list.replaceChildren();
+  $("analysis-empty").hidden = runs.length > 0;
+  $("analysis-detail").hidden = runs.length === 0;
+  if (!runs.length) { $("analysis-status").textContent = "No completed runs in the audit log."; analysisSelectedAttemptId = null; return; }
+  for (const run of runs) {
+    const attemptId = run.attempt.id, button = document.createElement("button");
+    button.type = "button"; button.className = "analysis-run";
+    button.setAttribute("aria-pressed", String(attemptId === (analysisSelectedAttemptId || runs[0].attempt.id)));
+    const description = document.createElement("span"), duration = document.createElement("span"), small = document.createElement("small");
+    description.textContent = run.attempt.stage_name || run.attempt.step || "run";
+    small.textContent = attemptId; description.append(small);
+    duration.textContent = msText(run.outcome?.elapsed_ms || 0);
+    button.append(description,duration);
+    button.addEventListener("click", () => { analysisSelectedAttemptId = attemptId; drawAnalysisRun(run, entries); for (const item of list.querySelectorAll("button")) item.setAttribute("aria-pressed",String(item===button)); });
+    list.append(button);
+  }
+  const selected = runs.find(run => run.attempt.id === analysisSelectedAttemptId) || runs[0];
+  analysisSelectedAttemptId = selected.attempt.id;
+  drawAnalysisRun(selected, entries);
+  $("analysis-status").textContent = `Showing the latest ${runs.length} completed run${runs.length === 1 ? "" : "s"}.`;
+}
+function drawAnalysisRun(run, entries) {
+  const attempt = run.attempt || {}, outcome = run.outcome || {}, bands = outcome.band_timings || [];
+  const sum = key => bands.reduce((total,event) => total + (Number(event[key]) || 0), 0);
+  const total = Number(outcome.elapsed_ms) || 0, transfer = sum("transfer_ms"), setup = sum("setup_ms"), wait = sum("wait_ms");
+  const other = Math.max(0,total-transfer-setup-wait);
+  $("analysis-attempt").textContent = attempt.id || "Run";
+  const assumed = bands.some(event => event.phase === "assumed_complete") || String(outcome.saw || "").includes("assumed complete");
+  $("analysis-summary").textContent = `${attempt.mode || "unknown mode"} · ${attempt.stage_name || attempt.step || "run"} · ${assumed ? "completion assumed" : outcome.ok ? "software completed" : "software error"}`;
+  const chart = $("analysis-chart"); chart.replaceChildren();
+  const parts = [["transfer",transfer],["setup",setup],["wait",wait],["other",other]];
+  chart.setAttribute("aria-label",parts.map(([kind,value])=>`${kind} ${msText(value)}`).join(", "));
+  for (const [kind,value] of parts) {
+    const segment = document.createElement("div"); segment.className="analysis-segment"; segment.dataset.kind=kind;
+    segment.style.flexGrow=String(value); segment.style.flexBasis="0"; segment.title=`${kind}: ${msText(value)}`; chart.append(segment);
+  }
+  renderTimingGrid("analysis-timing", {total_ms:total,transfer_ms:transfer,setup_ms:setup,wait_ms:wait,other_ms:other}, {total_ms:"Total",transfer_ms:"Raster transfer",setup_ms:"Protocol setup",wait_ms:"Feedback wait",other_ms:"Outside measured bands"});
+  const analysis = entries.find(entry => entry.event === "audio_analysis" && entry.attempt_id === attempt.id);
+  $("analysis-audio").hidden = !analysis;
+  $("analysis-report-link").hidden = !analysis?.report_url;
+  if (analysis) {
+    renderTimingGrid("analysis-audio-timing", analysis.timing, {pi_receive_ms:"Pi upload receive",pi_prepare_ms:"Pi validation",analyzer_http_ms:"Analyzer round-trip",analysis_process_ms:"Analyzer process",analyzer_total_ms:"Analyzer total",pi_total_ms:"Pi total"});
+    $("analysis-report-link").href = analysis.report_url;
+  } else $("analysis-audio-timing").replaceChildren();
 }
 function controls() {
   const active = Boolean(state?.attempt || state?.running);
-  const guideReady = phase === "guide" && ownedAttempt === state?.attempt?.id && state?.outcome?.ok && !state?.running && !stopped;
-  const reuseGuide = prepared && !prepared.preview.stages.some(stage => stage.name === "guide") && !active && !frozen;
+  const stages = prepared?.preview.stages || [];
+  const accepted = prepared?.preview.accepted_stages || [];
+  const guideIndex = stages.findIndex(stage => stage.name === "guide");
+  const guideAccepted = guideIndex < 0 || accepted.includes(guideIndex);
   $("card-inputs").disabled = false;
   for (const field of $("card-inputs").querySelectorAll("input,select,textarea")) field.disabled = working || frozen || active || (field.definition && !field.definition.editable);
-  $("card-file").disabled ||= !activeTemplate;
   $("preview-card").disabled = working || frozen || active || !activeTemplate;
-  $("edit-card").disabled = working || active;
   $("mode").disabled = working || frozen || active;
   $("clear-pi").disabled = working || Boolean(state?.running);
+  $("start-attempt").disabled = working || Boolean(state?.running || state?.outcome);
+  const recordingAttempt = plannedAttempt || state?.attempt;
+  const recordingEnabled = attemptRequires("requires_recording_ack", recordingAttempt) || Boolean((recordingAttempt?.review_id || prepared?.review_id) && activeTemplate?.audio_recording_enabled);
+  $("audio-recording-ack").hidden = !modeInfo.real || Boolean(state?.running || state?.outcome) || !recordingEnabled;
+  $("audio-recording-started").disabled = working || Boolean(state?.running || state?.outcome);
+  $("setup").inert = working || active;
   $("mode").value = modeInfo.mode || "simulator";
   $("mode").options[1].disabled = !modeInfo.real_available;
+  $("audio-sync-cue-control").hidden = !modeInfo.real;
   $("burn-guide").textContent = modeInfo.real ? "Burn markings" : "Simulate markings";
   $("burn-card").textContent = (modeInfo.real ? "Burn " : "Simulate ") + ($("side-control").hidden ? "card" : selectedSide);
   $("burn-guide").disabled = working || active || frozen || !prepared || !prepared.preview.stages.some(stage => stage.name === "guide");
-  $("burn-card").disabled = working || stopped || !prepared || !(guideReady || acceptedGuide || reuseGuide) || !$("card-placed").checked;
-  $("placement-check").hidden = !(guideReady || acceptedGuide || reuseGuide);
-  $("placement-heading").textContent = reuseGuide ? "Card Placement" : "Markings Reported Done";
+  $("burn-guide").hidden = Boolean(prepared) && guideIndex < 0;
+  $("burn-card").disabled = working || active || stopped || !prepared || !guideAccepted || !$("card-placed").checked;
+  $("placement-check").hidden = !prepared || active || !guideAccepted;
+  $("placement-heading").textContent = "Card placement";
   const index = prepared?.preview.stages.findIndex(stage => stage.name !== "guide" && (stage.side || "front") === selectedSide) ?? -1;
-  const priorAccepted = index >= 0 && prepared.preview.stages.slice(0,index).every((stage,stageIndex) => stage.name === "guide" && guideReady || (prepared.preview.accepted_stages || []).includes(stageIndex));
+  const priorAccepted = index >= 0 && prepared.preview.stages.slice(0,index).every((stage,stageIndex) => accepted.includes(stageIndex));
   if (index < 0 || !priorAccepted) $("burn-card").disabled = true;
   $("placement-label").textContent = selectedSide === "back" ? "Front inspected; card flipped and back placed in the same guide" : "Guide matches; front is placed";
   $("card-side").disabled = working || Boolean(state?.running);
-  if (guideReady) $("judge").classList.add("hidden");
+  $("preview-card").classList.toggle("primary", !prepared);
+  $("burn-guide").classList.toggle("primary", !$("burn-guide").disabled && !guideAccepted);
+  $("burn-card").classList.toggle("primary", !$("burn-card").disabled);
+  $("preview-empty").hidden = Boolean(prepared || state?.attempt?.job);
+  $("stage-status").textContent = active ? (state.running ? "Running" : state.outcome ? "Inspection required" : "Start pending") : !prepared ? "No review" : !priorAccepted ? "Prior stage not accepted" : !guideAccepted ? "Markings not accepted" : !$("card-placed").checked ? "Placement not confirmed" : `${selectedSide === "back" ? "Back" : "Front"} ready`;
+  renderWorkflow();
+}
+
+function renderWorkflow(view) {
+  const current = view || state?.phase || (state?.running ? "running" : state?.outcome ? "awaiting_verdict" : state?.attempt ? "planned" : "idle");
+  const step = current === "judge" || current === "awaiting_verdict" ? 3 : ["running","planned"].includes(current) ? 2 : prepared ? 1 : 0;
+  for (const item of document.querySelectorAll("[data-workflow-step]")) {
+    if (Number(item.dataset.workflowStep) === step) item.setAttribute("aria-current", "step"); else item.removeAttribute("aria-current");
+  }
+  $("machine-mode").textContent = modeInfo.real ? "REAL LASER" : "SIMULATION";
+  document.documentElement.dataset.machineMode = modeInfo.real ? "real" : "simulator";
 }
 function renderTemplate(template, projection = null) {
   activeTemplate = template; changedFields.clear(); $("template").value = template.id;
   $("template-fields").replaceChildren();
+  $("layout-fields").replaceChildren();
+  $("layout-controls").hidden = !template.fields.some(field => field.type === "number");
   secretFields.splice(0, secretFields.length, ...secretFields.filter(item => document.contains(item.field)));
   for (const definition of template.fields) {
     const label = document.createElement("label"); label.textContent = definition.label; label.dataset.control = definition.type;
@@ -325,9 +574,23 @@ function renderTemplate(template, projection = null) {
     field.dataset.provided = String(Boolean(supplied?.provided));
     if (definition.masked) { field.dataset.secret = definition.label; if (definition.type === "multiline") field.hidden = true; }
     if (value == null && supplied?.provided) field.placeholder = "Restricted";
-    label.append(field); $("template-fields").append(label);
+    const layout = definition.type === "number" || template.elements.some(element => element.bindings?.["content.font"] === definition.id);
+    label.append(field); $(layout ? "layout-fields" : "template-fields").append(label);
+    if (definition.file_input) {
+      const fileLabel = document.createElement("label"); fileLabel.textContent = definition.label + " file";
+      const fileInput = document.createElement("input");
+      fileInput.id = "file-" + definition.id; fileInput.type = "file"; fileInput.accept = ".txt,.vcf,text/plain,text/vcard"; fileInput.dataset.fieldId = definition.id;
+      fileInput.addEventListener("change", () => action(async () => {
+        const file = fileInput.files?.[0]; if (!file) return;
+        const payload = new TextDecoder("utf-8", {fatal:true}).decode(await file.arrayBuffer());
+        if (!payload.trim() || payload.includes("\0")) throw new Error("Choose a nonempty UTF-8 text file without NUL characters.");
+        field.value = payload; field.dispatchEvent(new Event("input", {bubbles:true})); fileInput.value = "";
+        message("File loaded. Output review pending.");
+      }));
+      fileLabel.append(fileInput); $("template-fields").append(fileLabel);
+    }
   }
-  installSecretFields($("template-fields")); applyDisplay(template.display);
+  installSecretFields($("card-inputs")); applyDisplay(template.display);
   const sides = [...new Set(template.elements.map(element => element.side || "front"))];
   $("side-control").hidden = !sides.includes("back");
   showSideFields();
@@ -335,10 +598,11 @@ function renderTemplate(template, projection = null) {
 
 function showSideFields() {
   if (!activeTemplate) return;
-  for (const field of $("template-fields").querySelectorAll("[data-field-id]")) {
-    const sides = activeTemplate.elements.filter(element => element.enabled_by === field.dataset.fieldId || Object.values(element.bindings || {}).includes(field.dataset.fieldId)).map(element => element.side || "front");
-    field.closest("label").hidden = sides.length > 0 && !sides.includes(selectedSide);
+  for (const field of $("card-inputs").querySelectorAll("[data-field-id]")) {
+    const elements = activeTemplate.elements.filter(element => element.enabled_by === field.dataset.fieldId || Object.values(element.bindings || {}).includes(field.dataset.fieldId));
+    field.closest("label").hidden = elements.length > 0 && !elements.some(element => (element.side || "front") === selectedSide && (element.enabled_by === field.dataset.fieldId || !element.enabled_by || $("field-" + element.enabled_by)?.checked));
   }
+  $("layout-controls").hidden = !Array.from($("layout-fields").children).some(label => !label.hidden);
 }
 function selectCardSide(side) {
   selectedSide = side === "back" ? "back" : "front"; $("card-side").value = selectedSide;
@@ -370,7 +634,8 @@ function drawPreview(job, preview) {
   applyDisplay(preview.display || displayPolicy);
 }
 function dirty() {
-  prepared = null; acceptedGuide = false; $("card-placed").checked = false;
+  prepared = null; $("card-placed").checked = false;
+  $("audio-recording-started").checked = false; rememberAudioRecordingAttempt(null);
   $("card-scene").replaceChildren(); $("card-goal").hidden = true;
   $("output-stages").replaceChildren(); $("laser-output").hidden = true;
   setLayerVisible("content", false); setLayerVisible("guide", displayPolicy.markings_visible);
@@ -382,7 +647,9 @@ async function prepare() {
     const field = $("field-" + id);
     values[id] = field.type === "checkbox" ? field.checked : field.definition.type === "number" ? Number(field.value) : field.value;
   }
+  const requestStarted = performance.now();
   const preview = await api("/api/jobs/form", {template:activeTemplate.id,review_id:loadedReviewId,fields:values,piece:$("piece").value,backing:$("backing").value,placement:$("placement").value,guide:$("include-guide").checked});
+  preview.timing = {...preview.timing,client_review_ms:Math.round(performance.now()-requestStarted)};
   loadReview(preview, true);
 }
 function showOutput(preview) {
@@ -411,7 +678,8 @@ function loadReview(preview, preserveSide = false) {
   const job = preview.job;
   const previousTemplate = activeTemplate?.id;
   const previousSide = selectedSide;
-  $("card-placed").checked = false; acceptedGuide = false;
+  $("audio-recording-started").checked = false; rememberAudioRecordingAttempt(null);
+  $("card-placed").checked = false;
   renderTemplate(preview.template, preview.fields);
   const next = preview.stages.find((stage,index) => stage.name !== "guide" && !(preview.accepted_stages || []).includes(index));
   selectedSide = preserveSide && previousTemplate === preview.template.id && preview.stages.some(stage => stage.side === previousSide)
@@ -423,7 +691,10 @@ function loadReview(preview, preserveSide = false) {
   loadedReviewId = preview.review_id;
   showOutput(preview);
   drawPreview(job,preview);
-  $("card-goal").textContent = preview.stages.map(stage => stage.goal).join("\n"); $("card-goal").hidden = false;
+  $("card-goal-text").textContent = preview.stages.map(stage => stage.goal).join("\n"); $("card-goal").hidden = false;
+  const timing = preview.timing;
+  $("review-timing").textContent = timing ? `Raster generation ${msText(timing.raster_generation_ms)} · preview encoding ${msText(timing.preview_encoding_ms)}${timing.client_review_ms == null ? "" : ` · browser round-trip ${msText(timing.client_review_ms)}`}` : "";
+  $("review-timing").hidden = !timing;
   $("profiles").textContent = [["piece","Card"],["backing","Backing"]].map(([key,label]) => {
     const entry = materials.find(entry => entry.material.id === job[key]);
     const values = {...entry?.values,...(key === "piece" ? job.values : {})};
@@ -431,15 +702,16 @@ function loadReview(preview, preserveSide = false) {
   }).join(" / ");
   message("Pi raster preview ready. Markings go on bare backing. No burn started.");
 }
-function prepareCard() { return action(prepare); }
-function editCard() { if (state?.attempt || working) return; frozen = false; phase = null; ownedAttempt = null; dirty(); }
+function prepareCard() { return action(async () => { await prepare(); $("review-surface").scrollIntoView?.({block:"start",behavior:"smooth"}); }); }
 async function startStage(stage) {
+  const generation = stopGeneration;
   const index = prepared.preview.stages.findIndex(item => stage === "guide" ? item.name === "guide" : item.name !== "guide" && (item.side || "front") === selectedSide);
   if (index < 0) throw new Error("This review has no " + stage + " stage.");
   const attempt = await api("/api/plan", {review_id:prepared.review_id,stage:index,placement_confirmed:$("card-placed").checked});
-  ownedAttempt = attempt.id; phase = stage; frozen = true; stopped = false;
-  await api("/api/run", {});
-  await poll();
+  if (generation !== stopGeneration) { await poll(); return; }
+  plannedAttempt = attempt; phase = stage; ownedAttempt = null; frozen = false; stopped = false;
+  state = {...state,phase:"planned",attempt,running:false,outcome:null};
+  presentPlan(attempt);
 }
 function burnGuide() { return action(async () => {
   if (!prepared || frozen || state?.attempt) return;
@@ -449,25 +721,19 @@ function burnGuide() { return action(async () => {
 function burnCard() { return action(async () => {
   if (!prepared || stopped || !$("card-placed").checked) return;
   if (modeInfo.real && !confirm(`Burn the previewed ${selectedSide} on the placed card?`)) return;
-  if (!acceptedGuide && prepared.preview.stages.some(stage => stage.name === "guide")) {
-    if (phase !== "guide" || ownedAttempt !== state?.attempt?.id || !state?.outcome?.ok) return;
-    await api("/api/verdict", {status:"ok",comment:"Guide matches; card placed by operator."});
-    acceptedGuide = true;
-  }
   await startStage("content");
 }); }
-function guideDeviation() { const note = prompt("Describe the guide deviation."); if (note?.trim()) { $("comment").value = note; verdict("deviation"); } }
 async function clearPi() {
   return action(async () => {
-    if (!confirm("Sign out and clear the Pi's idle state? This discards the current review, plan and pending outcome. The redacted run log is kept. No laser command is sent.")) return;
+    if (!confirm("Clear the idle session? This discards the current review, plan and pending outcome. The redacted run log is kept. No laser command is sent.")) return;
     await api("/api/state", undefined, "DELETE");
     for (const item of secretFields) item.field.value = "";
     secretFields.length = 0;
-    prepared = null; phase = null; ownedAttempt = null; frozen = false; stopped = false; acceptedGuide = false;
+    prepared = null; phase = null; ownedAttempt = null; frozen = false; stopped = false;
     loadedReviewId = null; displayedAttempt = null; activeTemplate = null; selectedSide = "front";
     changedFields.clear(); contentVisible = false; markingsVisible = true;
-    $("template").value = ""; $("template-fields").replaceChildren();
-    $("card-file").value = ""; $("card-placed").checked = false;
+    $("template").value = ""; $("template-fields").replaceChildren(); $("layout-fields").replaceChildren(); $("layout-controls").hidden = true;
+    $("card-placed").checked = false;
     $("profiles").textContent = ""; $("include-guide").checked = true; $("side-control").hidden = true;
     $("card-scene").replaceChildren(); $("output-stages").replaceChildren();
     $("laser-output").hidden = true; $("card-goal").hidden = true;
@@ -480,31 +746,178 @@ async function clearPi() {
     message("Pi state cleared. Redacted run history retained.");
   });
 }
-function requestStop() { return action(async () => {
-  stopped = true; acceptedGuide = false;
-  const result = await api("/api/stop", {});
-  message(result.sent ? "STOP command sent. Confirm motion has stopped." : "No STOP handle available. Confirm device state.", true);
-}); }
+function isStandaloneApp() {
+  return navigator.standalone === true || matchMedia("(display-mode: standalone)").matches;
+}
+function updateFullscreenControl() {
+  const button = $("fullscreen"), standalone = isStandaloneApp();
+  const active = document.fullscreenElement === document.documentElement;
+  button.textContent = standalone ? "Full-screen app" : active ? "Exit full screen" : "Full screen";
+  button.disabled = standalone;
+  button.setAttribute("aria-pressed", String(standalone || active));
+  button.title = standalone ? "This home-screen app already uses the full screen." : "";
+}
+async function toggleFullscreen() {
+  if (isStandaloneApp()) return;
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else if (document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen({navigationUI:"hide"});
+    else {
+      message("For full-screen on iPhone, use Safari Share > Add to Home Screen, then open Laser from the Home Screen.", true);
+      return;
+    }
+  } catch {
+    message("Full screen was not granted. On iPhone, use Safari Share > Add to Home Screen, then open Laser from the Home Screen.", true);
+  }
+  updateFullscreenControl();
+}
+document.addEventListener("fullscreenchange", updateFullscreenControl);
+async function requestStop() {
+  ++stopGeneration;
+  stopped = true;
+  controls();
+  try {
+    const result = await api("/api/stop", {});
+    message(result.sent ? "STOP command sent. Confirm motion has stopped." : "No STOP handle available. Confirm device state.", true);
+  } catch (error) { message("STOP request failed. Check the physical machine. " + error.message, true); }
+}
 async function post(url, body) {
-  const r = await fetch(url, {method: "POST", body: JSON.stringify(body || {})});
-  const j = await r.json();
-  if (!r.ok) alert(j.error || r.status);
-  return r.ok ? j : null;
+  try { return await api(url, body || {}); }
+  catch (error) { message(error.message, true); return null; }
+}
+function testDefinition(step = (plannedAttempt || state?.attempt)?.step || $("step").value) {
+  return testDefinitions.find(definition => definition.step === step);
+}
+function attemptRequires(name, attempt = plannedAttempt || state?.attempt) {
+  return Boolean(attempt?.step && testDefinitions.find(definition => definition.step === attempt.step)?.[name]);
+}
+async function uploadAudio() {
+  const file = $("audio-recording-file").files?.[0];
+  if (!file || !state?.attempt?.id) return;
+  const button = $("audio-upload-button"), status = $("audio-upload-status");
+  button.disabled = true; status.textContent = "Uploading recording and matching run log…";
+  let uploadStarted = performance.now();
+  try {
+    if (!await checkAudioAnalyzer(true)) {
+      $("audio-upload-panel").hidden = true;
+      $("audio-analysis-unavailable").hidden = false;
+      throw new Error("Audio analysis container is unavailable. The recording remains in Voice Memos.");
+    }
+    uploadStarted = performance.now();
+    const response = await fetch("/api/audio-analyses", {method:"POST",headers:{"Content-Type":file.type || "application/octet-stream","X-Attempt-ID":state.attempt.id},body:file});
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+    const timing = result.timing || {};
+    renderTimingGrid("audio-timing", timing, {pi_receive_ms:"Pi upload receive",multipart_parse_ms:"Pi multipart parse",pi_prepare_ms:"Pi validation and forwarding",analyzer_http_ms:"Pi-to-analyzer round-trip",persistence_ms:"Analyzer persistence",analysis_process_ms:"Analyzer process",report_read_ms:"Analyzer report read",analyzer_total_ms:"Analyzer total",pi_total_ms:"Pi upload total",request_total_ms:"Analyzer request total"});
+    renderTimingGrid("audio-analysis-timing", timing.analysis, {probe_ms:"Media probe",decode_ms:"Audio decode",sync_correlation_ms:"Sync/log correlation",playback_encode_ms:"Playback encoding",analysis_compute_ms:"Compute subtotal",report_write_ms:"Report write"});
+    $("audio-analysis-details").hidden = $("audio-analysis-timing").hidden;
+    $("audio-report-status").textContent = "Loading report…";
+    const reportFrame = $("audio-report"), reportStarted = performance.now();
+    reportFrame.onload = () => {
+      const elapsed = Math.round(performance.now()-reportStarted);
+      const item = document.createElement("div"), term = document.createElement("dt"), detail = document.createElement("dd");
+      term.textContent = "Browser report download"; detail.textContent = msText(elapsed); item.append(term,detail); $("audio-timing").append(item); $("audio-timing").hidden = false;
+      $("audio-report-status").textContent = `Report downloaded in ${msText(elapsed)}.`;
+    };
+    reportFrame.src = result.report_url;
+    reportFrame.hidden = false;
+    status.textContent = `Upload and analysis response: ${msText(performance.now()-uploadStarted)}. Report is ready.`;
+  } catch (error) {
+    status.textContent = `Upload or analysis failed after ${msText(performance.now()-uploadStarted)}: ${error.message}`;
+  } finally {
+    button.disabled = false;
+  }
+}
+function recordingIdForAttempt(attemptId) {
+  const timestamp = String(attemptId).split("-")[0];
+  if (!/^\d+$/.test(timestamp)) throw new Error("The planned attempt has no numeric recording ID.");
+  return timestamp.slice(-6).padStart(6, "0");
+}
+function scheduleCueTone(context, frequency, start, duration, level) {
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  oscillator.frequency.value = frequency;
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.linearRampToValueAtTime(level, start + 0.015);
+  gain.gain.setValueAtTime(level, start + duration - 0.025);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  oscillator.connect(gain); gain.connect(context.destination);
+  oscillator.start(start); oscillator.stop(start + duration + 0.01);
+}
+async function playSyncCue(recordingId) {
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContext) throw new Error("This browser does not support an audio sync cue.");
+  if (!/^\d{6}$/.test(recordingId)) throw new Error("Recording ID must contain six digits.");
+  const context = new AudioContext();
+  try {
+    await context.resume();
+    const start = context.currentTime + 0.05;
+    for (const [offset, frequency] of [[0,880],[0.22,660],[0.44,880]]) {
+      scheduleCueTone(context, frequency, start + offset, 0.12, 0.18);
+    }
+    for (const [index, digit] of [...recordingId].entries()) {
+      const toneStart = start + 0.70 + index * 0.22;
+      for (const frequency of DTMF_FREQUENCIES[Number(digit)]) scheduleCueTone(context, frequency, toneStart, 0.14, 0.075);
+    }
+    await new Promise(resolve => setTimeout(resolve, SYNC_CUE_TO_REQUEST_MS));
+  } finally {
+    await context.close();
+  }
 }
 function testParams() {
   const params = {};
   for (const f of fields) params[f] = f === "text" ? $(f).value : Number($(f).value);
+  const definition = testDefinition();
   params.values = {};
-  for (const s of settings) params.values[s.key] = Number($("set-" + s.key).value);
+  for (const s of settings.filter(setting => definition?.settings?.includes(setting.key))) params.values[s.key] = Number($("set-" + s.key).value);
   return params;
+}
+function testMaterialChanged() {
+  const selected = materials.find(entry => entry.material.id === $("test-material").value);
+  $("test-material-note").textContent = selected?.material.note || "";
+  $("test-material-note").hidden = !selected?.material.note;
+  for (const setting of settings) {
+    $("set-" + setting.key).value = selected?.values?.[setting.key] ?? setting.default;
+  }
+  scheduleTestPreview();
 }
 async function updateTestPreview() {
   const step = $("step").value;
   if (!step) return;
+  const definition = testDefinition(step);
+  const controls = new Set(definition?.controls || []);
+  for (const field of $("setup").querySelectorAll("[data-test-control]")) {
+    field.hidden = !controls.has(field.dataset.testControl);
+  }
+  $("test-material-control").hidden = !definition?.materials;
+  const visibleSettings = new Set(definition?.settings || []);
+  for (const label of $("settings").querySelectorAll("[data-test-setting]")) label.hidden = !visibleSettings.has(label.dataset.testSetting);
+  for (const key of ["x_mm", "y_mm", "size_mm"]) {
+    const fixed = definition?.[`fixed_${key}`];
+    const input = $(key);
+    input.disabled = fixed != null;
+    if (fixed != null) input.value = fixed;
+  }
+  const powerValues = definition?.power_values || [];
+  const hasPowerValues = powerValues.length > 0;
+  const powerSweep = powerValues.length > 1;
+  for (const setting of settings.filter(item => item.key === "power")) {
+    const control = $("set-" + setting.key);
+    control.disabled = hasPowerValues;
+    if (hasPowerValues) control.value = powerValues[0];
+  }
+  if (hasPowerValues) {
+    if (!powerSweepOriginInitialized) { $("x_mm").value = 20; powerSweepOriginInitialized = true; }
+  }
+  if (powerSweep) {
+    $("y_mm").value = 0;
+  }
   const generation = ++testPreviewGeneration;
   const image = $("test-pattern-image"), empty = $("test-pattern-empty");
   try {
-    const preview = await api("/api/tests/preview", {step, params:testParams()});
+    const request = {step, params:testParams()};
+    if (definition?.materials && $("test-material").value) request.material = $("test-material").value;
+    const preview = await api("/api/tests/preview", request);
     if (generation !== testPreviewGeneration) return;
     $("test-preview-goal").textContent = preview.goal || "No goal returned.";
     $("test-preview-note").textContent = preview.note || "Pattern preview only; it is not a burn result.";
@@ -525,20 +938,88 @@ function scheduleTestPreview() {
   testPreviewTimer = setTimeout(() => updateTestPreview(), 180);
 }
 function show(id) {
+  const entering = $(id).classList.contains("hidden");
   for (const s of ["setup", "planned", "running", "judge"]) $(s).classList.toggle("hidden", s !== id);
+  renderWorkflow(id);
+  if (entering && id !== "setup") $(id).scrollIntoView?.({block:"start",behavior:"smooth"});
 }
 async function plan() {
+  const definition = testDefinition($("step").value);
+  if (definition?.requires_real && !modeInfo.real) {
+    message("Select Real mode before planning this physical test.", true);
+    return;
+  }
+  if (definition?.requires_analyzer && !await checkAudioAnalyzer(true)) {
+    message("The required analysis service is unavailable. This test was not planned.", true);
+    return;
+  }
   const params = testParams();
-  const a = await post("/api/plan", {step: $("step").value, params});
-  if (a) { $("goal").textContent = a.goal; show("planned"); }
+  const request = {step: $("step").value, params};
+  if (definition?.materials && $("test-material").value) request.material = $("test-material").value;
+  const a = await post("/api/plan", request);
+  if (a) {
+    state = {...state,phase:"planned",attempt:a,running:false,outcome:null};
+    presentPlan(a);
+  }
 }
-async function run() { if (await post("/api/run")) poll(); }
+function presentPlan(a) {
+  const changed = plannedAttempt?.id !== a.id;
+  plannedAttempt = a; $("goal").textContent = a.goal;
+  if (changed) {
+    $("sync-recording-id").textContent = recordingIdForAttempt(a.id);
+    audioUploadEligibilityAttemptId = null; audioUploadEligible = false;
+    const requiresSync = attemptRequires("requires_sync_marker", a);
+    const requiresRecordingAck = attemptRequires("requires_recording_ack", a);
+    const recordingEnabled = requiresRecordingAck || Boolean(a.review_id && activeTemplate?.audio_recording_enabled);
+    $("audio-recording-ack").hidden = !modeInfo.real || !recordingEnabled;
+    if (!(a.review_id && $("audio-recording-started").checked)) $("audio-recording-started").checked = false;
+    $("audio-sync-cue").checked = modeInfo.real || requiresSync; $("audio-sync-cue").disabled = requiresSync;
+    $("audio-upload-panel").hidden = true; $("audio-report").hidden = true;
+    $("audio-recording-file").value = ""; $("audio-upload-status").textContent = ""; $("audio-upload-button").disabled = true;
+  }
+  $("start-attempt").textContent = `${modeInfo.real ? "Start" : "Simulate"} ${a.review_id ? (a.stage_name || "card stage") : "test"}`;
+  show("planned");
+}
+async function run() {
+  const generation = stopGeneration;
+  const needsAnalyzer = attemptRequires("requires_analyzer");
+  const needsRecordingAck = attemptRequires("requires_recording_ack");
+  const recordingStarted = $("audio-recording-started").checked;
+  if (needsAnalyzer && !await checkAudioAnalyzer(true)) {
+    message("The required analysis service is unavailable; this test was not started.", true);
+    return;
+  }
+  if (needsRecordingAck && !$("audio-recording-started").checked) { message("Confirm the required recording is active before starting the test.", true); return; }
+  const definition = testDefinitions.find(definition => definition.step === plannedAttempt?.step);
+  const stockConfirmation = definition?.stock_confirmation;
+  if (stockConfirmation && modeInfo.real) {
+    const sweepNote = definition?.power_values?.length > 1
+      ? "\n\nRun this adjacent block with bounded receive tracing enabled? The frame's top edge is the 1000-power reference."
+      : "";
+    if (!confirm(`${plannedAttempt.goal}\n\n${stockConfirmation}${sweepNote}`)) return;
+  }
+  const syncMarker = modeInfo.real && (attemptRequires("requires_sync_marker") || recordingStarted || $("audio-sync-cue").checked);
+  let runRequest = {attempt_id:plannedAttempt?.id};
+  if (syncMarker) {
+    try {
+      const recordingId = recordingIdForAttempt(plannedAttempt?.id);
+      await playSyncCue(recordingId);
+      runRequest = {attempt_id:plannedAttempt?.id,sync_marker:true,recording_id:recordingId,cue_duration_ms:SYNC_CUE_DURATION_MS,post_cue_lead_ms:SYNC_CUE_POST_LEAD_MS};
+    }
+    catch (error) { message(`Cannot play sync cue; run not started: ${error.message}`, true); return; }
+  }
+  if (generation !== stopGeneration) { message("Start cancelled by STOP.", true); return; }
+  if (await post("/api/run", runRequest)) {
+    rememberAudioRecordingAttempt(recordingStarted && syncMarker ? plannedAttempt.id : null);
+    poll();
+  }
+}
 async function verdict(status) {
   if (status === "deviation" && !$("comment").value.trim()) return alert("Describe the deviation.");
   return action(async () => {
     const own = ownedAttempt === state?.attempt?.id;
     await api("/api/verdict", {status, comment:$("comment").value});
-    if (own) { phase = null; ownedAttempt = null; frozen = false; acceptedGuide = false; loadReview(await api("/api/jobs/review")); }
+    if (own) { phase = null; ownedAttempt = null; frozen = false; loadReview(await api("/api/jobs/review")); }
     $("comment").value = ""; stopped = false;
     await poll(); await refreshLog(); message("Recorded: " + status + ".");
   });
@@ -563,7 +1044,7 @@ async function poll() {
     if (state?.attempt?.id === preview.attempt_id) {
       showOutput(preview);
       drawPreview({items:[]}, preview);
-      $("card-goal").textContent = s.attempt.goal; $("card-goal").hidden = false;
+      $("card-goal-text").textContent = s.attempt.goal; $("card-goal").hidden = false;
       displayedAttempt = preview.attempt_id;
     }
   }
@@ -575,68 +1056,106 @@ async function poll() {
   if (s.running) {
     show("running"); const progress = progressText(s.progress);
     $("pct").textContent = progress;
+    const percent = typeof s.progress === "number" ? s.progress : s.progress?.percent;
+    $("run-progress").hidden = percent == null;
+    $("run-progress").setAttribute("aria-label", s.progress?.band == null ? "Current operation progress" : "Current band progress");
+    if (percent != null) $("run-progress").value = percent;
     if (!stopped) message(`${modeInfo.real ? "Burning" : "Simulating"} ${phase || "attempt"}. ${progress}`);
   }
   else if (s.outcome) {
     $("goal").textContent = s.attempt.goal;
     $("saw").textContent = (s.outcome.ok ? "Software completed: " : "Device error: ") + s.outcome.saw;
+    showRunTiming(s.outcome);
     const timings = s.outcome.band_timings || s.band_timings || [];
     $("band-timing-details").hidden = timings.length === 0;
     $("band-timing").textContent = bandTimingText(timings);
+    const trace = s.outcome.receive_trace || s.receive_trace;
+    $("receive-trace-details").hidden = !trace || !trace.events?.length;
+    $("receive-trace").textContent = trace ? JSON.stringify(trace, null, 2) : "";
+    const needsAnalyzer = attemptRequires("requires_analyzer", s.attempt);
+    const hasRecording = storedAudioRecordingAttempt() === s.attempt?.id;
+    if (s.attempt?.id && audioUploadEligibilityAttemptId !== s.attempt.id) {
+      const entries = await api("/api/log");
+      const expectedId = recordingIdForAttempt(s.attempt.id);
+      const marked = entries.some(entry => entry.event === "sync_marker" && entry.attempt_id === s.attempt.id && entry.recording_id === expectedId);
+      const completedReal = entries.some(entry => entry.event === "ran" && entry.attempt?.id === s.attempt.id && entry.attempt?.mode === "real");
+      audioUploadEligible = marked && completedReal;
+      audioUploadEligibilityAttemptId = s.attempt.id;
+    }
+    const canUpload = hasRecording || audioUploadEligible;
+    if (needsAnalyzer || canUpload) await checkAudioAnalyzer();
+    const uploadAvailable = canUpload && audioAnalysisAvailable;
+    $("audio-upload-panel").hidden = !uploadAvailable;
+    $("audio-phone-upload").hidden = !uploadAvailable;
+    $("audio-analysis-unavailable").hidden = !canUpload || audioAnalysisAvailable;
+    if (uploadAvailable && s.attempt?.id) {
+      const encodedId = encodeURIComponent(s.attempt.id), uploadPath = `/audio-upload/${encodedId}`;
+      $("audio-phone-upload-link").href = uploadPath;
+      $("audio-phone-upload-link").textContent = new URL(uploadPath, location.href).href;
+      $("audio-phone-upload-qr").src = `/api/audio-analyses/${encodedId}/upload-qr.svg`;
+    }
+    $("audio-recording-file").onchange = () => { $("audio-upload-button").disabled = !$("audio-recording-file").files?.length; };
     show("judge");
-    if (!stopped) message(s.outcome.ok ? (phase === "guide" ? "Markings reported done. Awaiting card placement." : "Run reported done. Observation pending.") : s.outcome.saw, !s.outcome.ok);
+    if (!stopped) message(s.outcome.ok ? "Run reported done. Confirm physical rest and inspect the result." : s.outcome.saw, !s.outcome.ok);
   }
-  else if (s.attempt) { $("goal").textContent = s.attempt.goal; show("planned"); message("Planned; waiting for operator start."); }
-  else show("setup");
+  else if (s.attempt) { presentPlan(s.attempt); message("Planned; waiting for operator start."); }
+  else {
+    $("audio-upload-panel").hidden = true;
+    $("audio-recording-ack").hidden = true;
+    $("audio-analysis-unavailable").hidden = true;
+    show("setup");
+  }
   controls();
 }
-async function refreshLog() { const log = await api("/api/log"); $("log").textContent = log.slice(-20).reverse().map(entry => JSON.stringify(entry)).join("\n"); }
+async function refreshLog() { const log = await api("/api/log"); $("log").textContent = log.slice(-10).reverse().map(entry => JSON.stringify(entry)).join("\n"); }
 async function init() {
+  updateFullscreenControl();
+  await checkAudioAnalyzer(true);
   const d = await (await fetch("/api/steps")).json();
   const m = d.machine;
   $("model").textContent = m.model;
   $("reach").textContent = `Reach ${m.reach_mm[0]} x ${m.reach_mm[1]} mm`;
   settings = m.settings;
+  testDefinitions = d.steps;
   for (const s of settings) {
     const l = document.createElement("label");
     l.textContent = `${s.label} (${s.min}-${s.max}) `;
+    l.dataset.testSetting = s.key;
     const i = document.createElement("input");
     Object.assign(i, {id: "set-" + s.key, type: "number", min: s.min, max: s.max, value: s.default, title: s.note});
     l.append(i, ` ${s.note}`);
     $("settings").append(l);
   }
-  for (const s of d.steps) $("step").add(new Option(s.title, s.step));
+  for (const s of d.steps) if (!s.requires_analyzer || audioAnalysisAvailable) $("step").add(new Option(s.title, s.step));
   for (const f of fields) $(f).value = d.defaults[f];
   $("setup").addEventListener("input", scheduleTestPreview);
   $("setup").addEventListener("change", scheduleTestPreview);
   await updateTestPreview();
   machine = m;
   materials = await api("/api/materials");
+  for (const entry of materials) $("test-material").add(new Option(`${entry.material.name} (${entry.material.role})`, entry.material.id));
+  $("test-material").addEventListener("change", testMaterialChanged);
   templates = await api("/api/templates");
   for (const template of templates) $("template").add(new Option(template.name, template.id));
   for (const entry of materials) $(entry.material.role === "piece" ? "piece" : "backing").add(new Option(entry.material.name, entry.material.id));
-  $("card-inputs").addEventListener("input", event => { if (event.target.dataset.fieldId) changedFields.add(event.target.dataset.fieldId); if (!["card-file","template"].includes(event.target.id)) dirty(); });
+  $("card-inputs").addEventListener("input", event => { if (event.target.dataset.fieldId) changedFields.add(event.target.dataset.fieldId); showSideFields(); if (event.target.id !== "template") dirty(); });
   $("template").addEventListener("change", () => action(async () => {
     const selected = $("template").value;
     if (loadedReviewId) {
       if (!confirm("Discard the current private review and select another type?")) { $("template").value = activeTemplate.id; return; }
       await api("/api/jobs/review", undefined, "DELETE"); loadedReviewId = null;
     }
-    prepared = null; frozen = false; acceptedGuide = false;
+    prepared = null; frozen = false;
     const template = templates.find(template => template.id === selected);
     if (template) renderTemplate(template);
-    else { activeTemplate = null; $("template-fields").replaceChildren(); }
+    else { activeTemplate = null; $("template-fields").replaceChildren(); $("layout-fields").replaceChildren(); $("layout-controls").hidden = true; }
     dirty();
   }));
   $("card-placed").addEventListener("change", controls);
-  $("card-file").addEventListener("change", () => action(async () => {
-    const file = $("card-file").files[0]; if (!file) return;
-    dirty();
-    const source = await file.text();
-    const job = file.name.toLowerCase().endsWith(".toml") ? (await api("/api/cards/import", {toml:source,template:activeTemplate.id})).job : JSON.parse(source);
-    if (!job.template) job.template = activeTemplate.id;
-    loadReview(await api("/api/jobs/review", {job}));
-  }));
+  $("timing-example").addEventListener("toggle", event => {
+    const example = event.currentTarget.querySelector("iframe");
+    if (event.currentTarget.open && !example.hasAttribute("src")) example.src = example.dataset.src;
+  });
   $("mode").addEventListener("change", event => {
     const real = event.currentTarget.value === "real";
     action(async () => {
@@ -650,6 +1169,15 @@ async function init() {
   setInterval(() => poll().catch(error => { $("burn-guide").disabled = true; $("burn-card").disabled = true; message("Connection lost: " + error.message, true); }), 1000);
 }
 installSecretFields();
+document.querySelector('[role="tablist"]').addEventListener("keydown", event => {
+  if (!["ArrowLeft","ArrowRight","Home","End"].includes(event.key)) return;
+  const tabs = Array.from(event.currentTarget.querySelectorAll('[role="tab"]'));
+  const index = tabs.indexOf(event.target);
+  if (index < 0) return;
+  event.preventDefault();
+  const next = event.key === "Home" ? tabs[0] : event.key === "End" ? tabs.at(-1) : tabs[(index + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
+  tab(next.getAttribute("aria-controls")); next.focus();
+});
 setPreviewPolarity("dark");
 document.addEventListener("visibilitychange", () => { if (document.hidden) { hideSecrets(); setLayerVisible("content", false); } });
 action(init);

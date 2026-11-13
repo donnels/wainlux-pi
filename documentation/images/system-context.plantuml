@@ -1,13 +1,8 @@
 @startuml system-context
+!include plantuml-style.puml
 ' Logical context only. No SSID, IP address or credentials.
 title Wainlux K6 - system context
 left to right direction
-skinparam backgroundColor #fff/aaf
-skinparam componentbackgroundColor #fff/aaf
-skinparam nodebackgroundColor #fff/aaf
-skinparam componentStyle rectangle
-skinparam shadowing true
-skinparam defaultFontName sans-serif
 
 rectangle "One shared Wi-Fi network\n(SSID and addresses intentionally omitted)" as Wifi {
   node "Steam Deck\nDevelopment platform" as Deck {
@@ -56,5 +51,4 @@ note bottom of Ghidra
   inside the isolated analysis container.
   Only protocol descriptions cross roles.
 end note
-footer (C)2026 Sean Donnellan
 @enduml

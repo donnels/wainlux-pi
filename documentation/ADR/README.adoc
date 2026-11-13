@@ -14,6 +14,36 @@ Clean-room methodology is summarized in <<clean-room-statement>>.
 * <<adr-022-build-packaging,ADR-022: ARM packaging>>
 * <<adr-025-placement,ADR-025: Card placement>>
 * <<adr-026-mcp-hub,ADR-026: Network MCP hub>>
+* <<adr-027-audio-end-detection,ADR-027: Audio-first end-detection evidence>>
+* <<adr-028-distributed-audio-analysis,ADR-028: Pi-coordinated capture and external analysis>>
+endif::single-page[]
+
+ifdef::single-page[]
+[appendix]
+[[adr-002-serial-communication]]
+include::ADR-002-serial-communication.adoc[leveloffset=+1]
+[[adr-006-clean-room]]
+include::ADR-006-clean-room.adoc[leveloffset=+1]
+[[adr-007-asciidoc]]
+include::ADR-007-asciidoc.adoc[leveloffset=+1]
+[[adr-010-bytefield-diagrams]]
+include::ADR-010-bytefield-diagrams.adoc[leveloffset=+1]
+[[adr-013-simulator-testing]]
+include::ADR-013-simulator-testing.adoc[leveloffset=+1]
+[[adr-019-http-review-boundary]]
+include::ADR-019-http-review-boundary.adoc[leveloffset=+1]
+[[adr-021-rust-core]]
+include::ADR-021-rust-core.adoc[leveloffset=+1]
+[[adr-022-build-packaging]]
+include::ADR-022-build-packaging.adoc[leveloffset=+1]
+[[adr-025-placement]]
+include::ADR-025-placement.adoc[leveloffset=+1]
+[[adr-026-mcp-hub]]
+include::ADR-026-mcp-hub.adoc[leveloffset=+1]
+[[adr-027-audio-end-detection]]
+include::ADR-027-audio-end-detection.adoc[leveloffset=+1]
+[[adr-028-distributed-audio-analysis]]
+include::ADR-028-distributed-audio-analysis.adoc[leveloffset=+1]
 endif::single-page[]
 ifndef::single-page[]
 Clean-room methodology lives in link:../../CLEAN_ROOM.md[the clean-room statement].
@@ -27,4 +57,6 @@ Clean-room methodology lives in link:../../CLEAN_ROOM.md[the clean-room statemen
 * link:ADR-022-build-packaging.adoc[ADR-022: ARM packaging]
 * link:ADR-025-placement.adoc[ADR-025: Card placement]
 * link:ADR-026-mcp-hub.adoc[ADR-026: Network MCP hub]
+* link:ADR-027-audio-end-detection.adoc[ADR-027: Audio-first end-detection evidence]
+* link:ADR-028-distributed-audio-analysis.adoc[ADR-028: Pi-coordinated capture and external analysis]
 endif::single-page[]

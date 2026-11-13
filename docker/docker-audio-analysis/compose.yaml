@@ -1,0 +1,14 @@
+services:
+  audio-analyzer:
+    image: localhost/wainlux-audio-analysis:local
+    build: .
+    entrypoint: ["python3", "/usr/local/bin/audio_api.py"]
+    command: ["--listen", "0.0.0.0", "--port", "8090"]
+    environment:
+      PORT: "8090"
+      AUDIO_DATA_DIR: /data
+      AUDIO_ANALYZER_TOKEN: ${AUDIO_ANALYZER_TOKEN:?Set a shared analyzer token in the environment}
+    volumes:
+      - ./data:/data
+    ports:
+      - "${AUDIO_ANALYZER_BIND_ADDRESS:-127.0.0.1}:8090:8090"

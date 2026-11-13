@@ -1,21 +1,59 @@
-MIT License
+Wainlux Pi Personal Non-Commercial and No-AI-Training License
+Version 1.0, 12 November 2026
 
 Copyright (c) 2026 Sean Donnellan
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+1. Scope
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+This license covers the copyright holder's code, documentation, examples,
+diagrams and other original material in this repository (the "Material").
+Third-party components and assets retain their own licenses and notices;
+this license does not replace them or claim rights over them.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+2. Permission and conditions
+
+You may use, study, copy, modify and redistribute the Material solely for
+personal, non-commercial use and non-commercial learning, subject to all
+conditions below. Keep this license and the copyright notice with every
+copy or substantial portion, identify modifications, and distribute the
+Material and modifications under these same terms. You may not grant rights
+to the Material that this license withholds.
+
+3. Commercial use is not permitted
+
+You may not sell, resell, commercially license, or use the Material in a
+business or paid service, or use it to produce goods, cards or backups for
+sale or resale, without the copyright holder's separate written permission.
+
+4. AI and machine-learning use is not permitted
+
+Without the copyright holder's separate written permission, you may not use
+the Material or modified versions to train, pre-train, fine-tune, distill,
+or evaluate artificial-intelligence or machine-learning models, or include
+them in datasets for those purposes. You may not scrape, crawl, collect,
+index or scan the Material for such AI or machine-learning use, or supply
+it to others for those purposes. The copyright holder may separately
+authorize AI-assisted development; that authorization is not general
+permission to train models on this repository.
+
+5. Prior grants and statutory rights
+
+This license does not withdraw permissions already validly granted for
+earlier copies under earlier licenses, or restrict rights that applicable
+law does not permit the copyright holder to restrict. No permission is
+granted to use third-party trademarks or to imply endorsement.
+
+6. Termination
+
+Permission under this license ends automatically if you breach its terms.
+Other permission must be obtained separately from the copyright holder.
+
+7. No warranty or liability
+
+THE MATERIAL IS PROVIDED "AS IS" AND "AS AVAILABLE", WITHOUT WARRANTY OF ANY
+KIND, EXPRESS OR IMPLIED, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE, NON-INFRINGEMENT, SECURITY, ACCURACY OR SUCCESSFUL RECOVERY. TO THE
+FULLEST EXTENT PERMITTED BY LAW, THE COPYRIGHT HOLDER IS NOT LIABLE FOR ANY
+CLAIM, DAMAGE OR OTHER LIABILITY ARISING FROM THE MATERIAL OR ITS USE,
+INCLUDING LOST DATA, ACCOUNT COMPROMISE, EQUIPMENT DAMAGE OR INJURY. NOTHING
+HERE EXCLUDES LIABILITY OR RIGHTS THAT CANNOT LAWFULLY BE EXCLUDED.

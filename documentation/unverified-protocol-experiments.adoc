@@ -1,0 +1,72 @@
+= Unverified Vector Protocol Experiments
+
+This is a test plan, not verified protocol documentation. Promote findings only after captured bytes and repeatable, supervised device observations support them. Ghidra material is limited to candidate packet fields; do not copy vendor source, names, algorithms or implementation structure.
+
+Completion behavior and its evidence are recorded in ADR-027. This file covers the unverified vector path.
+
+== Mixed Raster and Vector
+
+=== Working hypothesis
+
+Isolated analysis of the older host suggests that it obtains raster pixels and vector points as separate data, then places both in one job header and one DATA transfer. This suggests one combined submission, but does not establish whether the K6 executes the raster and vector portions sequentially, in another order, or at all. The current Rust K6 driver is raster-only; this is not a request to add vector support before the wire format and device behavior are verified.
+
+The host appears to request raster pixels and an ordered vector-point list separately from its canvas state. The exact canvas-object classification that selects each path has not been established here; do not infer that every displayed line or shape is supported as device vector data.
+
+=== Candidate packing and protocol requirements
+
+The following is a candidate wire description from isolated binary analysis, not a confirmed K6 contract:
+
+* `JOB_HEADER` appears to be opcode `23`, length `00 26` (38 bytes). Candidate fields cover raster dimensions, data offset, raster power/depth, vector dimensions, raster-size-plus-offset, vector power/depth, vector point count and placement/repeat values. In the analyzed host path, the raster-size field appears to be `33 + raster_bytes`, while the separate 16-bit packet-count calculation uses `33 + raster_bytes + 4 * point_count`, divided by 4094 and then incremented. Exact field meanings and device constraints must be confirmed from captures; do not label the raster-size field as combined payload length.
+* The older host appears to supply raster power/depth and vector power/depth separately in that header. This suggests one raster setting for the raster portion and one vector setting for the vector portion of a combined job. No per-DATA-chunk, per-row, per-point or per-segment power field has been observed. Changing power within one portion therefore appears to require another header/job; verify this with a capture before relying on it.
+* Raster pixels appear to be packed as one bit per pixel, eight pixels per byte, most-significant bit first, with each row padded to a whole byte.
+* The candidate mixed payload is one buffer: packed raster bytes first, followed immediately by vector coordinate records. Each candidate point is two 16-bit coordinates, four bytes total. The host appears to emit each coordinate low byte then high byte; do not assume this byte order is correct for the device until a capture confirms it.
+* DATA appears to use opcode `22`, a two-byte big-endian packet length, payload and a final two's-complement checksum. The older host chunks the combined buffer into 1,900-byte payloads (1,904 bytes including the three-byte header and checksum), sends them in order and waits for an ACK before continuing. A vector-only full payload packet can therefore hold 475 four-byte points; mixed packets hold fewer, depending on how much raster data occupies each packet. This is a transport chunk capacity, not a proven path or job limit.
+* No separate per-line point limit is apparent in the host path; the header has one vector point count for the job. The 16-bit packet-count calculation implies an arithmetic ceiling of roughly 67 million vector points for a vector-only buffer if no lower limit applies. This is not a verified K6 maximum: the host does not establish that the device accepts such a job, and the count may wrap beyond its field width.
+* The host chunks at 1,900-byte offsets without visible padding before the vector records. Since 1,900 is divisible by four but raster byte length need not be, a mixed-job chunk boundary could split a four-byte point when the raster byte length is not four-byte aligned. Test this in the packet fixture and inspect a capture before concluding whether the device reassembles the stream or requires aligned points.
+* Confirm boundaries, retry behavior and the final short packet from captures.
+* Candidate contour separator values appear in the coordinate stream, but their meaning and safe use are unknown. Do not emit them in a Rust test packet until their byte representation and effects are independently confirmed.
+* The older host sends two `24 00 0B` INIT packets after the DATA transfer. Whether this starts execution, closes an upload phase or serves another purpose is unverified.
+
+The packet layout implies a shared job submission, not necessarily simultaneous execution. A device may process the raster and vector sections one after the other. The host packet alone cannot establish execution order, laser state during travel, coordinate origin, scaling, or whether the vector points form lines, isolated marks or contours.
+
+=== Bed and material allocation
+
+Use one dedicated sacrificial workpiece for the physical experiment series where practical. Before burning, sketch its usable area and divide it into numbered, non-overlapping test cells. Size each cell for its planned geometry plus a visible margin; reserve gutters so scorch/marks and placement error cannot cross into a neighboring cell. Do not assign absolute machine coordinates until the operator has confirmed the actual workpiece placement and usable area. The nominal 80 x 75 mm normal profile is a software bound, not a guarantee of exact mechanical reach.
+
+Assign a fresh cell to each physical test and repeat, including the power-zero hypothesis test. Keep all geometry within that cell. Reserve one separate lane for extent tests, starting well inside the normal area and moving outward in small steps; do not use the test grid's remaining cells to probe the machine edge. Record each cell's label, origin, planned bounding box and actual placement on the bed map. If the workpiece cannot fit the complete map with margins, reduce the number or size of planned tests before starting rather than reuse marked material or overlap tests.
+
+=== Observation record
+
+Create one record per test, including packet-only and simulator tests. A physical observation must be recorded before allocating or starting the next physical test. For physical tests, include:
+
+* Test ID, date/time, operator, device/firmware, transport, and bed-map cell.
+* Hypothesis and the one variable changed from the previous test.
+* Geometry, raster dimensions/vector point count, origin/bounds, raster/vector power and depth, and expected visible result. Use synthetic, non-private payloads.
+* Header and DATA sizes, number of DATA packets, ACK/error responses, and a reference to the bounded receive trace. Do not put user content or raster bytes in the record.
+* Observed motion order and start/stop times; whether a visible mark appeared and where; whether the beam was independently confirmed off, or must be treated as potentially active.
+* Outcome: supported, rejected, inconclusive, or stopped for safety; state what evidence supports that judgment and the next permitted step.
+
+Do not continue on a guessed result. An absent mark, timeout, ACK, or simulator success by itself is not evidence that the beam was off, the machine was physically stopped, or a protocol hypothesis was confirmed.
+
+=== Staged test proposal
+
+. *1. Offline packet fixtures:* Build vector-only and mixed-job serializer fixtures. For mixed fixtures, use raster payload lengths with each remainder modulo four. Check header sizes/fields, raster row padding and bit order, coordinate byte order, point count, checksums, short final packets, DATA boundaries, and whether a point straddles a boundary. Do not connect to or move the machine. Do not fabricate contour markers whose meaning is unresolved.
+. *2. Simulator:* Exercise those exact fixtures and the planned measurement/logging flow in software. Simulator results cannot establish K6 packet acceptance, motion order, completion behavior or beam state.
+. *3. Power-zero hypothesis test:* This is the first physical test, not a beam-off procedure. Submit only a very small raster with power `0` to test whether that setting suppresses emission. Treat the beam as potentially active throughout. The owner will not disassemble or modify the K6; no manufacturer-documented external disable control has been confirmed, and that absence is not proven. BOUNDS framing, power `0`, a stopped preview or a network/serial command is not an established beam-disable method. Use the normal enclosure, safeguards, protective equipment and fire precautions, and a disposable test area. Record the command bytes and result. No visible mark does not establish that the beam was off. If the result cannot be established safely, stop; do not use it to authorize an off-beam movement test.
+. *4. Minimal vector-only test:* Proceed only with explicit operator acceptance of a real laser-on test and the same precautions. Start with the smallest simple closed path that can answer whether the vector packet is accepted; keep it well inside the normal work area. Record submitted bytes, ACKs, status frames, motion, marks and physical stop. Do not start with the estimated maximum point count or unresolved separator values.
+. *5. Minimal mixed test:* Only after vector-only behavior is understood, combine a tiny 2 mm by 2 mm raster square with a small, well-separated vector path. Keep settings, coordinates and geometry fixed between repeats. Record whether there is one header/transfer and which region is processed first. This is a real laser-on test unless beam-off has been independently verified.
+. *6. Boundary tests:* Increase one dimension at a time, stopping at the first unexpected packet response, motion, mark or completion result. First test point counts around the 1,900-byte DATA boundary (474, 475, 476 vector points) in packet fixtures; only consider physical equivalents after small vector tests pass and the operator accepts the exposure. Separately vary raster payload alignment, then increase vector extent in small steps while staying inside the selected normal work area. Do not combine maximum size, maximum extent, new separators and power changes in one test. These are deliberate limit tests, not routine operating settings.
+
+Every physical test should have a bounded, timestamped receive trace from the final DATA/INIT exchange through observed physical stop, and a completed observation record tied to its bed-map cell. Do not automatically retry a whole job, proceed to another band, or treat silence as confirmed rest. Stop escalation if bytes, motion or physical results are ambiguous; review the trace and update the bed map before choosing the next test.
+
+The separated raster/vector regions could reveal which region is processed first, but only if the resulting marks or safely observed motion make that order distinguishable. A mixed submission is not evidence of mixed-job support until the K6 accepts and executes it repeatably.
+
+== Laser Disable Research Note
+
+The Rust driver's BOUNDS operation is described in the project as a laser-off framing request. It is a specific protocol operation, not a means to suppress the beam for arbitrary raster or vector jobs. The current K6 driver opens USB serial; the application's Wi-Fi QR feature only engraves network credentials.
+
+Public research located the manufacturer's Product Manual page, but it exposed no readable K6 manual. Search results pointed to third-party K6 manuals, but direct retrieval was blocked. The project code and available material therefore do not verify the stronger claim that disabling the laser always requires disassembly. Treat the beam as capable of firing unless an operator-accessible, manufacturer-supported method is identified and independently verified. Do not propose disassembly, wiring changes or an unverified software setting as a beam-disable method.
+
+== Evidence Boundary
+
+Keep raw captures and analysis artifacts outside the repository unless separately reviewed for privacy and clean-room suitability. This document contains hypotheses to guide testing; it is not evidence that the K6 supports mixed raster/vector jobs, that a proposed completion signal is reliable, or that the laser can be disabled externally. The main README, verified protocol reference and current implementation must remain unchanged until findings are independently checked and intentionally promoted.

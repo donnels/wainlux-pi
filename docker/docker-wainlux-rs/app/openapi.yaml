@@ -93,6 +93,17 @@ paths:
                 items:
                   type: object
                   additionalProperties: true
+  /examples/audio-analysis:
+    get:
+      operationId: getAudioAnalysisExample
+      summary: Get the self-contained real-run timing and audio example
+      description: Static read-only demonstration; one run is not a benchmark or proof of physical motion. Served independently of analyzer availability.
+      responses:
+        '200':
+          description: Self-contained HTML report with embedded sample audio
+          content:
+            text/html:
+              schema: {type: string}
   /api/templates:
     get:
       operationId: listTemplates
@@ -306,32 +317,6 @@ paths:
           $ref: '#/components/responses/Problem'
         '409':
           $ref: '#/components/responses/Problem'
-  /api/cards/import:
-    post:
-      operationId: importCard
-      summary: Import card values using a declared template
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [toml, template]
-              properties:
-                toml:
-                  type: string
-                template:
-                  type: string
-      responses:
-        '200':
-          description: Imported review values
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: true
-        '400':
-          $ref: '#/components/responses/Problem'
   /api/tests/preview:
     post:
       operationId: previewTest
@@ -378,6 +363,19 @@ paths:
     post:
       operationId: runPlannedStage
       summary: Run the explicitly planned attempt
+      description: When sync_marker is true, the client plays a three-tone preamble and six DTMF digits encoding the planned attempt's last six timestamp digits before calling this route. The marker is audit metadata, not proof that audio played.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                attempt_id: {type: string, description: Expected planned attempt ID; mismatches are refused without changing the plan. Omission remains supported for older clients.}
+                sync_marker: {type: boolean, default: false}
+                recording_id: {type: string, pattern: '^[0-9]{6}$'}
+                cue_duration_ms: {type: integer, const: 2000}
+                post_cue_lead_ms: {type: integer, minimum: 0, maximum: 2000, default: 700}
       responses:
         '202':
           description: Execution started
@@ -388,7 +386,132 @@ paths:
                 required: [running]
                 properties:
                   running: {type: boolean, const: true}
+                  attempt_id: {type: string}
+                  sync_marker: {type: boolean}
+                  recording_id: {type: [string, 'null'], pattern: '^[0-9]{6}$'}
         '409':
+          $ref: '#/components/responses/Problem'
+  /api/audio-analyses:
+    post:
+      operationId: uploadAudioForAnalysis
+      summary: Upload audio for a completed low/full audio comparison test
+      description: Accepts a raw audio body up to 64 MiB on the Pi origin, matches X-Attempt-ID to a completed Real attempt and its sync marker, forwards only those two run events to the configured analyzer, and returns a same-origin report URL. The Pi does not retain the audio or report. Upload and analyzer availability are optional and do not gate runs.
+      parameters:
+        - in: header
+          name: X-Attempt-ID
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          audio/mp4:
+            schema: {type: string, format: binary, maxLength: 67108864}
+          audio/x-m4a:
+            schema: {type: string, format: binary, maxLength: 67108864}
+          audio/x-m4a:
+            schema: {type: string, format: binary, maxLength: 67108864}
+          audio/wav:
+            schema: {type: string, format: binary, maxLength: 67108864}
+      responses:
+        '200':
+          description: Analysis completed; artifacts are retained by the analyzer
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [report_url]
+                properties:
+                  report_url: {type: string}
+                  timing:
+                    type: object
+                    description: Pi upload/forwarding and analyzer phase measurements in milliseconds. Nested analysis fields are contained within analysis_process_ms.
+                    properties:
+                      pi_receive_ms: {type: integer, minimum: 0}
+                      multipart_parse_ms: {type: integer, minimum: 0}
+                      pi_prepare_ms: {type: integer, minimum: 0}
+                      persistence_ms: {type: integer, minimum: 0}
+                      analysis_process_ms: {type: integer, minimum: 0}
+                      report_read_ms: {type: integer, minimum: 0}
+                      analyzer_http_ms: {type: integer, minimum: 0}
+                      pi_total_ms: {type: integer, minimum: 0}
+                      analysis: {type: object, additionalProperties: {type: integer, minimum: 0}}
+                    additionalProperties: true
+        '400':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+        '413':
+          $ref: '#/components/responses/Problem'
+        '415':
+          $ref: '#/components/responses/Problem'
+        '502':
+          $ref: '#/components/responses/Problem'
+        '503':
+          $ref: '#/components/responses/Problem'
+  /api/audio-analyses/availability:
+    get:
+      operationId: getAudioAnalyzerAvailability
+      summary: Check whether optional audio analysis is configured and reachable
+      responses:
+        '200':
+          description: Availability state; false does not affect laser operation
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [available]
+                properties:
+                  available: {type: boolean}
+  /audio-upload/{attempt_id}:
+    get:
+      operationId: getPhoneAudioUploadPage
+      summary: Open a phone-friendly uploader for a completed marked Real attempt
+      parameters:
+        - in: path
+          name: attempt_id
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Same-origin page with a Voice Memo file picker
+          content:
+            text/html:
+              schema: {type: string}
+        '404':
+          $ref: '#/components/responses/Problem'
+  /api/audio-analyses/{attempt_id}/upload-qr.svg:
+    get:
+      operationId: getPhoneAudioUploadQr
+      summary: Get the QR code for the phone upload page
+      parameters:
+        - in: path
+          name: attempt_id
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: QR code containing the same-origin phone upload URL
+          content:
+            image/svg+xml:
+              schema: {type: string}
+        '404':
+          $ref: '#/components/responses/Problem'
+  /api/audio-analyses/{attempt_id}/report:
+    get:
+      operationId: getAudioAnalysisReport
+      summary: Get the annotated report for an attempt
+      parameters:
+        - in: path
+          name: attempt_id
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Self-contained annotated audio report
+          content:
+            text/html:
+              schema: {type: string}
+        '404':
           $ref: '#/components/responses/Problem'
   /api/verdict:
     post:
@@ -409,8 +532,6 @@ paths:
                   enum: [ok, deviation, skipped]
                 comment:
                   type: string
-                ok:
-                  type: boolean
       responses:
         '200':
           description: Verdict recorded
@@ -499,7 +620,6 @@ components:
         step: {type: string}
         params: {type: object, additionalProperties: true}
         material: {type: string}
-        job: {$ref: '#/components/schemas/Job'}
         review_id: {type: string}
         stage: {type: integer, minimum: 0}
         placement_confirmed: {type: boolean}
@@ -525,6 +645,14 @@ components:
             accepted_stages:
               type: array
               items: {type: integer}
+            timing:
+              $ref: '#/components/schemas/ReviewTiming'
+    ReviewTiming:
+      type: object
+      required: [raster_generation_ms, preview_encoding_ms]
+      properties:
+        raster_generation_ms: {type: integer, minimum: 0, description: Time to compose prepared stage rasters.}
+        preview_encoding_ms: {type: integer, minimum: 0, description: Time to encode exact preview pixels for this response.}
     Stage:
       type: object
       properties:
@@ -547,13 +675,25 @@ components:
     State:
       type: object
       properties:
+        phase: {type: string, enum: [idle, planned, running, awaiting_verdict]}
         attempt: {type: [object, 'null'], additionalProperties: true}
         running: {type: boolean}
         progress: {type: [object, 'null'], additionalProperties: true}
         band_timings:
           type: array
           items: {type: object, additionalProperties: true}
-        outcome: {type: [object, 'null'], additionalProperties: true}
+        receive_trace:
+          type: [object, 'null']
+          description: Bounded RX-only trace for diagnostic power-sweep attempts; no outgoing payload bytes.
+          additionalProperties: true
+        outcome:
+          type: [object, 'null']
+          description: Includes total worker operation elapsed_ms; band_timings provide transfer/setup/completion-wait breakdowns where available.
+          properties:
+            elapsed_ms: {type: integer, minimum: 0}
+            band_timings: {type: array, items: {type: object, additionalProperties: true}}
+            receive_trace: {type: [object, 'null'], additionalProperties: true}
+          additionalProperties: true
         mode: {$ref: '#/components/schemas/Mode'}
         review_id: {type: [string, 'null']}
         accepted_stages:

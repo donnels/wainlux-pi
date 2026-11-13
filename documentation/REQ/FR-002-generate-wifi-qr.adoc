@@ -22,3 +22,5 @@ endif::single-page[]
 ifndef::single-page[]
 link:../hardware-observations.adoc[Hardware Observations].
 endif::single-page[]
+
+For background on QR structure, see link:https://noel-friedrich.github.io/read-qr-by-hand/?e=L&m=4&v=1[QR decoding by hand]. This is reference material, not a planned project task.

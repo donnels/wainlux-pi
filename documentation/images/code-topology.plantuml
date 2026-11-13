@@ -1,0 +1,108 @@
+@startuml
+!include plantuml-style.puml
+title Wainlux source topology - ownership and dependencies
+left to right direction
+
+actor Operator
+
+package "Rust workspace: docker/docker-wainlux-rs" {
+  package "app" {
+    component "main.rs\nprocess entry" as Main
+    component "lib.rs\nHTTP adapter + coordination\nbounded device worker" as App
+    component "workflow.rs\ntyped lifecycle + safe records" as Workflow
+    component "prepared.rs\nretained operations + raster merge\none runner" as Prepared
+    component "ui.html\nembedded browser client" as UI
+    component "job.rs\ncard composition and stages" as Job
+    component "ladder.rs\ntyped test recipes" as Ladder
+    component "templates.rs\nform schema and bindings" as Templates
+    component "test_catalog.rs\ntest metadata" as Catalog
+    component "materials.rs\nmaterial profiles" as Materials
+    component "assets.rs\nembedded raster assets" as Assets
+    folder "materials.toml\ntests.toml\nuse-cases/*.toml" as Config
+  }
+
+  package "compose" {
+    component "lib.rs" as ComposeLib
+    component "place.rs\npattern.rs\nqr.rs\ntext.rs\nwifi.rs" as ComposeFiles
+  }
+
+  package "laser" {
+    interface "Machine, Job, Info,\nRaster, Progress" as Machine
+    component "lib.rs\ncontract + shared formatters" as LaserLib
+    component "raster.rs" as Raster
+    component "sim.rs" as Sim
+  }
+
+  package "k6" {
+    component "lib.rs\nprofile and open" as K6Lib
+    component "device.rs\nMachine implementation" as K6Device
+    component "protocol.rs\nbytes, bands, packing" as Protocol
+  }
+}
+
+component "Browser" as Browser
+component "docker-mcp/app/\nmcp_server.py\npreview-only client" as MCP
+package "docker-audio-analysis" {
+  component "audio_api.py\nauth, persistence, report API" as AudioAPI
+  component "analyze_laser_audio.py\nDTMF and activity report" as Analyzer
+}
+package "cli: wainlux-client" {
+  component "src/main.rs\narguments and entry point" as CardCLI
+  component "submit.rs\nJSON job + text-file input" as Submit
+}
+folder "scripts/\nbuild, deploy, docs, audio" as Scripts
+node "Wainlux K6" as Device
+database "DATA_DIR/runs.jsonl" as Log
+
+Operator --> Browser
+Main --> App : Config::from_env / serve
+App --> UI : embeds
+Browser --> App : review, plan, run, verdict
+App --> Job : producer review and card stages
+App --> Templates : load/edit form definitions
+App --> Catalog : load test definitions
+App --> Materials : resolve settings
+App --> Ladder : prepare test operations
+App --> Assets : prepared assets
+App --> Workflow : plan / start / finish / judge
+App --> Prepared : worker executes retained program
+Prepared --> Machine : explicit operations
+App --> K6Lib : select/open real driver
+App --> ComposeLib : review layout preview
+App --> Config : startup load
+App --> Log : append redacted events
+
+Templates --> Job : JobReq / items
+Catalog --> Ladder : Step identifiers
+Job --> ComposeLib : placement and raster composition
+Job --> Prepared : card operations + shared pixels
+Ladder --> Prepared : test operations + shared pixels
+Workflow --> Prepared : retain immutable program
+Ladder --> ComposeLib : test geometry and QR
+ComposeLib --> ComposeFiles
+ComposeFiles --> Raster : create 1-bit rasters
+LaserLib --> Raster : exports Raster
+Sim ..|> Machine
+K6Device ..|> Machine
+K6Lib --> K6Device
+K6Device --> Protocol
+K6Device --> Device : serial protocol
+
+MCP --> App : machine, materials, templates, preview only
+App --> AudioAPI : authenticated recording + matching log
+AudioAPI --> Analyzer : subprocess / report
+AudioAPI --> App : report bytes
+App --> Browser : same-origin report
+CardCLI --> Submit
+Submit --> App : HTTP review only
+Submit ..> App : local API tests only (dev dependency)
+Scripts ..> App : build/deploy
+Scripts ..> Analyzer : offline analysis
+
+note bottom of App
+  Workflow owns legal transitions; HTTP projects them.
+  One worker owns the device; STOP is out of band.
+  Hardware start remains an explicit operator action.
+end note
+
+@enduml

@@ -14,3 +14,17 @@ A stop request must cancel queued work and request a device stop when a device h
 * An operator confirms motion has stopped before changing placement or proceeding.
 
 A successful HTTP response is not proof of physical rest. Use the machine's physical emergency controls and supervision; this API is not a certified emergency-stop system.
+
+== Attended Hardware Check (Initial Result)
+
+The software STOP uses a separate serial write handle and bypasses the normal device-worker queue. It still serializes with an in-flight packet write, and neither its priority nor physical effect is certified until observed on the machine.
+
+Test whether the UI STOP can stop a job started directly from the machine's middle button, including when the service reports no active software attempt:
+
+. Use an attended, enclosed setup and sacrificial stock. Leave the physical emergency control within immediate reach. Select a previously reviewed, minimal, non-sensitive job; do not use a valuable card or a job with unknown settings.
+. Confirm the machine is physically at rest and the UI has no active attempt. Press the machine's middle button once. If it does not produce the expected controlled replay, stop and record the result; do not improvise with other controls.
+. While the replay is visibly active, press the persistent UI STOP once. Observe the machine independently and confirm whether motion and marking stop. Record the UI response, observed stop latency, and any remaining motion; an HTTP response alone is not evidence of success.
+. After physical rest, inspect the stock and software state. Confirm no automatic retry, next band, or later job was started. Record any mismatch between the device replay and the service's run log.
+. If STOP does not stop the replay promptly, use the machine's physical emergency control and do not repeat the test until the cause is understood.
+
+On 2026-11-12, the operator reported one test in which a job repeated with the machine's middle button was stopped using the UI STOP control. The reported repeat stopped. Exact stop latency, independent motion/beam observation, and repetition count beyond this trial were not recorded. This is limited evidence for that scenario, not an emergency-stop guarantee; repeat under the checklist above and keep the physical emergency control within reach.

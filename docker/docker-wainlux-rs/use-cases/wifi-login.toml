@@ -1,6 +1,6 @@
 id = "wifi-login"
 name = "WiFi login"
-legacy_items = ["wifi", "title"]
+audio_recording_enabled = true
 
 fields = [
 	{ id="ssid", label="SSID", type="text", default="", editable=true, revealable=true, masked=true },

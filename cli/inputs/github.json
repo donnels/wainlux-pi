@@ -1,0 +1,13 @@
+{
+  "job": {
+    "template": "github-recovery",
+    "piece": "bamboo-ntag215-light",
+    "backing": "backing-first",
+    "placement": "left",
+    "guide": false,
+    "items": [
+      {"id":"recovery-qr","side":"front","content":{"kind":"qr","text":"SYNTHETIC DEMO ONLY - NOT VALID GITHUB CODES.\nDEMO-ALPHA-001"}},
+      {"id":"login-qr","side":"back","content":{"kind":"qr","text":"https://github.com/login"}}
+    ]
+  }
+}

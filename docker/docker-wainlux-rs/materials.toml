@@ -19,7 +19,12 @@ id = "backing-first"
 name = "Backing board (first QR etch)"
 role = "backing"
 size_mm = [80.0, 75.0]
-note = "Planning placeholder aligned to the current K6 working reach; physical board not measured. QR at power 500, depth 10 scanned on it."
+note = """Planning placeholder aligned to current K6 reach; physical board dimensions are not measured.
+Baseline: a QR scanned at power 500, depth 10. Keep these as the starting settings; no tuning conclusion has been accepted.
+
+Power sweep observations, 2026-11-10, depth 10: block X=0 reported first five lines visible, line 6 faint, line 7 partly visible under magnification, and lines 8-10 not visible on the backing. Its frame covered/overlapped the first line. Adjacent block X=20 showed its first line; the frame appeared high relative to lines aligned with block 1. Alignment is unresolved, so do not compare the two blocks as a calibrated power curve.
+
+The adjacent block's receive trace recorded 99% for its frame and first row, then 0% for lower-power rows; every job was assumed complete after about 90 seconds of silence. This is diagnostic evidence, not proof of when motion stopped. A filled-square and depth/material test on this board remains pending. See documentation/hardware-observations.adoc and the redacted attempt log for the detailed record."""
 
 [material.settings."Wainlux K6"]
 power = 500

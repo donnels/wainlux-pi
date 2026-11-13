@@ -38,9 +38,7 @@ pub fn vertical_strip(height: u32, side: u32, gap_start: u32, gap_length: u32, c
         if continuous || row < gap_start || row >= gap_end { raster.set(0, row, true); }
     }
     for start in [0, gap_start - side, gap_end, height - side] {
-        for row in start..start + side {
-            for column in 0..side { raster.set(column, row, true); }
-        }
+        raster.fill_rect(0, start, side, side);
     }
     Ok(raster)
 }
@@ -82,14 +80,10 @@ pub fn corner_frame(width: u32, height: u32, side: u32, gap: u32) -> Result<Rast
             raster.set(width - 1, row, true);
         }
     }
-    for row in 0..side {
-        for column in 0..side {
-            raster.set(column, row, true);
-            raster.set(width - side + column, row, true);
-            raster.set(column, height - side + row, true);
-            raster.set(width - side + column, height - side + row, true);
-        }
-    }
+    raster.fill_rect(0, 0, side, side);
+    raster.fill_rect(width - side, 0, side, side);
+    raster.fill_rect(0, height - side, side, side);
+    raster.fill_rect(width - side, height - side, side, side);
     Ok(raster)
 }
 
@@ -102,11 +96,7 @@ pub fn limit_squares(side: u32, gap: u32, drop: u32) -> Result<Raster, String> {
     };
     let mut raster = Raster::new(width, height);
     for index in 0..7 {
-        for row in 0..side {
-            for column in 0..side {
-                raster.set(index * (side + gap) + column, index * drop + row, true);
-            }
-        }
+        raster.fill_rect(index * (side + gap), index * drop, side, side);
     }
     Ok(raster)
 }
@@ -155,12 +145,8 @@ pub fn located_limit_stairs(width: u32, rows: u32, locator_side: u32, gap: u32) 
 pub fn blank_rows(side: u32, gap: u32) -> Raster {
     let n = 2 * side + gap;
     let mut r = Raster::new(n, n);
-    for y in 0..side {
-        for x in 0..side {
-            r.set(x, y, true);
-            r.set(x + side + gap, y + side + gap, true);
-        }
-    }
+    r.fill_rect(0, 0, side, side);
+    r.fill_rect(side + gap, side + gap, side, side);
     r
 }
 

@@ -13,4 +13,7 @@ services:
       - ./materials.toml:/etc/laser/materials.toml:ro
     ports:
       - "8081:8081"
+    environment:
+      AUDIO_ANALYZER_URL: ${AUDIO_ANALYZER_URL:-}
+      AUDIO_ANALYZER_TOKEN: ${AUDIO_ANALYZER_TOKEN:-}
     restart: unless-stopped

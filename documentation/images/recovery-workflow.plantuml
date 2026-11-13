@@ -1,0 +1,75 @@
+@startuml recovery-workflow
+!include plantuml-style.puml
+title Pi-rendered recovery card and manual NFC read-back
+hide footbox
+
+actor User
+participant "Rust CLI" as CLI
+participant "Pi laser API" as API
+participant "Operator browser" as Browser
+participant "Phone: QRbot / NFC Tools" as Phone
+participant "Wooden NTAG215 card" as Card
+participant "Opaque RF-shielded holder" as Holder
+participant Service
+
+User -> Service: Save recovery codes
+activate Service
+deactivate Service
+User -> CLI: submit: JSON job + codes-only UTF-8 file
+CLI -> API: POST /api/jobs/review
+API -> API: Encode QR, render fonts and separate side rasters
+API --> CLI: Review ID; no laser start
+note over CLI, API
+The CLI has no PDF, QR, image or font renderer.
+Keep login passwords separate from recovery codes.
+Start with fictional data; neither QR nor NFC is encryption.
+end note
+User -> Browser: Inspect exact front and back previews
+User -> Browser: Confirm placement; start front
+Browser -> API: Plan and run front (explicit operator action)
+API --> Browser: Software outcome, not physical acceptance
+User -> Browser: Confirm rest, inspect front, record verdict
+User -> User: Flip and seat card in the same guide
+User -> Browser: Confirm placement; start back separately
+Browser -> API: Plan and run back (separate operator action)
+API --> Browser: Software outcome
+User -> Browser: Confirm rest, inspect back, record verdict
+User -> Phone: Scan finished QR; compare source payload
+User -> User: Prepare and secure an independent paper backup
+note over Phone, Card
+Manual NFC Tools workflow, not a CLI or Pi NFC adapter.
+Check tag compatibility and full NDEF storage first.
+Optional tag read protection cannot protect the QR.
+Do not expose an antenna or chip to the laser.
+end note
+User -> Phone: Explicitly choose one English NDEF Text record
+Phone -> Card: Write payload
+Card --> Phone: Read full text back
+User -> User: Compare complete payload with source
+User -> Holder: Store card; secure paper separately
+User -> Phone: Clear temporary copies and history
+
+group Recovery after successful backup
+    note over User, Holder
+If the card is unavailable, use the separate paper backup.
+After loss or suspected copying, replace the code set
+and every backup. A spare copy does not revoke a lost one.
+end note
+    User -> Holder: Remove card
+    activate Phone
+    alt NFC
+        Phone -> Card: Read with NFC Tools
+        activate Card
+        Card --> Phone: Codes and instructions
+        deactivate Card
+    else QR
+        User -> Phone: Scan with QRbot; view text
+    end
+    Phone --> User: Display codes and instructions
+    deactivate Phone
+    User -> Service: Follow instructions; use one unused code
+    activate Service
+    deactivate Service
+    User -> User: Mark code spent with marker; clear temporary copies; store card
+end
+@enduml

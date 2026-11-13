@@ -1,12 +1,8 @@
 @startuml architecture-rust
+!include plantuml-style.puml
 ' Current deployment and crate boundaries; not a target-state sketch.
 title Wainlux K6 service - runtime ownership
 left to right direction
-skinparam backgroundColor #fff/aaf
-skinparam componentbackgroundColor #fff/aaf
-skinparam componentStyle rectangle
-skinparam shadowing true
-skinparam defaultFontName sans-serif
 
 actor "Sean Donnellan\n(operator)" as Sean
 component "Browser UI" as Browser
@@ -14,6 +10,9 @@ component "HTTP producer\n(optional)" as Producer
 
 package "Pi Zero W host" {
   component "app\nHTTP API + review/run/verdict" as App
+  component "workflow\ntyped attempt lifecycle" as Workflow
+  component "prepared program\nshared raster artifacts" as Prepared
+  component "device worker\none machine owner" as Worker
   component "MCP preview service\nStreamable HTTP\n(separate container)" as MCP
   component "compose\nQR, text, placement, raster" as Compose
   package "laser crate" {
@@ -33,7 +32,13 @@ Browser --> App : HTTP :8081
 Producer --> App : HTTP API
 MCP --> App : Streamable HTTP\npreview only
 App --> Compose : compose stages
-App --> Machine : plan/run contracts
+App --> Workflow : guarded transitions
+App --> Prepared : prepare once
+Workflow --> Prepared : retain reviewed work
+App --> Worker : bounded command channel
+Worker --> Prepared : execute retained operations
+Prepared --> Machine : machine contract
+App ..> Machine : independent STOP handle
 K6 ..|> Machine
 K6 --> Device : /dev/ttyUSB0\n115200 baud
 App --> Config : load at startup
@@ -42,7 +47,8 @@ App --> Log : append outcome/verdict
 note bottom of App
   Review and raster payloads stay in RAM.
   The event log omits submitted content.
-  One API process owns machine access.
+  One worker owns the device.
+  STOP does not wait in its command queue.
 end note
 note bottom of MCP
   Assumed placement on this Pi host for now.
@@ -53,5 +59,4 @@ note bottom of Device
   The simulator never opens this link.
   Normal K6 reach: 80 x 75 mm.
 end note
-footer (C)2026 Sean Donnellan
 @enduml

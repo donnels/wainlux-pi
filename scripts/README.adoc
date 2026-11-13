@@ -20,23 +20,35 @@ endif::flag-book[]
 
 Repository maintenance and documentation utilities.
 
-== Usage
+== Commands
 
-`test_docs.sh`:: Validate all AsciiDoc files render correctly standalone and as includes.
-`generate_diagrams.sh`:: Regenerate checked-in documentation diagrams.
+Run these commands from the repository root:
 
-== Run
+[cols="1,3",options="header"]
+|===
+| Command | Purpose
+| `./scripts/build_laser.sh` | Test the CLI examples and Rust service workspace, then build the ARMv6 image. Does not deploy.
+| `./scripts/deploy_laser.sh --target USER@PI-HOST --confirm` | Transfer the image and recreate an idle Pi service. Never starts a laser job.
+| `./scripts/analyze_laser_audio.sh RECORDING.m4a` | Analyze DTMF and candidate audio activity in a container. No laser control.
+| `./scripts/test_docs.sh` | Check AsciiDoc rendering, links, captions and PlantUML attribution.
+| `./scripts/generate_diagrams.sh` | Regenerate protocol SVGs from the EDN sources.
+|===
 
-=== Documentation Testing
+ifdef::single-page[]
+Build details: <<build-and-test-the-rust-service>>. Audio analysis: <<burn-timing>>.
+endif::single-page[]
+ifndef::single-page[]
+Build and deployment: link:../documentation/GETTING_STARTED.adoc[Getting Started]. Audio analysis: link:../documentation/doing-debugging.adoc[Burn Timing].
+endif::single-page[]
 
-.Run the documentation validator
-[source,bash]
-----
-# Test all AsciiDoc files for rendering consistency
-./test_docs.sh
-----
+ifdef::single-page[]
+include::../documentation/includes/include-steamdeck-flatpack-warning.adoc[leveloffset=+1]
+endif::single-page[]
+ifndef::single-page[]
+Flatpak host command details: link:../documentation/includes/include-steamdeck-flatpack-warning.adoc[Steam Deck notes].
+endif::single-page[]
 
-Requires podman. Uses asciidoctor/docker-asciidoctor container image.
+The build command does not transfer or deploy the image. Deployment requires an explicit target and confirmation. Audio analysis reports candidate sound activity; it does not prove laser motion or physical rest.
 
 ifdef::flag-book[]
 :imagesdir: {imagesdir-saved}

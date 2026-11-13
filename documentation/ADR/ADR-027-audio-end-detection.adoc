@@ -1,0 +1,42 @@
+= ADR-027: Audio-First Evidence for Physical End Estimates
+
+== Status
+Accepted for evidence collection. Automatic physical end estimation remains unimplemented.
+
+== Context
+The K6's visible status has not been shown to reliably mark physical motion stop. The Rust service accepts a reported 100-percent frame as device completion and currently assumes completion after 90 seconds without received bytes. Silence is not proof of physical rest. The operator can hear head movement, while a camera may be useful for visible illumination/marking; the Pi's camera microphone is unknown. A phone can record room audio independently.
+
+The operator needs to associate an uploaded recording with per-job protocol events without installing audio software on the Steam Deck or changing the Pi build/runtime. Sound itself is not used to infer laser state or physical rest.
+
+== Decision
+
+* Keep the existing reported-completion and 90-second assumed-completion rules unchanged while evidence is gathered. Never label silence as device confirmation.
+* Prefer audio as the first low-friction observation channel because mechanical motion is audible. The target architecture uses Pi-coordinated local capture and an external analysis worker; it does not require decoding on the Pi. A phone remains a valid alternate capture source.
+* When recording externally, the UI can play a three-tone preamble and six standard DTMF digits before `/api/run`. Pi-local capture can instead correlate capture-relative monotonic times with the run log and does not need an audible cue. The six-digit external recording ID is the last six decimal digits of the planned attempt's timestamp ID; it is a short label, not a globally unique identifier. The run log remains authoritative for the full ID.
+* Capture bounded receive traces for each power-sweep job: monotonic relative time, job index, received bytes, decoded status/heartbeat frames, progress and quiet intervals. Cap raw RX bytes and event count; report truncation. Never capture outgoing raster/job data or user content.
+* Process recordings with `./scripts/analyze_laser_audio.sh` in a pinned Docker/Podman container. The audio file is mounted read-only. FFmpeg decodes the recording; Python's standard-library Goertzel implementation reads the DTMF ID only for association with the run log. The report presents playback, filtered run-log events and measured processing timings; it does not classify audible activity. No audio tools or Python packages are installed on the Deck.
+* Keep OK/deviation/comment as a separate human judgment. Logs, timings, sync matching and playback do not prove physical completion.
+* Camera/video is optional evidence, not a prerequisite for audio analysis. Add it only when a specific unresolved signal needs it and it can share the same attempt and time reference.
+
+== Evidence and Limits
+
+The first audio-sync test used a short 2 mm laser-off frame at X=20. The M4A decoded to recording ID `321995`, matching attempt `1794321995-frame`. The preamble began at 15.8 seconds in the file; the digits followed at 16.48-17.70 seconds. The nominal run request was 18.5 seconds. An earlier exploratory report also listed acoustic intervals; that output is archived and is not part of the current analysis or a validated motion label.
+
+The M4A embedded creation time differed from the API marker wall clock by about 2 hours 40 minutes, while the DTMF ID matched. Prefer the audible ID and within-recording relative timing over file metadata until clock provenance is understood.
+
+The adjacent X=20 power-block trace captured 1,024 raw bytes and 1,454 events, then marked truncation. Decoded progress/quiet events were present for all ten jobs; raw bytes were exhausted during job 1. Frame and first-row statuses reached 99%; remaining rows reported 0%. All jobs ended under the existing 90-second silence assumption. No distinct terminal event was established, so no production completion-policy change is justified.
+
+== Consequences
+
+* The run is reproducible with a compact audio code and the full attempt ID remains in the audit log.
+* The container gives ordinary Docker/Podman hosts a repeatable analyzer and avoids modifying the Steam Deck host.
+* Container/image/decoder metadata, DTMF confidence and activity thresholds must accompany future reports; false decodes and room-noise intervals remain possible.
+* Physical correlation remains an attended operator task. No automatic next-job or next-band decision may rely only on this trace or audio analysis.
+
+== Staged Work
+
+. Phone-audio proof of concept: decode the six-digit marker and inspect candidate audible intervals. Complete for one real 2 mm frame recording; the ID matched, but creation-time metadata was offset from the Pi log. Its self-contained report is available at `/examples/audio-analysis`.
+. Visualization and log join: implemented in the analyzer. The HTML report includes playable audio, waveform/activity, cue/DTMF markers, run timing and trace limits. It shows candidate evidence, not proof of movement.
+. Pi capture integration: coordinate local microphone capture and the laser run from the Pi, use monotonic capture-relative event times, then submit audio and filtered run metadata to an external analysis service. Keep the optional cue for phone/independent capture. Measure capture CPU, memory and storage before enabling it in routine runs; see <<adr-028-distributed-audio-analysis,ADR-028>>.
+. Synchronization accuracy: compare audio/video markers, receive trace, and attended physical stop across short non-marking frames and representative material runs. Quantify offsets, missed detections and false acoustic activity.
+. End-estimate evaluation: only after accuracy is measured, evaluate a conservative end estimate and whether the 90-second safety margin can be reduced. Keep silence-assumed completion and operator confirmation as fallback; do not make a candidate estimate an automatic progression trigger until evidence supports it.

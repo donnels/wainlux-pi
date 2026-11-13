@@ -15,3 +15,12 @@ Record the goal before a run, the software outcome after it, and an independent 
 * Later reviewed card stages require acceptance of earlier stages; a back stage also requires explicit placement confirmation.
 
 Use the simulator for automated contract tests. Real-device checks require an attended operator and a recorded physical observation.
+
+== Full-Screen Operator UI Acceptance (Pending)
+
+* On desktop, enter full screen from the UI; confirm the workflow, current machine mode and STOP remain visible and usable. Exit with the UI control and the browser's Escape shortcut.
+* On iPhone Safari, add the service to the Home Screen and launch the installed app. Confirm it opens as a standalone view, respects the camera/sensor safe areas, and keeps STOP fully visible and tappable in portrait and landscape.
+* If Safari exposes the Fullscreen API for the page, test the in-browser toggle as well. If it does not, the standalone Home Screen launch is the supported full-screen path.
+* Verify the page remains usable when returning from full screen; do not start a laser job as part of this display check.
+
+These device/browser checks have not yet been performed. Automated UI tests cover toggle state and persistent STOP visibility only.
