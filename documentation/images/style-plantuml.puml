@@ -16,4 +16,4 @@ skinparam shadowing true
 skinparam ArrowColor #black
 skinparam ArrowColor<<system>> #blue
 
-footer (C)2026 Sean Donnellan
+footer ©2026 Sean Donnellan

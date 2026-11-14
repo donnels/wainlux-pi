@@ -1,5 +1,5 @@
 @startuml
-!include plantuml-style.puml
+!include style-plantuml.puml
 
 title Deployment: Pi Zero W
 

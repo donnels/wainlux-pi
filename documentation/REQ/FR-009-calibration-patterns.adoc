@@ -17,7 +17,7 @@ ifdef::single-page[]
 Run results, selected measurements, the 0–12 ladder and pattern illustrations are in <<hardware-observations>>.
 endif::single-page[]
 ifndef::single-page[]
-Run results and selected measurements are summarized in link:../hardware-observations.adoc[Hardware Observations].
+Run results and selected measurements are summarized in <<hardware-observations>>.
 The 0–12 acceptance ladder and recorded evidence are summarized there as well.
 Pattern illustrations: link:../images/test-case-07a-limit-stairs.svg[limit stairs], link:../images/test-case-07c-seven-squares.svg[limit squares], link:../images/test-case-08-blank-rows.svg[blank rows] and link:../images/test-case-09-corners.svg[corner positions].
 endif::single-page[]

@@ -1,5 +1,5 @@
 @startuml
-!include plantuml-style.puml
+!include style-plantuml.puml
 title Component: Rust Laser Service
 
 package "Rust Service" {

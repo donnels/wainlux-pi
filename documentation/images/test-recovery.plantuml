@@ -1,5 +1,5 @@
 @startuml recovery-workflow
-!include plantuml-style.puml
+!include style-plantuml.puml
 title Pi-rendered recovery card and manual NFC read-back
 hide footbox
 

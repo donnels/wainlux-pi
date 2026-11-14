@@ -14,6 +14,7 @@ The Dockerfile at `docker/docker-wainlux-rs/Dockerfile` is a multi-stage build o
 
 === Stage 1: Cross-Compilation
 
+.Cross-compilation Dockerfile
 [source,dockerfile]
 ----
 FROM --platform=$BUILDPLATFORM ghcr.io/rust-cross/rust-musl-cross@sha256:90fc4876d17c21346e55dfd4a344924b72c3bb38380749647461cd9595174789 AS build
@@ -30,6 +31,7 @@ RUN RUSTFLAGS="-C target-cpu=arm1176jzf-s" \
 
 === Stage 2: Runtime Image
 
+.Runtime Dockerfile
 [source,dockerfile]
 ----
 FROM docker.io/library/alpine@sha256:bc21487101ae47172509130ee1092cc273a831968d64b617776d1f69c81e42ab
@@ -49,6 +51,7 @@ COPY use-cases /etc/laser/use-cases
 
 From repository root:
 
+.Build script
 [source,bash]
 ----
 ./scripts/build_laser.sh
@@ -71,6 +74,7 @@ This script:
 
 Start in simulator mode:
 
+.Local simulator command
 [source,bash]
 ----
 MACHINE=sim docker compose -f docker/docker-wainlux-rs/compose.yaml up -d
@@ -78,6 +82,7 @@ MACHINE=sim docker compose -f docker/docker-wainlux-rs/compose.yaml up -d
 
 Or use the build script which handles environment setup:
 
+.Build and deploy in simulator mode
 [source,bash]
 ----
 MACHINE=sim ./scripts/build_laser.sh

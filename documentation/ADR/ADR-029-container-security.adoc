@@ -65,18 +65,19 @@ With local Dockerfiles:
 [cols="1,1,1,1",options="header"]
 |===
 | Container | Directory | Status | Action
-| bytefield-svg | `docker/docker-bytefield/` | ✅ Local Dockerfile | Keep
-| plantuml | Not in docker/ | ❌ Remote `:latest` | Create local Dockerfile
-| rust-cross | Not in docker/ | ⚠️ Remote pinned | Create local Dockerfile
-| wainlux-rs | `docker/docker-wainlux-rs/` | ✅ Local Dockerfile | Keep
-| mcp | `docker/docker-mcp/` | ✅ Local Dockerfile | Keep
-| audio-analysis | `docker/docker-audio-analysis/` | ✅ Local Dockerfile | Keep
+| bytefield-svg | `docker/docker-bytefield/` | Local Dockerfile | Keep
+| plantuml | Not in docker/ | Remote `:latest` | Create local Dockerfile
+| rust-cross | Not in docker/ | Remote pinned | Create local Dockerfile
+| wainlux-rs | `docker/docker-wainlux-rs/` | Local Dockerfile | Keep
+| mcp | `docker/docker-mcp/` | Local Dockerfile | Keep
+| audio-analysis | `docker/docker-audio-analysis/` | Local Dockerfile | Keep
 |===
 
 === Build Process
 
 Create `docker-compose.build.yml` at repository root:
 
+.Build compose file
 [source,yaml]
 ----
 version: '3.8'
@@ -94,6 +95,7 @@ services:
 
 Build all tool containers:
 
+.Build containers command
 [source,bash]
 ----
 docker compose -f docker-compose.build.yml build
@@ -103,6 +105,7 @@ docker compose -f docker-compose.build.yml build
 
 Scan all local containers before use:
 
+.Scan containers command
 [source,bash]
 ----
 trivy image localhost/bytefield-svg:latest
@@ -114,6 +117,7 @@ trivy image localhost/rust-cross:arm
 
 After scanning, tag containers with semantic versions:
 
+.Tag containers command
 [source,bash]
 ----
 docker tag localhost/bytefield-svg:latest localhost/bytefield-svg:v1.0.0

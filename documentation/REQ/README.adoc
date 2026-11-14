@@ -18,7 +18,7 @@ Historical physical evidence is in <<hardware-observations>>.
 * <<fr-017-end-detection,FR-017: Physical end estimates>>
 endif::single-page[]
 ifndef::single-page[]
-Historical physical evidence is in link:../hardware-observations.adoc[Hardware Observations].
+Historical physical evidence is in <<hardware-observations>>.
 * link:FR-001-burn-raster-image.adoc[FR-001: Reviewed raster execution]
 * link:FR-002-generate-wifi-qr.adoc[FR-002: WiFi QR composition]
 * link:FR-003-progress-and-timing.adoc[FR-003: Progress and timing]

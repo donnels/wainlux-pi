@@ -12,10 +12,10 @@ These are investigation and experiment ideas, not commitments or claims of devic
 The photos show both sides of an HW-147 reader board. It has SCK/MISO/MOSI/SS SPI pins and a separate TXD/RXD UART header. Confirm the controller, UART protocol, voltage, tag support, GPIO allocation and HAT pin sharing before wiring it to the original Pi Zero W.
 
 .Proposed HW-147 NFC reader, component side
-image::hardware-nfc-reader-hw147-front.jpg[HW-147 reader front]
+image::hw-nfc-reader-hw147-front.jpg[HW-147 reader front]
 
 .Proposed HW-147 NFC reader, reverse side
-image::hardware-nfc-reader-hw147-back.jpg[HW-147 reader back]
+image::hw-nfc-reader-hw147-back.jpg[HW-147 reader back]
 
 If compatible, expose NFC read, write and read-back as a separate adapter and operator-confirmed API action. Verify the payload by reading the tag after writing it. Keep tag operations separate from laser plan/run and use them to test cards after engraving.
 
@@ -24,7 +24,7 @@ If compatible, expose NFC read, write and read-back as a separate adapter and op
 The photo shows a 2.8-inch, 240 x 320 CYD. It needs separate firmware and should use Wi-Fi to call the API, not GPIO to control the laser. Preserve the existing review and explicit plan/run flow.
 
 .Proposed 2.8-inch CYD board
-image::hardware-cyd-2.8-tft.jpg[2.8-inch CYD]
+image::hw-cyd-28-tft.jpg[2.8-inch CYD]
 
 === Audio/display HAT
 
@@ -39,7 +39,7 @@ The LAFVIN audio/display HAT is ordered, not installed or tested. Before use, ve
 * *Fixture:* If a locating jig is used, it must register the laser without shifting its established position. Measure and verify the actual unit before relying on a downloaded or printed fixture; published K6 trays note unit/printer dimensional variation.
 
 .To-scale projection of both adjacent 20 mm blocks, with X=20 selected for the next traced run
-image::power-sweep-projection.svg[Adjacent sweep blocks and receive-traced test,align="center"]
+image::test-power-sweep.svg[Adjacent sweep blocks and receive-traced test,align="center"]
 
 == Protocol investigations
 

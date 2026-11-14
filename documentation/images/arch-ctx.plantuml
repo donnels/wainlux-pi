@@ -1,5 +1,5 @@
 @startuml
-!include plantuml-style.puml
+!include style-plantuml.puml
 title System Context: Wainlux K6 Laser Service
 !$port8081="\n<color #blue>8081"
 !$port8082="\n<color #blue>8082"

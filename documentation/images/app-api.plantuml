@@ -1,5 +1,5 @@
 @startuml card-api-clients
-!include plantuml-style.puml
+!include style-plantuml.puml
 title API-fed card examples - no automatic laser execution
 hide footbox
 actor User

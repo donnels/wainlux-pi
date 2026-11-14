@@ -1,9 +1,7 @@
 @startmindmap
+!include style-plantuml.puml
 title Decision Tree
-footer (c)2026 Sean Donnellan
-skinparam BackgroundColor #fff/aaf
-skinparam shadowing 1
-skinparam NodeBackgroundColor #fff/aaf
+footer ©2026 Sean Donnellan
 
 * K6 Build & Deployment Decision Tree
 ** Where to build?

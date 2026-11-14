@@ -1,5 +1,5 @@
 @startuml architecture-rust
-!include plantuml-style.puml
+!include style-plantuml.puml
 ' Current deployment and crate boundaries; not a target-state sketch.
 title Wainlux K6 service - runtime ownership
 left to right direction

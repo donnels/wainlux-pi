@@ -1,5 +1,5 @@
 @startuml
-!include plantuml-style.puml
+!include style-plantuml.puml
 title Workflow: Card Job Lifecycle
 
 start

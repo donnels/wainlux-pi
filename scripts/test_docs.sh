@@ -99,8 +99,8 @@ PLANTUML_FILES=()
 while IFS= read -r source; do PLANTUML_FILES[${#PLANTUML_FILES[@]}]="$source"; done < <(find "${PROJECT_ROOT}" \( -name .git -o -name target -o -name .venv \) -prune -o -type f -name "*.plantuml" -print | sort)
 echo
 echo "=== PlantUML Shared Style Test ==="
-PLANTUML_STYLE="${PROJECT_ROOT}/documentation/images/plantuml-style.puml"
-if grep -Fqx 'footer (C)2026 Sean Donnellan' "${PLANTUML_STYLE}"; then
+PLANTUML_STYLE="${PROJECT_ROOT}/documentation/images/style-plantuml.puml"
+if grep -Fqx 'footer ©2026 Sean Donnellan' "${PLANTUML_STYLE}"; then
   echo "[ PASS ] Shared PlantUML footer"
 else
   echo "[ FAIL ] Shared PlantUML footer missing"
@@ -108,7 +108,7 @@ else
 fi
 for source in "${PLANTUML_FILES[@]}"; do
   rel_path="${source#${PROJECT_ROOT}/}"
-  if grep -Eq '^!include .*plantuml-style\.puml$' "${source}"; then
+  if grep -Eq '^!include .*style-plantuml\.puml$' "${source}"; then
     echo "[ PASS ] ${rel_path}"
   else
     echo "[ FAIL ] ${rel_path} (missing shared style include)"

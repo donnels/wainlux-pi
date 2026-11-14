@@ -18,7 +18,7 @@ ifdef::github-env[]
 :caution-caption: :fire:
 :warning-caption: :warning:
 endif::github-env[]
-:imagesdir: ./documentation/images
+:imagesdir: documentation/images
 :localdir: .
 include::documentation/includes/include-formatting-book-header.adoc[]
 
@@ -111,19 +111,19 @@ Project owner and decision authority: Sean Donnellan. Sean triggered and verifie
 The system architecture is documented through the following diagrams:
 
 .System Context
-image::documentation/images/arch-ctx.png[System Context Diagram,align=center,width=600]
+image::arch-ctx.png[System Context Diagram,align=center,width=600]
 
 .Component: Rust Laser Service
-image::documentation/images/arch-cmp.png[Component Diagram,align=center,width=800]
+image::arch-cmp.png[Component Diagram,align=center,width=800]
 
 .Workflow: Card Job Lifecycle
-image::documentation/images/biz-wfl-job.png[Workflow Diagram,align=center,width=400]
+image::biz-wfl-job.png[Workflow Diagram,align=center,width=400]
 
 .Deployment: Pi Zero W
-image::documentation/images/arch-dep.png[Deployment Diagram,align=center,width=600]
+image::arch-dep.png[Deployment Diagram,align=center,width=600]
 
 .Architecture Decision Tree
-image::documentation/images/arch-dec.png[Decision Tree,align=center,width=800]
+image::arch-dec.png[Decision Tree,align=center,width=800]
 
 For detailed architecture decisions, see <<adr-006-clean-room>> and <<ADR-029-container-security>>.
 

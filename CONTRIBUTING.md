@@ -2,7 +2,7 @@
 
 Thank you for your interest in contributing! This project maintains strict **contamination control** to ensure clean-room reverse-engineering integrity and legal distribution.
 
-## ⚠️ Critical: Contributor Declaration
+## Critical: Contributor Declaration
 
 By submitting a pull request, you **implicitly declare** that:
 
@@ -17,7 +17,7 @@ By submitting a pull request, you **implicitly declare** that:
 
 ## Acceptable Contribution Sources
 
-✅ **ALLOWED:**
+* **ALLOWED:**
 - Independent protocol implementations based on observed behavior
 - USB packet captures you created yourself
 - Serial port monitoring logs
@@ -29,7 +29,7 @@ By submitting a pull request, you **implicitly declare** that:
 
 ## Prohibited Contribution Sources
 
-❌ **FORBIDDEN:**
+* **FORBIDDEN:**
 - Code copied from decompiled vendor software
 - Algorithms or logic structures reverse-engineered from binaries
 - Proprietary firmware analysis (unless you own the device and performed independent analysis)
@@ -146,4 +146,4 @@ We'd rather clarify upfront than reject a PR later.
 **Remember:** This project's legal status depends on clean-room integrity.
 When in doubt, disclose your sources and methods. Transparency protects everyone.
 
-Thank you for contributing responsibly! 🚀
+Thank you for contributing responsibly!

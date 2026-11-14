@@ -32,6 +32,6 @@ endif::single-page[]
 
 == Copyright Notice
 
-Copyright (c) 2026 Sean Donnellan
+Copyright © 2026 Sean Donnellan
 
 
