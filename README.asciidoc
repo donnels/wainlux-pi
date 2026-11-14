@@ -72,6 +72,61 @@ Project owner and decision authority: Sean Donnellan. Sean triggered and verifie
 * Use a smoke detector.
 ====
 
+== Stakeholder Requirements
+
+.Stakeholder
+* Sean Donnellan
+* Anyone else who takes interest
+
+.Goal
+* A repeatable laser workflow with an existing machine.
+
+.Problem
+* Eyeballing each job, in an iphone app with a tiny screen, is fine for quick work, not for NFC/RFID cards or anything needing accuracy or repeatability.
+
+.Solution
+* Invest a few hours. Get it right once. Make NFC engraving reliable and repeatable, even if slow.
+
+.Why
+* The laser exists.
+* Might as well use it well. 
+* Demonstrate capability. 
+* Show what's possible across multiple concepts. 
+* A small, rounded project.
+* A demonstration of what one can create.
+
+.Project status
+* [x] Architecture
+** [x] Requirements
+** [x] Decisions
+** [x] Design
+* [ ] Features
+** [x] Web UI
+** [x] API
+** [x] MCP
+** [ ] Security
+
+== Architecture
+
+The system architecture is documented through the following diagrams:
+
+.System Context
+image::documentation/images/system-context.png[System Context Diagram,align=center,width=600]
+
+.Component: Rust Laser Service
+image::documentation/images/component-rust-service.png[Component Diagram,align=center,width=800]
+
+.Workflow: Card Job Lifecycle
+image::documentation/images/workflow-job-lifecycle.png[Workflow Diagram,align=center,width=400]
+
+.Deployment: Pi Zero W
+image::documentation/images/deployment.png[Deployment Diagram,align=center,width=600]
+
+.Architecture Decision Tree
+image::documentation/images/architecture-decision-tree.png[Decision Tree,align=center,width=800]
+
+For detailed architecture decisions, see <<adr-006-clean-room>> and <<ADR-029-container-security>>.
+
 == Repository Guides
 
 ifdef::github-env[]

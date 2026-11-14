@@ -1,9 +1,11 @@
 skinparam backgroundColor #fff/aaf
+skinparam cardbackgroundColor #fff/aaf
+skinparam cardbackgroundColor<<system>> #fff/blue
 skinparam actorBackgroundColor #fff/aaf
 skinparam activityBackgroundColor #fff/aaf
-skinparam activityBorderColor #667985
+skinparam activityBorderColor #black
 skinparam componentBackgroundColor #fff/aaf
-skinparam componentBorderColor #344054
+skinparam componentBorderColor #black
 skinparam componentStyle rectangle
 skinparam nodeBackgroundColor #fff/aaf
 skinparam noteBackgroundColor #fff/aaf
@@ -11,7 +13,7 @@ skinparam packageBorderColor #7b8794
 skinparam participantBackgroundColor #fff/aaf
 skinparam sequenceLifeLineBackgroundColor #fff/aaf
 skinparam shadowing true
-skinparam defaultFontName sans-serif
-skinparam ArrowColor #40515c
+skinparam ArrowColor #black
+skinparam ArrowColor<<system>> #blue
 
 footer (C)2026 Sean Donnellan

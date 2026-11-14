@@ -1,54 +1,49 @@
-@startuml system-context
+@startuml
 !include plantuml-style.puml
-' Logical context only. No SSID, IP address or credentials.
-title Wainlux K6 - system context
-left to right direction
+title System Context: Wainlux K6 Laser Service
+!$port8081="\n<color #blue>8081"
+!$port8082="\n<color #blue>8082"
+!$port8083="\n<color #blue>8083"
 
-rectangle "One shared Wi-Fi network\n(SSID and addresses intentionally omitted)" as Wifi {
-  node "Steam Deck\nDevelopment platform" as Deck {
-    component "Rust workspace\nbuild + tests" as RustDev
-    component "Ghidra analysis\nisolated container" as Ghidra
+rectangle "Pi Zero W" as pi {
+  card "Docker Containers" as pi.docker {
+    card "Laser Service\n(port 8081)" as service <<system>>
   }
-
-  node "Pi Zero W\nLaser host" as PiZero {
-    component "Rust laser service\nHTTP API + browser UI" as Laser
-    component "MCP preview service\nStreamable HTTP\n(separate container, assumed here)" as MCP
-  }
-
-  node "Laptop" as Laptop {
-    component "Web browser\noperator UI" as Browser
-  }
-
-  node "Pi 5" as Pi5 {
-    component "neocv\nproducer/client" as NeoCV
-  }
-
-  actor "Sean Donnellan" as Sean
-  actor "iPhone" as Phone
 }
 
-node "Wainlux K6" as K6 #fff/red
-artifact "Bamboo card\nWi-Fi/contact QR + NFC" as Card #fff/orange
+rectangle "Development Workstation" as workstation {
+  card "Browser" as browser
+  card "CLI App" as cli <<system>>
+  card "VS Code + LLM" as vscode
+}
 
-Sean --> Deck : develops; starts Ghidra analysis
-Ghidra --> RustDev : protocol-only findings\n(no source/artifacts)
-RustDev --> PiZero : built service image\nwhen deployed
-Sean --> Browser : reviews and starts stages
-Browser --> Laser : HTTP review / plan / run / verdict
-MCP --> Laser : local HTTP discovery + preview only
-NeoCV --> Laser : HTTP job submission / preview
-Laser --> K6 : USB serial
-Phone --> Card : scans QR / reads NFC
-Phone --> Wifi : joins the network\nwhen QR describes Wi-Fi access
+actor "Operator" as user
+node "K6 Laser" as laser
 
-note bottom of PiZero
-  Assumed context placement for MCP.
-  MCP never opens the serial device.
-  Rust service is sole K6 owner.
-end note
-note bottom of Ghidra
-  Vendor binary and Ghidra artifacts stay
-  inside the isolated analysis container.
-  Only protocol descriptions cross roles.
-end note
+rectangle "External Services" as external {
+    card "Docker Containers" as external.docker {
+        card "MCP Hub" as mcp <<system>>
+        card "Audio Analyzer" as audio <<system>>
+      }
+    card "external app\n(eg neoCV)" as external.application
+}
+
+user --> browser : "1. Review UI"
+user --> cli : "2. Submit Jobs"
+user --> vscode : "3. LLM Integration"
+user .-> external.application
+
+browser --> service <<system>> : HTTP $port8081
+cli --> service <<system>> : HTTP API $port8081
+vscode --> mcp <<system>> : MCP Protocol $port8083
+mcp --> service <<system>> : HTTP API $port8081
+external.application --> service <<system>> : HTTP API $port8081
+
+service --> laser <<system>> : USB Serial
+audio <-- service <<system>> : HTTP API $port8082
+
+legend
+    Ports are noted overlap free here to allow co-location
+    This is not mandatory
+end legend
 @enduml

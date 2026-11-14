@@ -61,3 +61,12 @@ endif::single-page[]
 ** Marks that alter QR metadata, using the tool's separate metadata option.
 ** Marks that alter alignment or timing patterns. The tool warns that these may not scan with all readers, so treat them as higher-risk trials.
 * *Halftone QR:* Try a small, controlled test based on link:https://lucerojc.github.io/halftone-qr/[Halftone QR]. This is lower-confidence for a laser because engraving reduces the pattern to material marks, but a supervised scan test can establish whether any useful effect survives.
+
+== Currently missing
+
+* [ ] Trusted LAN boundary: Document network assumptions
+* [ ] Authentication options: API keys, basic auth, mutual TLS, SSO
+* [ ] Input validation: Sanitize QR content, vCard fields
+* [ ] Card fixtures: Physical jigs for NFC card placement
+* [ ] Preview: Show exact position before burning
+* [x] Guide marks: Burn alignment marks on backing material

@@ -1,0 +1,42 @@
+@startuml
+!include plantuml-style.puml
+title Component: Rust Laser Service
+
+package "Rust Service" {
+  [HTTP Server] as http
+  [Workflow Engine] as workflow
+  [K6 Driver] as k6driver
+  [Template Engine] as templates
+  [Raster Generator] as raster
+  [Asset Store] as assets
+  [State Manager] as state
+  [Audit Logger] as audit
+}
+
+package "Data" {
+  folder "Data Files" as data {
+    [Jobs] as jobs
+    [Materials] as materials
+    [Templates] as templates_data
+    [Logs] as logs
+  }
+}
+
+package "Hardware" {
+  [K6 Laser] as k6
+}
+
+http --> workflow : "Routes /api/*"
+workflow --> k6driver : "Execute commands"
+workflow --> templates : "Render templates"
+workflow --> raster : "Generate raster"
+workflow --> state : "Manage state"
+workflow --> audit : "Log events"
+
+k6driver --> k6 : "USB Serial\n115200 baud"
+
+raster --> assets : "Load images"
+templates --> templates_data : "Read templates"
+audit --> logs : "Write logs"
+
+@enduml

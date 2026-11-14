@@ -1,0 +1,27 @@
+@startuml
+!include plantuml-style.puml
+
+title Deployment: Pi Zero W
+
+node "Steam Deck / Workstation" as deck {
+  artifact "Docker" as docker_deck
+  artifact "Source Code" as source
+}
+
+node "Pi Zero W" as pi {
+  artifact "Docker" as docker_pi
+  artifact "laser-app" as service
+}
+
+cloud "GitHub" as github {
+  artifact "Repository" as repo
+}
+
+deck --> github : clone/pull
+deck --> docker_deck : build
+docker_deck --> service : produce image
+service --> pi : deploy
+pi --> docker_pi : load
+docker_pi --> service : run
+
+@enduml

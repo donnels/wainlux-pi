@@ -1,0 +1,25 @@
+@startuml
+!include plantuml-style.puml
+title Workflow: Card Job Lifecycle
+
+start
+
+:CLI/Browser submits job;
+:Service validates & generates raster;
+:Operator reviews pixels/placement;
+
+if (Approval?) then (yes)
+  :Service plans burn stages;
+  :Operator confirms physical rest;
+  :Operator confirms placement;
+  :Service sends to K6 via serial;
+  :K6 executes burn;
+  :Operator inspects result;
+  :Operator records verdict;
+  stop
+else (no)
+  :Operator discards/revises;
+  :Return to review;
+endif
+
+@enduml
