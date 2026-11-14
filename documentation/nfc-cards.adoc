@@ -29,7 +29,7 @@ The capacity reference below covers only one English NDEF Text record on a Type 
 Use `cli/inputs/synthetic-codes.txt`, not a private file. The fictional values cannot unlock GitHub. Submit the file through the CLI, review the Pi-generated QR, and scan it with QRbot in text view, not a detected link. Test phone reading and NFC read-back before real codes.
 
 .Historical synthetic recovery-code QR, not a current Pi rendering
-image::recovery-demo-qr.png[Synthetic recovery-code QR,420]
+image::capt-recovery-qr.png[Synthetic recovery-code QR,420]
 
 This retained illustration includes fictional instructions and codes. It does not update with the sample file and is not the raster to engrave. Use the live Pi preview for the exact submitted payload and geometry.
 
@@ -182,11 +182,11 @@ custody are not all enforced or verified by this tool. It is your choice to use 
 == Workflow
 
 .Backup creation, card writing, and recovery workflow
-image::recovery-workflow.png[Recovery code backup and use]
+image::test-recovery.png[Recovery code backup and use]
 
 ifdef::single-page[]
-Edit `documentation/images/recovery-workflow.plantuml` and render locally. Never send real codes to a public diagram server.
+Edit `documentation/images/test-recovery.plantuml` and render locally. Never send real codes to a public diagram server.
 endif::single-page[]
 ifndef::single-page[]
-Edit link:images/recovery-workflow.plantuml[the PlantUML source] and render locally. Never send real codes to a public diagram server.
+Edit link:images/test-recovery.plantuml[the PlantUML source] and render locally. Never send real codes to a public diagram server.
 endif::single-page[]

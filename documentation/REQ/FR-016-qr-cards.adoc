@@ -22,4 +22,4 @@ See link:../ADR/ADR-019-http-review-boundary.adoc[ADR-019] for the trusted-LAN a
 endif::single-page[]
 
 .Current API submission, review, and operator-controlled run sequence
-image::../images/card-api-clients.png[API submission, review and manual run sequence]
+image::../images/app-api.png[API submission, review and manual run sequence]

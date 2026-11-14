@@ -92,23 +92,23 @@ image::../../docker/docker-wainlux-rs/app/assets/test-patterns/vertical-comparis
 Sean reported that the first card run had a good guide, readable QR and working NFC. Printed text was too small. The subsequent larger bold text defaults have not been physically accepted in a physical run; verify them on a new supervised card before treating them as measured results.
 
 .Generic open-right card guide used on bare backing
-image::card-guide.svg[Generic open-right card guide]
+image::test-card-guide.svg[Generic open-right card guide]
 
 == Historical Cork and PLA Close-ups
 
 These recovered images show material behavior from earlier experiments. They are microscope/camera close-ups of cork and PLA, not the missing close-ups from the 9b corner/limit run.
 
 .Cork test-pattern surface
-image::capture_20260127_124112.jpg[Cork close-up]
+image::capt-20260127-124112.jpg[Cork close-up]
 
 .Cork pattern at wider view
-image::capture_20260127_124223.jpg[Cork pattern close-up]
+image::capt-20260127-124223.jpg[Cork pattern close-up]
 
 .Pulsed line detail on PLA
-image::capture_20260127_124337.jpg[PLA close-up]
+image::capt-20260127-124337.jpg[PLA close-up]
 
 .Tiger pattern on PLA
-image::capture.2426611769506763096.jpg[PLA tiger close-up]
+image::capt-2426611769506763096.jpg[PLA tiger close-up]
 
 == Historical QR Run
 

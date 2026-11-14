@@ -1,21 +1,96 @@
-= Images
+= Images Directory Structure
+:imagesdir: .
 
-Current diagrams used by the documentation.
+This directory contains all diagrams, screenshots, and images used in the project documentation.
 
-* `k6-prot-*.edn` -> `.svg` with Bytefield-SVG (`scripts/generate_diagrams.sh`).
-* `plantuml-style.puml` is shared by all PlantUML sources. `system-context.plantuml`, `architecture-rust.plantuml`, `code-topology.plantuml`, `sequence-stage-run.plantuml`, `card-api-clients.plantuml`, `sequence-audio-capture.plantuml`, `activity-audio-test.plantuml` and `sequence-ghidra-analysis.plantuml` show system ownership and workflows. Their PNGs are generated with PlantUML.
-* `card-guide.svg` is a generic open-right guide with no submitted content or credentials.
-* `card-placement.svg` and `card-items.svg` are generic illustrations of the current K6/card geometry and template coordinates.
-* `ui-simulator-preview.png` is a Rust operator UI screenshot with synthetic Wi-Fi values, simulator mode and no burn started. The simulator's 80 x 80 mm profile is not the measured K6 working reach.
-* `hardware-nfc-reader-hw147-front.jpg`, `hardware-nfc-reader-hw147-back.jpg` and `hardware-cyd-2.8-tft.jpg` are proposed hardware references, not installed or tested devices.
-* `recovery-demo-qr.png` is a historical illustration containing synthetic instructions and codes, not a current Pi raster. `recovery-workflow.plantuml` and its PNG describe Pi-reviewed card submission, manual NFC write/read-back and recovery, not an implemented NFC adapter or CLI exporter.
-* `test-ladder.svg`, `test-case-07a-limit-stairs.svg`, `test-case-07c-seven-squares.svg`, `test-case-08-blank-rows.svg` and `test-case-09-corners.svg` show Rust test coverage/evidence. The 9b comparison is shared from `docker/docker-wainlux-rs/app/assets/test-patterns/vertical-comparison.svg`.
-* `capture_20260127_124112.jpg`, `capture_20260127_124223.jpg`, `capture_20260127_124337.jpg` and `capture.2426611769506763096.jpg` are recovered historical cork/PLA close-ups; they are not 9b ladder microscope captures.
+== File Naming Convention
 
-ifdef::single-page[]
-Measured results are in <<hardware-observations>>.
-endif::single-page[]
-ifndef::single-page[]
-Measured results are in link:../hardware-observations.adoc[Hardware Observations].
-endif::single-page[]
+Files are organized by TOGAF phase using the following prefix scheme:
+
+.Naming Prefixes (4-8 characters)
+[cols="1,1,2,4",options="header"]
+|===
+| Prefix | Phase | Category | Description
+| `arch-` | Architecture | Architecture | System context, component, deployment, and decision diagrams
+| `app-` | Application | Application | Software components and service diagrams
+| `biz-` | Business | Business | Workflows and process diagrams
+| `test-` | Testing | Test | Test scenarios, sequences, and validation diagrams
+| `prot-` | Technology | Protocol | K6 protocol documentation (EDN + SVG)
+| `hw-` | Technology | Hardware | Physical component photos
+| `capt-` | Capture | Capture | Screenshots and photo evidence
+| `style-` | N/A | Style | Configuration files (e.g., PlantUML styles)
+|===
+
+=== Examples by Prefix
+
+.Architecture (`arch-*`)
+* `arch-ctx.plantuml` / `arch-ctx.png` - System context diagram
+* `arch-cmp.plantuml` / `arch-cmp.png` - Component diagram
+* `arch-dep.plantuml` / `arch-dep.png` - Deployment diagram
+* `arch-dec.plantuml` / `arch-dec.png` - Architecture decision tree
+
+.Application (`app-*`)
+* `app-rust.plantuml` / `app-rust.png` - Rust service architecture
+* `app-api.plantuml` / `app-api.png` - API client sequence
+* `app-topo.plantuml` / `app-topo.png` - Codebase topology
+
+.Business (`biz-*`)
+* `biz-wfl-job.plantuml` / `biz-wfl-job.png` - Job lifecycle workflow
+
+.Test (`test-*`)
+* `test-audio.plantuml` / `test-audio.png` - Phone-driven audio test
+* `test-recovery.plantuml` / `test-recovery.png` - Recovery workflow
+* `test-seq-audio.plantuml` / `test-seq-audio.png` - Audio capture sequence
+* `test-seq-ghidra.plantuml` / `test-seq-ghidra.png` - Ghidra analysis sequence
+* `test-seq-stage.plantuml` / `test-seq-stage.png` - Stage run sequence
+* `test-*.svg` - Test pattern SVG diagrams
+
+.Protocol (`prot-*`)
+* `prot-rx-*.edn` / `prot-rx-*.svg` - K6 RX protocol messages
+* `prot-tx-*.edn` / `prot-tx-*.svg` - K6 TX protocol messages
+
+.Hardware (`hw-*`)
+* `hw-cyd-28-tft.jpg` - CYD 2.8" TFT display
+* `hw-nfc-reader-hw147-front.jpg` - NFC reader front view
+* `hw-nfc-reader-hw147-back.jpg` - NFC reader back view
+
+.Capture (`capt-*`)
+* `capt-ui-simulator.png` - UI simulator screenshot
+* `capt-recovery-qr.png` - Recovery QR code capture
+* `capt-*.jpg` - Historical capture photos
+
+== Diagram Generation
+
+=== PlantUML Diagrams
+
+All `*.plantuml` files use the shared `style-plantuml.puml` for consistent styling.
+
+ Render all PlantUML diagrams to PNG:
+[source,bash]
+----
+cd documentation/images
+# Use podman/flatpak as shown in scripts/generate_diagrams.sh
+flatpak-spawn --host podman run --rm --user root -v "$(pwd):/repo" \
+  docker.io/plantuml/plantuml:latest /repo/<FILE>.plantuml
+----
+
+=== Bytefield-SVG Diagrams
+
+Protocol diagrams (`prot-*.edn` -> `prot-*.svg`) are generated using Bytefield-SVG in the `docker/docker-bytefield/` container.
+
+== File Mapping Reference
+
+A complete mapping from old filenames to new names is available in `FILE_MAPPING.csv`.
+This file can be deleted after the migration is complete.
+
+== Security Notes
+
+* `capt-recovery-qr.png` contains synthetic instructions and codes, not current Pi rasters
+* `test-recovery.plantuml` describes Pi-reviewed card submission and recovery workflow
+* No real credentials, SSIDs, or IP addresses are embedded in any diagrams
+* All hardware photos show proposed/referenced devices, not installed/tested equipment
+
+== Cleanup
+
 Unverified design proposals and retired Python/UI diagrams have been removed.
+Measured results are documented in link:../hardware-observations.adoc[Hardware Observations].

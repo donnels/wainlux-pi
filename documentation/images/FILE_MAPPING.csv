@@ -1,0 +1,70 @@
+Old Name,New Name,Category,Description
+system-context.plantuml,arch-ctx.plantuml,ARCH,System Context Diagram
+system-context.png,arch-ctx.png,ARCH,System Context Diagram (rendered)
+component-rust-service.plantuml,arch-cmp.plantuml,ARCH,Component Diagram - Rust Service
+component-rust-service.png,arch-cmp.png,ARCH,Component Diagram (rendered)
+deployment.plantuml,arch-dep.plantuml,ARCH,Deployment Diagram
+deployment.png,arch-dep.png,ARCH,Deployment Diagram (rendered)
+architecture-decision-tree.plantuml,arch-dec.plantuml,ARCH,Architecture Decision Tree
+architecture-decision-tree.png,arch-dec.png,ARCH,Decision Tree (rendered)
+architecture-rust.plantuml,app-rust.plantuml,APP,Rust Architecture
+architecture-rust.png,app-rust.png,APP,Rust Architecture (rendered)
+card-api-clients.plantuml,app-api.plantuml,APP,API Clients Diagram
+card-api-clients.png,app-api.png,APP,API Clients (rendered)
+code-topology.plantuml,app-topo.plantuml,APP,Code Topology
+code-topology.png,app-topo.png,APP,Code Topology (rendered)
+workflow-job-lifecycle.plantuml,biz-wfl-job.plantuml,BIZ,Workflow - Job Lifecycle
+workflow-job-lifecycle.png,biz-wfl-job.png,BIZ,Job Lifecycle (rendered)
+activity-audio-test.plantuml,test-audio.plantuml,TEST,Audio Test Activity
+activity-audio-test.png,test-audio.png,TEST,Audio Test (rendered)
+recovery-workflow.plantuml,test-recovery.plantuml,TEST,Recovery Workflow
+recovery-workflow.png,test-recovery.png,TEST,Recovery Workflow (rendered)
+sequence-audio-capture.plantuml,test-seq-audio.plantuml,TEST,Audio Capture Sequence
+sequence-audio-capture.png,test-seq-audio.png,TEST,Audio Capture Sequence (rendered)
+sequence-ghidra-analysis.plantuml,test-seq-ghidra.plantuml,TEST,Ghidra Analysis Sequence
+sequence-ghidra-analysis.png,test-seq-ghidra.png,TEST,Ghidra Analysis Sequence (rendered)
+sequence-stage-run.plantuml,test-seq-stage.plantuml,TEST,Stage Run Sequence
+sequence-stage-run.png,test-seq-stage.png,TEST,Stage Run Sequence (rendered)
+plantuml-style.puml,style-plantuml.puml,STYLE,PlantUML Style Configuration
+ui-simulator-preview.png,capt-ui-simulator.png,CAPT,UI Simulator Preview Screenshot
+recovery-demo-qr.png,capt-recovery-qr.png,CAPT,Recovery QR Code Capture
+capture_20260127_124112.jpg,capt-20260127-124112.jpg,CAPT,Capture Photo 1
+capture_20260127_124223.jpg,capt-20260127-124223.jpg,CAPT,Capture Photo 2
+capture_20260127_124337.jpg,capt-20260127-124337.jpg,CAPT,Capture Photo 3
+capture.2426611769506763096.jpg,capt-2426611769506763096.jpg,CAPT,Capture Photo 4
+power-sweep-projection.svg,test-power-sweep.svg,TEST,Power Sweep Projection Test
+hardware-cyd-2.8-tft.jpg,hw-cyd-28-tft.jpg,HW,CYD 2.8 TFT Hardware
+hardware-nfc-reader-hw147-back.jpg,hw-nfc-reader-hw147-back.jpg,HW,NFC Reader HW147 Back
+hardware-nfc-reader-hw147-front.jpg,hw-nfc-reader-hw147-front.jpg,HW,NFC Reader HW147 Front
+k6-prot-rx-08-error.edn,prot-rx-08-error.edn,PROT,K6 Protocol RX 08 Error
+k6-prot-rx-08-error.svg,prot-rx-08-error.svg,PROT,K6 Protocol RX 08 Error Diagram
+k6-prot-rx-09-ack.edn,prot-rx-09-ack.edn,PROT,K6 Protocol RX 09 Ack
+k6-prot-rx-09-ack.svg,prot-rx-09-ack.svg,PROT,K6 Protocol RX 09 Ack Diagram
+k6-prot-rx-heartbeat.edn,prot-rx-heartbeat.edn,PROT,K6 Protocol RX Heartbeat
+k6-prot-rx-heartbeat.svg,prot-rx-heartbeat.svg,PROT,K6 Protocol RX Heartbeat Diagram
+k6-prot-rx-status.edn,prot-rx-status.edn,PROT,K6 Protocol RX Status
+k6-prot-rx-status.svg,prot-rx-status.svg,PROT,K6 Protocol RX Status Diagram
+k6-prot-rx-version.edn,prot-rx-version.edn,PROT,K6 Protocol RX Version
+k6-prot-rx-version.svg,prot-rx-version.svg,PROT,K6 Protocol RX Version Diagram
+k6-prot-tx-0a-connect.edn,prot-tx-0a-connect.edn,PROT,K6 Protocol TX 0A Connect
+k6-prot-tx-0a-connect.svg,prot-tx-0a-connect.svg,PROT,K6 Protocol TX 0A Connect Diagram
+k6-prot-tx-16-stop.edn,prot-tx-16-stop.edn,PROT,K6 Protocol TX 16 Stop
+k6-prot-tx-16-stop.svg,prot-tx-16-stop.svg,PROT,K6 Protocol TX 16 Stop Diagram
+k6-prot-tx-17-home.edn,prot-tx-17-home.edn,PROT,K6 Protocol TX 17 Home
+k6-prot-tx-17-home.svg,prot-tx-17-home.svg,PROT,K6 Protocol TX 17 Home Diagram
+k6-prot-tx-20-bounds.edn,prot-tx-20-bounds.edn,PROT,K6 Protocol TX 20 Bounds
+k6-prot-tx-20-bounds.svg,prot-tx-20-bounds.svg,PROT,K6 Protocol TX 20 Bounds Diagram
+k6-prot-tx-21-framing.edn,prot-tx-21-framing.edn,PROT,K6 Protocol TX 21 Framing
+k6-prot-tx-21-framing.svg,prot-tx-21-framing.svg,PROT,K6 Protocol TX 21 Framing Diagram
+k6-prot-tx-22-data.edn,prot-tx-22-data.edn,PROT,K6 Protocol TX 22 Data
+k6-prot-tx-22-data.svg,prot-tx-22-data.svg,PROT,K6 Protocol TX 22 Data Diagram
+k6-prot-tx-23-job-header.edn,prot-tx-23-job-header.edn,PROT,K6 Protocol TX 23 Job Header
+k6-prot-tx-23-job-header.svg,prot-tx-23-job-header.svg,PROT,K6 Protocol TX 23 Job Header Diagram
+k6-prot-tx-24-init.edn,prot-tx-24-init.edn,PROT,K6 Protocol TX 24 Init
+k6-prot-tx-24-init.svg,prot-tx-24-init.svg,PROT,K6 Protocol TX 24 Init Diagram
+k6-prot-tx-ff-version.edn,prot-tx-ff-version.edn,PROT,K6 Protocol TX FF Version
+k6-prot-tx-ff-version.svg,prot-tx-ff-version.svg,PROT,K6 Protocol TX FF Version Diagram
+card-guide.svg,test-card-guide.svg,TEST,Card Guide Test
+card-items.svg,test-card-items.svg,TEST,Card Items Test
+card-placement.svg,test-card-placement.svg,TEST,Card Placement Test
+analysis-timeline-draft.svg,test-analysis-timeline.svg,TEST,Analysis Timeline Draft
