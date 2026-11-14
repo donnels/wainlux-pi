@@ -112,6 +112,33 @@ def analyze_submission(parts, data_dir):
     return report, timing
 
 
+def analyze_run_log(payload, data_dir):
+    from analyze_laser_audio import write_run_log_report
+
+    started = time.perf_counter_ns()
+    if not isinstance(payload, dict) or set(payload) != {"attempt_id", "run_log"}:
+        raise ValueError("required fields: attempt_id, run_log")
+    attempt_id = payload["attempt_id"]
+    if not isinstance(attempt_id, str) or not attempt_id or any(character not in "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_" for character in attempt_id):
+        raise ValueError("invalid attempt ID")
+    events = payload["run_log"]
+    if not isinstance(events, list) or not all(isinstance(event, dict) for event in events):
+        raise ValueError("run_log must be an array")
+    runs = [event for event in events if event.get("event") == "ran" and isinstance(event.get("attempt"), dict) and event["attempt"].get("id") == attempt_id]
+    if len(runs) != 1 or runs[0]["attempt"].get("mode") != "real" or not isinstance(runs[0].get("outcome"), dict):
+        raise ValueError("requires a completed Real run")
+    encoded = json.dumps([runs[0]])
+    if len(encoded.encode()) > MAX_LOG_BYTES:
+        raise ValueError("run_log exceeds the 512 KiB limit")
+    directory = Path(data_dir) / attempt_id
+    directory.mkdir(parents=True, exist_ok=True)
+    report_path = directory / "report.analysis.html"
+    if not (report_path.is_file() and any(directory.glob("audio.*"))):
+        (directory / "run-log.json").write_text(encoded, encoding="utf-8")
+        write_run_log_report(report_path, [runs[0]], attempt_id)
+    return report_path.read_bytes(), {"analyzer_total_ms":(time.perf_counter_ns() - started) // 1_000_000}
+
+
 class AnalyzerHandler(BaseHTTPRequestHandler):
     server_version = "WainluxAudioAnalyzer/1"
 
@@ -139,17 +166,26 @@ class AnalyzerHandler(BaseHTTPRequestHandler):
             self.send_error(413, "request exceeds upload limit")
             return
         content_type = self.headers.get("Content-Type", "")
-        if not content_type.lower().startswith("multipart/form-data;"):
-            self.send_error(415, "expected multipart/form-data")
+        log_only = content_type.split(";", 1)[0].strip().lower() == "application/json"
+        if not log_only and not content_type.lower().startswith("multipart/form-data;"):
+            self.send_error(415, "expected multipart/form-data or application/json")
+            return
+        if log_only and length > MAX_LOG_BYTES:
+            self.send_error(413, "run_log exceeds the 512 KiB limit")
             return
         request_started = time.perf_counter_ns()
         try:
             body = self.rfile.read(length)
             request_receive_ms = (time.perf_counter_ns() - request_started) // 1_000_000
             phase_started = time.perf_counter_ns()
-            parts = parse_multipart(content_type, body)
-            multipart_parse_ms = (time.perf_counter_ns() - phase_started) // 1_000_000
-            report, timing = analyze_submission(parts, Path(os.environ.get("AUDIO_DATA_DIR", "/data")))
+            if log_only:
+                payload = json.loads(body)
+                multipart_parse_ms = 0
+                report, timing = analyze_run_log(payload, Path(os.environ.get("AUDIO_DATA_DIR", "/data")))
+            else:
+                parts = parse_multipart(content_type, body)
+                multipart_parse_ms = (time.perf_counter_ns() - phase_started) // 1_000_000
+                report, timing = analyze_submission(parts, Path(os.environ.get("AUDIO_DATA_DIR", "/data")))
         except (ValueError, UnicodeError) as error:
             self.send_error(400, str(error))
             return

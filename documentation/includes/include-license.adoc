@@ -27,7 +27,7 @@ ifdef::single-page[]
 See <<clean-room-statement>> for methodology and exclusions.
 endif::single-page[]
 ifndef::single-page[]
-See link:../CLEAN_ROOM.md[CLEAN_ROOM.md] for full methodology and exclusions.
+See link:../CLEAN_ROOM.adoc[CLEAN_ROOM.adoc] for full methodology and exclusions.
 endif::single-page[]
 
 == Copyright Notice

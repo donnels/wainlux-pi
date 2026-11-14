@@ -391,6 +391,92 @@ fn audio_analyzer_availability_is_optional_and_authenticated() {
     analyzer_thread.join().unwrap();
 }
 
+#[test]
+fn analysis_without_recording_forwards_completed_run_and_leaves_device_idle() {
+    let analyzer = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let analyzer_addr = analyzer.server_addr().to_ip().unwrap();
+    let analyzer_thread = std::thread::spawn(move || {
+        let health = analyzer.recv().unwrap();
+        assert_eq!(health.url(), "/health");
+        health.respond(tiny_http::Response::from_string("{\"ready\":1}")).unwrap();
+        let mut request = analyzer.recv().unwrap();
+        assert_eq!(request.method(), &tiny_http::Method::Post);
+        assert_eq!(request.headers().iter().find(|header| header.field.to_string().eq_ignore_ascii_case("Authorization")).unwrap().value.as_str(), "Bearer log-only-token");
+        let payload: Value = serde_json::from_reader(request.as_reader()).unwrap();
+        assert_eq!(payload["attempt_id"], "123456-content");
+        assert_eq!(payload["run_log"].as_array().unwrap().len(), 1);
+        assert_eq!(payload["run_log"][0]["event"], "ran");
+        assert!(payload.get("audio").is_none());
+        let content_type = tiny_http::Header::from_bytes("Content-Type", "text/html; charset=utf-8").unwrap();
+        request.respond(tiny_http::Response::from_string("<html>No audio recording</html>").with_header(content_type)).unwrap();
+    });
+    let (addr, log_path) = start_with_analyzer("sim", format!("http://{analyzer_addr}/api/analyze"), "log-only-token");
+    let event = json!({"event":"ran","attempt":{"id":"123456-content","mode":"real"},"outcome":{"ok":true,"elapsed_ms":3000}});
+    std::fs::write(&log_path, format!("{event}\n")).unwrap();
+    let (status, result) = call(addr, "POST", "/api/audio-analyses/123456-content/report", None);
+    assert_eq!(status, 200);
+    assert_eq!(result["has_audio"], false);
+    assert_eq!(result["report_url"], "/api/audio-analyses/123456-content/report");
+    let (_, state) = call(addr, "GET", "/api/state", None);
+    assert_eq!(state["running"], false);
+    assert!(state["attempt"].is_null());
+    let (_, entries) = call(addr, "GET", "/api/log", None);
+    assert!(entries.as_array().unwrap().iter().any(|entry| entry["event"] == "audio_analysis" && entry["has_audio"] == false));
+    let (status, cached) = call(addr, "POST", "/api/audio-analyses/123456-content/report", None);
+    assert_eq!(status, 200);
+    assert_eq!(cached["report_url"], result["report_url"]);
+    analyzer_thread.join().unwrap();
+}
+
+#[test]
+fn analysis_without_configured_container_is_optional() {
+    let (addr, log_path) = start();
+    let event = json!({"event":"ran","attempt":{"id":"123456-content","mode":"real"},"outcome":{"ok":true}});
+    std::fs::write(&log_path, format!("{event}\n")).unwrap();
+    assert_eq!(call(addr, "POST", "/api/audio-analyses/123456-content/report", None).0, 503);
+    assert_eq!(call(addr, "GET", "/api/state", None).1["running"], false);
+    assert_eq!(call(addr, "POST", "/api/audio-analyses/missing/report", None).0, 409);
+}
+
+#[test]
+fn analysis_is_automatic_and_does_not_hold_run_completion_open() {
+    let analyzer = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let analyzer_addr = analyzer.server_addr().to_ip().unwrap();
+    let (requested, received) = std::sync::mpsc::channel();
+    let (release, released) = std::sync::mpsc::channel();
+    let analyzer_thread = std::thread::spawn(move || {
+        let health = analyzer.recv().unwrap();
+        assert_eq!(health.url(), "/health");
+        health.respond(tiny_http::Response::from_string("{\"ready\":1}")).unwrap();
+        let mut request = analyzer.recv().unwrap();
+        let payload: Value = serde_json::from_reader(request.as_reader()).unwrap();
+        assert!(payload.get("audio").is_none());
+        requested.send(payload["attempt_id"].clone()).unwrap();
+        released.recv_timeout(Duration::from_secs(5)).unwrap();
+        let content_type = tiny_http::Header::from_bytes("Content-Type", "text/html").unwrap();
+        request.respond(tiny_http::Response::from_string("<html>Run timings</html>").with_header(content_type)).unwrap();
+    });
+    let (addr, _) = start_with_analyzer("k6", format!("http://{analyzer_addr}/api/analyze"), "automatic-analysis-token");
+    assert_eq!(call(addr, "POST", "/api/mode", Some(json!({"real":true}))).0, 200);
+    let (status, planned) = call(addr, "POST", "/api/plan", Some(json!({"step":"frame","params":{"size_mm":10}})));
+    assert_eq!(status, 200);
+    assert_eq!(call(addr, "POST", "/api/run", Some(json!({"attempt_id":planned["id"]}))).0, 202);
+    assert_eq!(received.recv_timeout(Duration::from_secs(5)).unwrap(), planned["id"]);
+    let (_, state) = call(addr, "GET", "/api/state", None);
+    assert_eq!(state["running"], false);
+    assert!(!state["outcome"].is_null(), "completion must not wait for analysis");
+    assert_eq!(state["outcome"]["ok"], false, "empty test port must not open real hardware");
+    release.send(()).unwrap();
+    let end = Instant::now() + Duration::from_secs(5);
+    loop {
+        let (_, events) = call(addr, "GET", "/api/log", None);
+        if events.as_array().unwrap().iter().any(|entry| entry["event"] == "audio_analysis") { break; }
+        assert!(Instant::now() < end, "automatic report event missing");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    analyzer_thread.join().unwrap();
+}
+
 
 #[test]
 fn swagger_ui_is_bundled_and_does_not_enable_mutating_try_it_out() {

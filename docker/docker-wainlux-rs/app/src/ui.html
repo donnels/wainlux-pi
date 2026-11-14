@@ -81,8 +81,21 @@
   .analysis-segment[data-kind=other] { background:#718394; }
   .analysis-legend { display:flex; flex-wrap:wrap; gap:12px; margin:8px 0; font-size:12px; color:var(--muted); }
   .analysis-legend span::before { content:''; display:inline-block; width:10px; height:10px; margin-right:5px; background:var(--swatch); }
+  .analysis-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .analysis-run-row { display:grid; grid-template-columns:24px minmax(0,1fr); align-items:stretch; gap:4px; }
+  .analysis-run-row>label { align-self:center; margin:0; }
+  #analysis-comparison-scroll { overflow-x:auto; }
+  #analysis-comparison-table { width:100%; min-width:850px; border-collapse:collapse; }
+  #analysis-comparison-table th,#analysis-comparison-table td { padding:8px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+  .analysis-goal { max-width:32ch; white-space:normal; overflow-wrap:anywhere; }
+  #analysis-waveforms { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(520px,100%),1fr)); gap:16px; }
+  #analysis-waveforms iframe { width:100%; height:560px; border:1px solid var(--line); background:white; }
+  #analysis-waveform-comparison { display:grid; gap:18px; }
+  .analysis-waveform-scroll { overflow-x:auto; max-width:100%; border:1px solid var(--line); background:white; }
+  .analysis-waveform-scroll svg { display:block; max-width:none; height:auto; }
   @media(max-width:760px) { .analysis-layout { grid-template-columns:minmax(0,1fr); gap:16px; } }
   #timing-example iframe { display:block; width:100%; height:72vh; margin-top:12px; border:1px solid var(--line); }
+  #analysis-report-frame { display:block; width:100%; height:80vh; margin-top:12px; border:1px solid var(--line); background:var(--panel); }
   button,input,select,textarea { font:inherit; border:1px solid var(--line); border-radius:3px; padding:8px; min-width:0; color:inherit; background:var(--panel); }
   button { cursor:pointer; padding:10px 16px; font-weight:bold; }
   button,select,input:not([type=checkbox]) { min-height:44px; }
@@ -235,7 +248,7 @@
 
 <section id="analysis" role="tabpanel" aria-labelledby="tab-analysis" hidden>
   <div class="section-heading"><h2>Recent run analysis</h2><button type="button" onclick="loadAnalysis()">Refresh</button></div>
-  <p id="analysis-status" class="meta" role="status" aria-live="polite">Select a run to inspect its measured timings.</p>
+  <div class="analysis-toolbar"><p id="analysis-status" class="meta" role="status" aria-live="polite">Select a run to inspect its measured timings.</p><button id="analysis-compare" type="button" onclick="compareAnalysisRuns()" disabled>Compare selected</button></div>
   <div class="analysis-layout">
     <nav id="analysis-runs" aria-label="Last 10 runs"></nav>
     <section id="analysis-detail" hidden>
@@ -244,13 +257,16 @@
       <div id="analysis-chart" class="analysis-bar" role="img"></div>
       <div class="analysis-legend"><span style="--swatch:#367abe">Transfer</span><span style="--swatch:#d68a27">Setup</span><span style="--swatch:#8b1e2d">Feedback wait</span><span style="--swatch:#718394">Other</span></div>
       <dl id="analysis-timing" class="timing-grid"></dl>
+      <button id="analysis-generate" type="button" onclick="generateAnalysis()" hidden>Analyze</button>
       <section id="analysis-audio" hidden>
-        <h3>Audio analysis</h3>
+        <h3>Analysis report</h3>
         <div id="analysis-audio-timing" class="timing-grid"></div>
-        <a id="analysis-report-link" target="_blank" rel="noopener" hidden>Open annotated report</a>
+        <p><a id="analysis-report-link" target="_blank" rel="noopener" hidden>Open annotated report in a new tab</a></p>
+        <details id="analysis-report-details" hidden><summary>Run timeline and optional audio</summary><iframe id="analysis-report-frame" title="Attempt timeline and run-log report" loading="lazy"></iframe></details>
       </section>
     </section>
   </div>
+  <section id="analysis-comparison" hidden><h3>Selected-run comparison</h3><p class="meta">Goals show recorded settings; duration and phase timings come from run logs. Audio is optional evidence and does not classify laser state.</p><div id="analysis-comparison-scroll"><table id="analysis-comparison-table"><thead><tr><th>Attempt</th><th>Goal / settings</th><th>Total</th><th>Transfer</th><th>Setup</th><th>Feedback wait</th><th>Other</th><th>Completion</th><th>Analysis</th></tr></thead><tbody id="analysis-comparison-body"></tbody></table></div><button id="analysis-compare-waveforms" type="button" onclick="compareAnalysisWaveforms()" hidden>Compare reports</button><div id="analysis-waveforms"></div></section>
   <p id="analysis-empty" class="meta" hidden>No completed runs in the audit log.</p>
 </section>
 
@@ -317,6 +333,7 @@ const changedFields = new Set();
 let testPreviewTimer = null, testPreviewGeneration = 0;
 let powerSweepOriginInitialized = false;
 let analysisSelectedAttemptId = null;
+let analysisRuns = [], analysisEntries = [];
 const SYNC_CUE_POST_LEAD_MS = 700;
 const SYNC_CUE_DURATION_MS = 2000;
 function storedAudioRecordingAttempt() {
@@ -457,14 +474,19 @@ function tab(name) {
   if (name === "analysis") loadAnalysis().catch(error => { $("analysis-status").textContent = error.message; });
 }
 async function loadAnalysis() {
+  await checkAudioAnalyzer();
   const entries = await api("/api/log");
   const runs = entries.filter(entry => entry.event === "ran" && entry.attempt?.id).slice(-10).reverse();
+  analysisRuns = runs; analysisEntries = entries;
   const list = $("analysis-runs"); list.replaceChildren();
   $("analysis-empty").hidden = runs.length > 0;
   $("analysis-detail").hidden = runs.length === 0;
-  if (!runs.length) { $("analysis-status").textContent = "No completed runs in the audit log."; analysisSelectedAttemptId = null; return; }
+  if (!runs.length) { $("analysis-status").textContent = "No completed runs in the audit log."; analysisSelectedAttemptId = null; $("analysis-comparison").hidden = true; return; }
   for (const run of runs) {
     const attemptId = run.attempt.id, button = document.createElement("button");
+    const row = document.createElement("div"), compareLabel = document.createElement("label"), compare = document.createElement("input");
+    row.className = "analysis-run-row"; compare.type = "checkbox"; compare.value = attemptId; compare.setAttribute("aria-label", `Include ${attemptId} in comparison`);
+    compare.addEventListener("change", updateAnalysisCompareButton); compareLabel.append(compare); row.append(compareLabel);
     button.type = "button"; button.className = "analysis-run";
     button.setAttribute("aria-pressed", String(attemptId === (analysisSelectedAttemptId || runs[0].attempt.id)));
     const description = document.createElement("span"), duration = document.createElement("span"), small = document.createElement("small");
@@ -473,12 +495,70 @@ async function loadAnalysis() {
     duration.textContent = msText(run.outcome?.elapsed_ms || 0);
     button.append(description,duration);
     button.addEventListener("click", () => { analysisSelectedAttemptId = attemptId; drawAnalysisRun(run, entries); for (const item of list.querySelectorAll("button")) item.setAttribute("aria-pressed",String(item===button)); });
-    list.append(button);
+    row.append(button); list.append(row);
   }
   const selected = runs.find(run => run.attempt.id === analysisSelectedAttemptId) || runs[0];
   analysisSelectedAttemptId = selected.attempt.id;
   drawAnalysisRun(selected, entries);
   $("analysis-status").textContent = `Showing the latest ${runs.length} completed run${runs.length === 1 ? "" : "s"}.`;
+  updateAnalysisCompareButton();
+}
+async function generateAnalysis() {
+  const attemptId = analysisSelectedAttemptId;
+  if (!attemptId) return;
+  const button = $("analysis-generate"); button.disabled = true;
+  $("analysis-status").textContent = "Generating run report…";
+  try {
+    await api(`/api/audio-analyses/${encodeURIComponent(attemptId)}/report`, {});
+    await loadAnalysis();
+  } catch (error) { $("analysis-status").textContent = error.message; }
+  finally { button.disabled = false; }
+}
+function updateAnalysisCompareButton() {
+  const selectedIds = [...$("analysis-runs").querySelectorAll('input[type="checkbox"]:checked')].map(input => input.value);
+  const count = selectedIds.length;
+  $("analysis-compare").disabled = count < 2;
+  $("analysis-compare").textContent = count ? `Compare selected (${count})` : "Compare selected";
+  const reportCount = selectedIds.filter(id => analysisEntries.some(event => event.event === "audio_analysis" && event.attempt_id === id && event.report_url)).length;
+  $("analysis-compare-waveforms").hidden = count < 2 || reportCount < 2;
+}
+function compareAnalysisRuns() {
+  const ids = [...$("analysis-runs").querySelectorAll('input[type="checkbox"]:checked')].slice(0,10).map(input => input.value);
+  const selected = analysisRuns.filter(run => ids.includes(run.attempt.id));
+  const body = $("analysis-comparison-body"); body.replaceChildren();
+  if (selected.length < 2) { $("analysis-comparison").hidden = true; return; }
+  $("analysis-comparison").hidden = false;
+  const maxTotal = Math.max(1,...selected.map(run => Number(run.outcome?.elapsed_ms)||0));
+  for (const run of selected) {
+    const attempt = run.attempt || {}, outcome = run.outcome || {}, bands = outcome.band_timings || [];
+    const sum = key => bands.reduce((total,event) => total + (Number(event[key])||0),0);
+    const transfer=sum("transfer_ms"), setup=sum("setup_ms"), wait=sum("wait_ms"), total=Number(outcome.elapsed_ms)||0, other=Math.max(0,total-transfer-setup-wait);
+    const row=document.createElement("tr"), attemptCell=document.createElement("td"), goalCell=document.createElement("td");
+    attemptCell.textContent=attempt.id||""; goalCell.className="analysis-goal"; goalCell.textContent=attempt.goal||attempt.step||"";
+    row.append(attemptCell,goalCell);
+    const totalCell=document.createElement("td"), totalLabel=document.createElement("span"), bar=document.createElement("div");
+    totalLabel.textContent=msText(total); bar.className="analysis-bar"; bar.style.width=`${Math.max(3,total/maxTotal*100)}%`;
+    for (const [kind,value] of [["transfer",transfer],["setup",setup],["wait",wait],["other",other]]) { const segment=document.createElement("div"); segment.className="analysis-segment"; segment.dataset.kind=kind; segment.style.flexGrow=String(value); segment.style.flexBasis="0"; bar.append(segment); }
+    totalCell.append(totalLabel,bar); row.append(totalCell);
+    for (const value of [transfer,setup,wait,other]) { const cell=document.createElement("td"); cell.textContent=bands.length||value===total?msText(value):"n/a"; row.append(cell); }
+    const assumed=bands.some(event=>event.phase==="assumed_complete")||String(outcome.saw||"").includes("assumed complete");
+    const completion=document.createElement("td"); completion.textContent=assumed?"Assumed":"Reported"; row.append(completion);
+    const audioCell=document.createElement("td"), audio=analysisEntries.findLast(entry=>entry.event==="audio_analysis"&&entry.attempt_id===attempt.id);
+    if(audio?.report_url){const link=document.createElement("a"),timing=document.createElement("small");link.href=audio.report_url;link.textContent="Open report";link.target="_blank";link.rel="noopener";timing.textContent=audio.has_audio===false?"Run timings; no audio":`Analyzer ${msText(audio.timing?.analysis_process_ms)} · Pi ${msText(audio.timing?.pi_total_ms)}`;audioCell.append(link,timing);}else audioCell.textContent="No report";
+    row.append(audioCell); body.append(row);
+  }
+}
+function compareAnalysisWaveforms() {
+  const selectedIds = [...$("analysis-runs").querySelectorAll('input[type="checkbox"]:checked')].map(input => input.value);
+  const reports = selectedIds.map(id => analysisEntries.findLast(event => event.event === "audio_analysis" && event.attempt_id === id && event.report_url)).filter(Boolean);
+  const container = $("analysis-waveforms"); container.replaceChildren();
+  for (const analysis of reports) {
+    const section = document.createElement("section"), heading = document.createElement("h4"), frame = document.createElement("iframe");
+    heading.textContent = analysis.attempt_id;
+    frame.title = `Run timeline for ${analysis.attempt_id}`;
+    frame.loading = "lazy"; frame.src = analysis.report_url;
+    section.append(heading,frame); container.append(section);
+  }
 }
 function drawAnalysisRun(run, entries) {
   const attempt = run.attempt || {}, outcome = run.outcome || {}, bands = outcome.band_timings || [];
@@ -496,13 +576,18 @@ function drawAnalysisRun(run, entries) {
     segment.style.flexGrow=String(value); segment.style.flexBasis="0"; segment.title=`${kind}: ${msText(value)}`; chart.append(segment);
   }
   renderTimingGrid("analysis-timing", {total_ms:total,transfer_ms:transfer,setup_ms:setup,wait_ms:wait,other_ms:other}, {total_ms:"Total",transfer_ms:"Raster transfer",setup_ms:"Protocol setup",wait_ms:"Feedback wait",other_ms:"Outside measured bands"});
-  const analysis = entries.find(entry => entry.event === "audio_analysis" && entry.attempt_id === attempt.id);
+  const analysis = entries.findLast(entry => entry.event === "audio_analysis" && entry.attempt_id === attempt.id);
+  $("analysis-generate").hidden = Boolean(analysis?.report_url) || !audioAnalysisAvailable || attempt.mode !== "real";
   $("analysis-audio").hidden = !analysis;
   $("analysis-report-link").hidden = !analysis?.report_url;
+  $("analysis-report-details").hidden = !analysis?.report_url;
+  $("analysis-report-details").open = false;
+  $("analysis-report-frame").removeAttribute("src");
   if (analysis) {
     renderTimingGrid("analysis-audio-timing", analysis.timing, {pi_receive_ms:"Pi upload receive",pi_prepare_ms:"Pi validation",analyzer_http_ms:"Analyzer round-trip",analysis_process_ms:"Analyzer process",analyzer_total_ms:"Analyzer total",pi_total_ms:"Pi total"});
     $("analysis-report-link").href = analysis.report_url;
-  } else $("analysis-audio-timing").replaceChildren();
+    $("analysis-report-frame").dataset.src = analysis.report_url;
+  } else { $("analysis-audio-timing").replaceChildren(); $("analysis-report-frame").removeAttribute("data-src"); }
 }
 function controls() {
   const active = Boolean(state?.attempt || state?.running);
@@ -1155,6 +1240,10 @@ async function init() {
   $("timing-example").addEventListener("toggle", event => {
     const example = event.currentTarget.querySelector("iframe");
     if (event.currentTarget.open && !example.hasAttribute("src")) example.src = example.dataset.src;
+  });
+  $("analysis-report-details").addEventListener("toggle", event => {
+    const frame = $("analysis-report-frame");
+    if (event.currentTarget.open && !frame.hasAttribute("src")) frame.src = frame.dataset.src;
   });
   $("mode").addEventListener("change", event => {
     const real = event.currentTarget.value === "real";

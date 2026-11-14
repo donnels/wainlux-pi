@@ -1,0 +1,28 @@
+@startmindmap
+title Decision Tree
+footer (c)2026 Sean Donnellan
+skinparam BackgroundColor #fff/aaf
+skinparam shadowing 1
+skinparam NodeBackgroundColor #fff/aaf
+
+* K6 Build & Deployment Decision Tree
+** Where to build?
+*** On workstation
+**** Reason: Pi too slow for Rust compilation
+**** Tool: Docker cross-compiler
+** Target?
+*** arm-unknown-linux-musleabihf
+**** CPU: arm1176jzf-s
+**** musl: Static linking, smaller binaries
+** Runtime?
+*** Alpine 3.21 (multi-arch)
+**** Why: Minimal footprint (~5MB)
+**** Why: Pinned SHA for reproducible builds
+** Deploy?
+*** Manual via deploy_laser.sh
+**** Check: Raspberry Pi Zero W Rev 1.1
+**** Check: Service idle + Simulator mode
+**** Check: No active attempt/outcome/review
+**** Check: Image ID matches
+
+@endmindmap

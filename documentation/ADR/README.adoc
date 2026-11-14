@@ -16,6 +16,7 @@ Clean-room methodology is summarized in <<clean-room-statement>>.
 * <<adr-026-mcp-hub,ADR-026: Network MCP hub>>
 * <<adr-027-audio-end-detection,ADR-027: Audio-first end-detection evidence>>
 * <<adr-028-distributed-audio-analysis,ADR-028: Pi-coordinated capture and external analysis>>
+* <<adr-029-container-security,ADR-029: Local Container Builds for Supply Chain Security>>
 endif::single-page[]
 
 ifdef::single-page[]
@@ -44,9 +45,11 @@ include::ADR-026-mcp-hub.adoc[leveloffset=+1]
 include::ADR-027-audio-end-detection.adoc[leveloffset=+1]
 [[adr-028-distributed-audio-analysis]]
 include::ADR-028-distributed-audio-analysis.adoc[leveloffset=+1]
+[[adr-029-container-security]]
+include::ADR-029-container-security.adoc[leveloffset=+1]
 endif::single-page[]
 ifndef::single-page[]
-Clean-room methodology lives in link:../../CLEAN_ROOM.md[the clean-room statement].
+Clean-room methodology lives in link:../../CLEAN_ROOM.adoc[the clean-room statement].
 * link:ADR-002-serial-communication.adoc[ADR-002: K6 serial transport]
 * link:ADR-006-clean-room.adoc[ADR-006: Clean-room protocol work]
 * link:ADR-007-asciidoc.adoc[ADR-007: AsciiDoc]
@@ -59,4 +62,5 @@ Clean-room methodology lives in link:../../CLEAN_ROOM.md[the clean-room statemen
 * link:ADR-026-mcp-hub.adoc[ADR-026: Network MCP hub]
 * link:ADR-027-audio-end-detection.adoc[ADR-027: Audio-first end-detection evidence]
 * link:ADR-028-distributed-audio-analysis.adoc[ADR-028: Pi-coordinated capture and external analysis]
+* link:ADR-029-container-security.adoc[ADR-029: Local Container Builds for Supply Chain Security]
 endif::single-page[]

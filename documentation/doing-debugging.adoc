@@ -55,7 +55,7 @@ Use the containerized analyzer from the repository root:
 	--attempt-id ATTEMPT-ID --expected-id DDDDDD
 ----
 
-The current upload report includes the recording for playback, its decoded ID match, filtered run-log events and measured processing timings. It does not display or classify audible activity. The in-app archived example at `/examples/audio-analysis` is an older exploratory report and is explicitly not the current analysis method.
+The current upload report includes the recording for playback, its decoded ID when available, a full-length auto-scaled min/max amplitude waveform with time/amplitude zoom, seek and Jump to end, timestamp-aligned receive bytes/decoded frames when captured, run-log markers, and measured processing timings. The packet table lets operators inspect which received values preceded progress/completion events; untraced runs explicitly lack those packet events. It does not classify audible activity or infer laser state. The Analysis tab compares the latest ten run goals/settings and durations, with links to individual uploaded reports and optional side-by-side waveform views. The in-app `/examples/audio-analysis` page is an older exploratory report.
 
 The M4A creation-time tag differed from the API marker wall clock by about 2 h 40 min even though the audio DTMF ID matched. Use the ID for association; do not treat file metadata as a physical timing reference. The analyzer uses FFmpeg 5.1.9 in its pinned container and Python standard-library Goertzel analysis for the sync ID; no audio packages are installed on the Deck.
 

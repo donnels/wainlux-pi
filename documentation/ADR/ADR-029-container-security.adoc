@@ -1,0 +1,166 @@
+= ADR-029: Local Container Builds for Supply Chain Security
+
+== Status
+Accepted; ongoing constraint.
+
+== Context
+
+The project uses Docker containers for:
+* Cross-compiling Rust code for ARMv6 (Pi Zero W)
+* Generating protocol diagrams (bytefield-svg)
+* Generating architecture diagrams (PlantUML)
+* Running the laser service and supporting tools
+
+Historically, some containers used remote images (e.g., `plantuml/plantuml:latest`, `rust:1.x`), while others used local Dockerfiles (e.g., `docker-bytefield`). This inconsistency creates supply chain risks and maintainability issues.
+
+== Decision
+
+**All tool containers must use local Dockerfiles in the `docker/` directory with pinned base images.**
+
+* Build containers once from pinned base images
+* Scan containers for vulnerabilities before use
+* Version containers in git history
+* Never use `:latest` tags for tool containers
+
+== Consequences
+
+=== Positive
+
+* **Supply chain security:** We control all dependencies; no implicit trust in external registries
+* **Reproducibility:** Exact container versions are committed to git
+* **Rollback capability:** If a build breaks, git history shows exactly what changed
+* **Cost control:** Avoids Docker Hub rate limits and bandwidth costs
+* **Vulnerability management:** We scan containers before deployment
+
+=== Negative
+
+* **Maintenance burden:** More Dockerfiles to maintain
+* **Storage overhead:** Larger repository size
+* **Build time:** Initial build takes longer
+
+== Rationale
+
+=== The `:latest` Problem
+
+Using `:latest` tags creates several risks:
+
+* **No version history:** When `:latest` breaks, we cannot determine what version was previously working
+* **No rollback path:** There is no tag to revert to
+* **Implicit updates:** New versions may be pulled automatically, introducing breaking changes or vulnerabilities
+* **Audit difficulty:** Cannot trace exactly what was used in historical builds
+
+=== The Local Dockerfile Solution
+
+With local Dockerfiles:
+
+* **Git is the source of truth:** All container definitions are in the repository
+* **Versioned by commit:** Every change to a Dockerfile creates a new, auditable version
+* **Rollback via git:** `git checkout <commit>` restores the exact container that was used
+* **Scan before merge:** Vulnerability scanning can be part of the CI/CD pipeline
+
+== Implementation
+
+== Container Inventory
+
+[cols="1,1,1,1",options="header"]
+|===
+| Container | Directory | Status | Action
+| bytefield-svg | `docker/docker-bytefield/` | ✅ Local Dockerfile | Keep
+| plantuml | Not in docker/ | ❌ Remote `:latest` | Create local Dockerfile
+| rust-cross | Not in docker/ | ⚠️ Remote pinned | Create local Dockerfile
+| wainlux-rs | `docker/docker-wainlux-rs/` | ✅ Local Dockerfile | Keep
+| mcp | `docker/docker-mcp/` | ✅ Local Dockerfile | Keep
+| audio-analysis | `docker/docker-audio-analysis/` | ✅ Local Dockerfile | Keep
+|===
+
+=== Build Process
+
+Create `docker-compose.build.yml` at repository root:
+
+[source,yaml]
+----
+version: '3.8'
+services:
+  bytefield-svg:
+    build: ./docker/docker-bytefield
+    image: localhost/bytefield-svg:latest
+  plantuml:
+    build: ./docker/docker-plantuml
+    image: localhost/plantuml:latest
+  rust-cross:
+    build: ./docker/docker-rust
+    image: localhost/rust-cross:arm
+----
+
+Build all tool containers:
+
+[source,bash]
+----
+docker compose -f docker-compose.build.yml build
+----
+
+=== Scanning
+
+Scan all local containers before use:
+
+[source,bash]
+----
+trivy image localhost/bytefield-svg:latest
+trivy image localhost/plantuml:latest
+trivy image localhost/rust-cross:arm
+----
+
+=== Versioning
+
+After scanning, tag containers with semantic versions:
+
+[source,bash]
+----
+docker tag localhost/bytefield-svg:latest localhost/bytefield-svg:v1.0.0
+docker tag localhost/plantuml:latest localhost/plantuml:v1.0.0
+docker tag localhost/rust-cross:arm localhost/rust-cross:v1.0.0
+----
+
+Update scripts to reference versioned tags.
+
+== Examples
+
+=== PlantUML Container
+
+.docker/docker-plantuml/Dockerfile
+[source,dockerfile]
+----
+FROM eclipse-temurin:17-jre-alpine@sha256:589a938476b126362d575a248e24c9b795947319c3d6283f54482e79744f8444
+
+RUN apk add --no-cache openjdk17-jre
+RUN mkdir -p /opt/plantuml && cd /opt/plantuml && \
+    curl -L https://github.com/plantuml/plantuml/releases/download/v1.2026.10/plantuml-1.2026.10.jar -o plantuml.jar
+
+WORKDIR /diagrams
+ENTRYPOINT ["java", "-jar", "/opt/plantuml/plantuml.jar"]
+CMD ["-help"]
+----
+
+=== Rust Cross-Compile Container
+
+.docker/docker-rust/Dockerfile
+[source,dockerfile]
+----
+FROM rust:1.85.0-slim@sha256:9daf2b244ccc30523e55cafe32edf8465671ba567d0101620e5612ccb76ea1a7
+
+RUN rustup target add arm-unknown-linux-musleabihf
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc-arm-linux-gnueabihf \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+----
+
+== Related Decisions
+
+* <<adr-022-build-packaging,ADR-022: ARM Packaging>> - Service build and deployment workflow
+* <<adr-006-clean-room,ADR-006: Clean-Room Protocol Work>> - Clean-room methodology that benefits from supply chain security
+
+== Notes
+
+The `:latest` tag should never be used for tool containers. For runtime containers (like the laser service), `:latest` may be acceptable if the service itself handles versioning, but tool containers that affect build reproducibility must be pinned and local.

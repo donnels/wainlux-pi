@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1050" viewBox="0 0 1440 1050" role="img" aria-labelledby="title description">
+  <title id="title">Audio and laser timeline: proposed investigation view</title>
+  <desc id="description">Illustrative design, not measurements from a real run. A continuous audio waveform, received packet lane, sending lane, job lane and synchronization lane share a time axis and red cursor. A full recording overview has a movable window. A detail ruler shows 200 millisecond subdivisions.</desc>
+  <defs>
+    <style>
+      text { font-family: 'DejaVu Sans', sans-serif; fill: #233139; font-size: 14px; }
+      .heading { font-size: 25px; font-weight: 700; }
+      .label { font-size: 13px; font-weight: 700; }
+      .small { font-size: 12px; fill: #576871; }
+      .mono { font-family: 'DejaVu Sans Mono', monospace; font-size: 12px; }
+      .grid { stroke: #dce3e6; stroke-width: 1; }
+      .separator { stroke: #b9c7ce; stroke-width: 1; }
+    </style>
+    <pattern id="fine-ticks" width="15.7867" height="390" patternUnits="userSpaceOnUse" x="190" y="296">
+      <path d="M0 0V7" stroke="#7e919b" fill="none"/>
+    </pattern>
+    <pattern id="overview-audio" width="20" height="42" patternUnits="userSpaceOnUse" x="190" y="157">
+      <path d="M0 21L2 16L4 27L6 8L8 34L10 18L12 24L14 12L16 29L18 19L20 21" fill="none" stroke="#435e69" stroke-width="1"/>
+    </pattern>
+    <clipPath id="audio-clip"><rect x="190" y="325" width="1110" height="150"/></clipPath>
+  </defs>
+  <rect width="1440" height="1050" fill="#f4f7f8"/>
+  <text x="40" y="45" class="heading">Audio / laser event alignment</text>
+  <text x="40" y="70" class="small">DESIGN DRAFT - synthetic waveform, packet times and job metadata; not the historical LAN report</text>
+  <text x="40" y="111" class="label">Time zoom</text>
+  <path d="M150 106H380" stroke="#758994" stroke-width="3"/>
+  <circle cx="380" cy="106" r="7" fill="#176d83"/>
+  <text x="395" y="111">128x</text>
+  <text x="490" y="111" class="label">Amplitude</text>
+  <text x="592" y="111" class="mono">0.25  0.5  0.75  1  2  [4]  8  16  32x</text>
+  <text x="1040" y="111" class="small">Scale: reference peak v</text>
+  <text x="40" y="179" class="label">Full recording</text>
+  <rect x="190" y="150" width="1110" height="49" fill="#fff" stroke="#bac8ce"/>
+  <rect x="190" y="153" width="1052" height="42" fill="url(#overview-audio)"/>
+  <path d="M1242 174H1300" stroke="#435e69"/>
+  <rect x="1235" y="147" width="9" height="55" fill="#167d89" fill-opacity="0.25" stroke="#167d89" stroke-width="2"/>
+  <path d="M1231 157V191M1248 157V191" stroke="#167d89" stroke-width="3"/>
+  <path d="M1239 205L1224 216M1239 205L1254 216" stroke="#167d89" fill="none"/>
+  <text x="190" y="224" class="mono">00:00</text>
+  <text x="545" y="224" class="mono">10:00</text>
+  <text x="915" y="224" class="mono">20:00</text>
+  <text x="1260" y="224" class="mono">30:00</text>
+  <text x="40" y="251" class="small">Drag the overview window or scroll horizontally; drag either edge to change the visible time span.</text>
+  <text x="190" y="275" class="mono">Visible: 28:15.000 - 28:29.063   /   14.063 s</text>
+  <rect x="190" y="289" width="1110" height="397" fill="#fff"/>
+  <rect x="190" y="296" width="1110" height="390" fill="url(#fine-ticks)"/>
+  <g class="grid">
+    <path d="M190 305V686M348 305V686M506 305V686M664 305V686M821 305V686M979 305V686M1137 305V686M1295 305V686"/>
+  </g>
+  <g class="mono">
+    <text x="190" y="315">28:15</text><text x="327" y="315">28:17</text><text x="485" y="315">28:19</text>
+    <text x="643" y="315">28:21</text><text x="800" y="315">28:23</text><text x="958" y="315">28:25</text>
+    <text x="1116" y="315">28:27</text><text x="1264" y="315">28:29</text>
+  </g>
+  <text x="40" y="367" class="label">Audio</text>
+  <text x="40" y="388" class="small">Signed amplitude</text>
+  <text x="40" y="409" class="small">not activity blocks</text>
+  <path d="M190 400H1300" stroke="#aabcc5"/>
+  <g clip-path="url(#audio-clip)">
+    <path d="M190 400L194 386L198 417L202 372L206 433L210 392L214 407L218 358L222 440L226 382L230 414L234 369L238 429L242 393L246 406L250 360L254 438L258 380L262 422L266 376L270 429L274 390L278 411L282 363L286 442L290 376L294 424L298 370L302 435L306 389L310 411L314 366L318 439L322 380L326 421L330 373L334 430L338 392L342 408L346 362L350 441L354 379L358 418L362 365L366 435L370 387L374 411L378 358L382 444L386 378L390 422L394 365L398 438L402 387L406 414L410 361L414 443L418 374L422 427L426 370L430 434L434 388L438 412L442 365L446 439L450 380L454 421L458 372L462 432L466 390L470 410L474 360L478 441L482 376L486 423L490 371L494 435L498 389L502 410L506 365L510 438L514 378L518 420L522 369L526 433L530 393L534 408L538 363L542 440L546 375L550 423L554 371L558 433L562 390L566 412L570 364L574 440L578 378L582 425L586 366L590 437L594 388L598 414L602 360L606 442L610 378L614 423L618 368L622 435L626 391L630 409L634 364L638 438L642 380L646 421L650 370L654 435L658 390L662 411L666 363L670 442L674 376L678 421L682 369L686 434L690 393L694 408L698 365L702 438L706 378L710 423L714 369L718 432L722 391L726 410L730 365L734 439L738 379L742 421L746 370L750 430L754 392L758 408L762 364L766 438L770 380L774 420L778 369L782 430L786 392L790 406L794 367L798 436L802 380L806 422L810 375L814 429L818 389L822 412L826 371L830 431L834 385L838 416L842 378L846 424L850 391L854 410L858 381L862 421L866 389L870 414L874 385L878 417L882 395L886 406L890 388L894 412L898 395L902 406L906 391L910 409L914 396L918 404L922 394L926 406L930 398L934 402L938 397L942 403L946 399L950 401L954 398L958 402L962 399L966 401L970 398L974 402L978 399L982 401L986 400L990 399L994 401L998 400L1002 399L1006 401L1010 400L1014 399L1018 401L1022 400L1026 399L1030 400L1034 401L1038 400L1042 399L1046 400L1050 401L1054 400L1058 399L1062 400L1066 401L1070 400L1074 399L1078 400L1082 401L1086 400L1090 399L1094 400L1098 401L1102 400L1106 399L1110 400L1114 401L1118 400L1122 399L1126 400L1130 401L1134 400L1138 399L1142 400L1146 401L1150 400L1154 399L1158 400L1162 401L1166 400L1170 399L1174 400L1178 401L1182 400L1186 399L1190 400L1194 401L1198 400L1202 399L1206 400L1210 401L1214 400L1218 399L1222 400L1226 401L1230 400L1234 399L1238 400L1242 401L1246 400L1250 399L1254 400L1258 401L1262 400L1266 399L1270 400L1274 401L1278 400L1282 399L1286 400L1290 401L1294 400L1300 400" fill="none" stroke="#233f4c" stroke-width="1.2"/>
+  </g>
+  <path d="M190 479H1300M190 533H1300M190 579H1300M190 637H1300M190 686H1300" class="separator"/>
+  <text x="40" y="508" class="label">Laser RX</text>
+  <text x="40" y="526" class="small">Bytes / decoded frames</text>
+  <g stroke="#137b63" stroke-width="2">
+    <path d="M225 488V524M274 488V524M405 488V524M519 488V524M642 488V524M728 488V524M809 488V524M884 485V528"/>
+  </g>
+  <g stroke="#8799a3" stroke-width="1"><path d="M880 494V519M881 494V519M882 494V519M883 494V519"/></g>
+  <circle cx="884" cy="489" r="5" fill="#137b63"/>
+  <text x="789" y="521" class="small">last 99%</text>
+  <text x="40" y="560" class="label">Host TX</text>
+  <text x="40" y="577" class="small">Transfer / commands</text>
+  <path d="M190 556H1300" stroke="#dce3e6"/>
+  <path d="M209 541V570" stroke="#b07623" stroke-width="2"/>
+  <text x="233" y="560" class="small">No bulk transfer in this window; DATA spans appear here when timestamped.</text>
+  <text x="40" y="609" class="label">Jobs / bands</text>
+  <rect x="190" y="590" width="1110" height="34" rx="3" fill="#e1eef0" stroke="#2d7c87"/>
+  <text x="210" y="612">Band 3 / card 2 / Wi-Fi / front - waiting for completion feedback</text>
+  <text x="40" y="663" class="label">Run / sync</text>
+  <text x="210" y="662" class="small">Run active - ID cue and job start are earlier; software finish is later (see overview below).</text>
+  <path d="M917 289V686" stroke="#cf3548" stroke-width="2"/>
+  <path d="M911 289H923L917 296Z" fill="#cf3548"/>
+  <rect x="932" y="334" width="238" height="65" rx="3" fill="#fff" stroke="#cf3548"/>
+  <text x="948" y="359" class="label">Cursor / playback 28:24.220</text>
+  <text x="948" y="382" class="small">User-judged audible activity end</text>
+  <path d="M884 489L874 461" stroke="#137b63"/>
+  <rect x="535" y="332" width="340" height="71" rx="3" fill="#fff" stroke="#137b63"/>
+  <text x="551" y="354" class="label">RX selected / hover detail</text>
+  <text x="551" y="375" class="mono">28:23.800 - decoded status: 99%</text>
+  <text x="551" y="393" class="small">Raw bytes + phase + band + timestamp source</text>
+  <text x="40" y="721" class="label">Ruler detail</text>
+  <text x="190" y="721" class="small">At high zoom: whole-second anchors with 200 ms subdivisions; detailed cursor remains millisecond-readable.</text>
+  <path d="M190 748H1300" stroke="#81949e"/>
+  <g stroke="#81949e"><path d="M190 736V748M348 742V748M507 742V748M665 742V748M824 742V748M983 736V748M1141 742V748M1300 742V748"/></g>
+  <g class="mono">
+    <text x="190" y="769">28:23.0</text><text x="337" y="769">.2</text><text x="496" y="769">.4</text><text x="654" y="769">.6</text>
+    <text x="813" y="769">.8</text><text x="956" y="769">28:24.0</text><text x="1130" y="769">.2</text><text x="1275" y="769">.4</text>
+  </g>
+  <path d="M824 779V803M1157 779V803" stroke="#576871"/>
+  <path d="M824 793H1157" stroke="#576871"/>
+  <text x="865" y="816" class="mono">99% to cursor: +0.420 s</text>
+  <text x="40" y="856" class="label">At 1x</text>
+  <text x="190" y="856" class="small">Same lanes, full recording; blocks have hover/select details. Dense packets group by pixel, not by invented time.</text>
+  <path d="M190 882H1300" stroke="#81949e"/>
+  <rect x="202" y="871" width="14" height="22" fill="#6589bc"><title>Illustrative ID cue: recording ID, cue start/end and correlation quality</title></rect>
+  <path d="M220 866V897" stroke="#167d89" stroke-width="2"/>
+  <rect x="227" y="874" width="65" height="16" fill="#ddb86f"><title>Illustrative DATA transfer: duration, byte count and command metadata; no private raster payload</title></rect>
+  <rect x="297" y="871" width="999" height="22" fill="#e1eef0" stroke="#2d7c87"><title>Illustrative job band: Wi-Fi card front, power/depth, start/end boundaries and completion policy</title></rect>
+  <path d="M1241 866V897" stroke="#137b63" stroke-width="2"/>
+  <path d="M1296 866V897" stroke="#a33f5b" stroke-width="2"><title>Illustrative software finish at 29:53.800: 90 seconds after last received data, assumed completion, not motion confirmation</title></path>
+  <text x="190" y="921" class="small">ID beeps / sync</text><text x="357" y="921" class="small">Job start + sending</text>
+  <text x="1045" y="921" class="small">Last 99%</text><text x="1190" y="944" class="small">Software finish</text>
+  <text x="190" y="944" class="small">Hover/select: band n of card y or sweep x, settings, duration and recorded completion reason.</text>
+  <text x="40" y="995" class="small">Evidence policy: audio supports the user's judgment; software completion and RX progress remain separate facts.</text>
+  <text x="40" y="1018" class="small">Capture gaps / truncation / sync uncertainty stay visible. TX bytes and richer job metadata require capture work; no fabricated historical packets.</text>
+</svg>

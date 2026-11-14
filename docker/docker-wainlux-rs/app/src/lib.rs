@@ -67,6 +67,7 @@ struct State {
     progress: Option<Progress>,
     band_timings: Vec<Progress>,
     receive_trace: Option<Value>,
+    capture_receive_trace: bool,
     review: Option<Review>,
 }
 
@@ -172,12 +173,18 @@ pub fn serve(cfg: Config) -> Result<SocketAddr, String> {
                         *worker_app.stopper.lock().unwrap_or_else(|error| error.into_inner()) = None;
                     }
                     let (timings, receive_trace) = {
-                        let state = worker_app.state.lock().unwrap();
+                        let mut state = worker_app.state.lock().unwrap();
+                        state.capture_receive_trace = false;
                         (state.band_timings.iter().copied().map(progress_json).collect(), state.receive_trace.clone())
                     };
                     let outcome = Outcome { ok:result.is_ok(), saw:match result { Ok(message) | Err(message) => message }, started, ended:now(), elapsed_ms:operation_started.elapsed().as_millis() as u64, band_timings:timings, receive_trace };
                     log(&worker_app, json!({"event":"ran","attempt":attempt.record,"outcome":outcome}));
                     if let Err(error) = worker_app.state.lock().unwrap().workflow.finish(&attempt.record.id, outcome) { eprintln!("workflow completion rejected: {error}"); }
+                    if attempt.record.mode == "real" && worker_app.audio_analyzer_url.is_some() && worker_app.audio_analyzer_token.is_some() {
+                        let analysis_app = worker_app.clone();
+                        let attempt_id = attempt.record.id.clone();
+                        std::thread::spawn(move || { let _ = analyze_run_log(&analysis_app, &attempt_id); });
+                    }
                 }
             }
         }
@@ -193,6 +200,15 @@ pub fn serve(cfg: Config) -> Result<SocketAddr, String> {
 }
 
 fn handle(app: &Arc<App>, mut req: Request) {
+    if req.method() == &Method::Post {
+        if let Some(attempt_id) = req.url().strip_prefix("/api/audio-analyses/").and_then(|path| path.strip_suffix("/report")).map(str::to_owned) {
+            match analyze_run_log(app, &attempt_id) {
+                Ok(result) => respond_json(req, 200, result),
+                Err((status, error)) => respond_json(req, status, json!({"error":error})),
+            }
+            return;
+        }
+    }
     if req.method() == &Method::Get && req.url() == "/api/audio-analyses/availability" {
         audio_analyzer_availability(app, req);
         return;
@@ -277,6 +293,7 @@ fn handle(app: &Arc<App>, mut req: Request) {
             return;
         }
         (Method::Get, "/api/machine") => (200, machine(&app.info)),
+        (Method::Get, "/api/health") => (200, health(app)),
         (Method::Get, "/api/mode") => (200, mode(app)),
         (Method::Post, "/api/mode") => set_mode(app, &body),
         (Method::Get, "/api/materials") => (200, materials_json(app)),
@@ -336,6 +353,39 @@ fn analyzer_is_available(app: &App) -> bool {
 
 fn valid_attempt_id(attempt_id: &str) -> bool {
     !attempt_id.is_empty() && attempt_id.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+}
+
+fn analyze_run_log(app: &App, attempt_id: &str) -> Result<Value, (u16, &'static str)> {
+    if !valid_attempt_id(attempt_id) { return Err((400, "invalid attempt ID")); }
+    let entries = read_log(app);
+    let ran = entries.iter().find(|entry| entry["event"] == "ran" && entry["attempt"]["id"] == attempt_id && entry["attempt"]["mode"] == "real")
+        .ok_or((409, "analysis requires a completed Real run"))?;
+    if let Some(existing) = entries.iter().rev().find(|entry| entry["event"] == "audio_analysis" && entry["attempt_id"] == attempt_id && entry["report_url"].is_string()) {
+        return Ok(existing.clone());
+    }
+    let (Some(url), Some(token)) = (app.audio_analyzer_url.as_deref(), app.audio_analyzer_token.as_deref()) else {
+        return Err((503, "analysis container is not configured"));
+    };
+    if !analyzer_is_available(app) { return Err((503, "analysis container is unavailable")); }
+    let started = Instant::now();
+    let response = ureq::AgentBuilder::new()
+        .timeout_connect(std::time::Duration::from_secs(2))
+        .timeout_read(std::time::Duration::from_secs(15))
+        .build().post(url)
+        .set("Content-Type", "application/json")
+        .set("Authorization", &format!("Bearer {token}"))
+        .send_string(&json!({"attempt_id":attempt_id,"run_log":[ran]}).to_string())
+        .map_err(|_| (502, "analysis request failed"))?;
+    if !response.header("Content-Type").is_some_and(|value| value.starts_with("text/html")) {
+        return Err((502, "analysis container did not return HTML"));
+    }
+    let timing: Value = response.header("X-Audio-Timing").and_then(|value| serde_json::from_str(value).ok()).unwrap_or_else(|| json!({}));
+    let mut report = Vec::new();
+    response.into_reader().take((MAX_ANALYSIS_REPORT_BYTES + 1) as u64).read_to_end(&mut report).map_err(|_| (502, "could not read analysis report"))?;
+    if report.is_empty() || report.len() > MAX_ANALYSIS_REPORT_BYTES { return Err((502, "invalid analysis report size")); }
+    let result = json!({"event":"audio_analysis","attempt_id":attempt_id,"report_url":format!("/api/audio-analyses/{attempt_id}/report"),"has_audio":false,"timing":timing,"pi_total_ms":started.elapsed().as_millis() as u64,"at":now()});
+    log(app, result.clone());
+    Ok(result)
 }
 
 fn request_header<'a>(req: &'a Request, name: &str) -> Option<&'a str> {
@@ -518,7 +568,7 @@ fn upload_audio(app: &Arc<App>, mut req: Request) {
     analyzer_timing["analyzer_http_ms"] = json!(analyzer_started.elapsed().as_millis() as u64);
     analyzer_timing["pi_total_ms"] = json!(pi_total_started.elapsed().as_millis() as u64);
     let report_url = format!("/api/audio-analyses/{attempt_id}/report");
-    log(app, json!({"event":"audio_analysis","attempt_id":attempt_id,"report_url":report_url,"timing":analyzer_timing.clone(),"at":now()}));
+    log(app, json!({"event":"audio_analysis","attempt_id":attempt_id,"report_url":report_url,"has_audio":true,"timing":analyzer_timing.clone(),"at":now()}));
     respond_json(req, 200, json!({"report_url":report_url,"timing":analyzer_timing}));
 }
 
@@ -579,6 +629,17 @@ fn machine(i: &Info) -> Value {
         "settings": i.settings.iter().map(|s| json!({
             "key": s.key, "label": s.label, "min": s.min, "max": s.max, "default": s.default, "note": s.note,
         })).collect::<Vec<_>>(),
+    })
+}
+
+fn health(app: &App) -> Value {
+    json!({
+        "status": "healthy",
+        "timestamp": now(),
+        "model": app.info.model,
+        "driver": app.driver,
+        "simulated": app.simulated.load(Ordering::SeqCst),
+        "port_path": app.port_path,
     })
 }
 
@@ -679,6 +740,7 @@ fn receive_trace_json(trace: ReceiveTrace) -> Value {
             "frame_bytes": event.frame_bytes.map(|bytes| bytes.iter().map(|byte| format!("{byte:02X}")).collect::<Vec<_>>().join(" ")),
             "percent": event.percent,
             "quiet_ms": event.quiet_ms,
+            "metadata": event.metadata,
         })).collect::<Vec<_>>(),
     })
 }
@@ -986,7 +1048,7 @@ fn plan(app: &App, body: &str) -> (u16, Value) {
         if stage.side == Some(job::Side::Back) && !req.placement_confirmed { return (409, json!({"error":"confirm the card is flipped and the back is placed correctly"})); }
         let prepared = match job::prepare(&stage, &app.info) { Ok(prepared) => Arc::new(prepared), Err(error) => return (400, json!({"error":error})) };
         let work = Work::Job(review.job.clone(), stage.clone(), prepared);
-        let record = AttemptRecord { id:format!("{}-{}",SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos(),stage.name), goal:stage.goal.clone(), machine:app.info.model.into(), mode:mode(app)["mode"].as_str().unwrap().into(), planned:now(), target:Target::Card { review_id:id, stage:req.stage, stage_name:stage.name.clone() } };
+        let record = AttemptRecord { id:format!("{}-{}",SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos(),stage.name), goal:stage.goal.clone(), machine:app.info.model.into(), mode:mode(app)["mode"].as_str().unwrap().into(), planned:now(), target:Target::Card { review_id:id, stage:req.stage, stage_name:stage.name.clone(), template:review.job.template.clone() } };
         let planned = Attempt { record, work };
         let attempt = planned.view();
         state.review.as_mut().unwrap().accepted.retain(|index| *index < req.stage);
@@ -1064,10 +1126,12 @@ fn run(app: &Arc<App>, body: &str) -> (u16, Value) {
                 return (409, json!({"error":"recording_id does not match the planned attempt"}));
             }
         }
+        let capture_trace = attempt_receive_trace_enabled(a.step(), req.sync_marker) || (app.audio_analyzer_url.is_some() && app.audio_analyzer_token.is_some());
         let started = match s.workflow.start(req.attempt_id.as_deref()) { Ok(attempt) => attempt, Err(error) => return (409, json!({"error":error})) };
         s.progress = None;
         s.band_timings.clear();
         s.receive_trace = None;
+        s.capture_receive_trace = capture_trace;
         app.cancel_requested.store(false, Ordering::SeqCst);
         started
     };
@@ -1099,6 +1163,10 @@ fn receive_trace_enabled(step: Option<Step>) -> bool {
     matches!(step, Some(Step::PowerSweep | Step::AudioPowerSweepLow | Step::AudioPowerSweepFull))
 }
 
+fn attempt_receive_trace_enabled(step: Option<Step>, sync_marker: bool) -> bool {
+    sync_marker || receive_trace_enabled(step)
+}
+
 fn reset_device(app: &App) -> Result<(), &'static str> {
     let (done, completed) = sync_channel(0);
     app.executor.try_send(DeviceCommand::Reset(done)).map_err(|_| "device executor is unavailable")?;
@@ -1127,12 +1195,14 @@ fn execute(app: &App, work: &Work, slot: &mut Option<Box<dyn Machine>>) -> Resul
         state.progress = Some(progress);
         if matches!(progress.phase, ProgressPhase::ReportedComplete | ProgressPhase::AssumedComplete) { state.band_timings.push(progress); }
     };
-    let trace_enabled = receive_trace_enabled(work.step());
+    let trace_enabled = app.state.lock().unwrap().capture_receive_trace || receive_trace_enabled(work.step());
     if trace_enabled { m.set_receive_trace(true); }
     let r = work.prepared().run(m.as_mut(), &mut progress, &|| app.cancel_requested.load(Ordering::SeqCst));
     if trace_enabled {
         let trace = m.take_receive_trace();
-        app.state.lock().unwrap().receive_trace = Some(receive_trace_json(trace));
+        let mut state = app.state.lock().unwrap();
+        state.receive_trace = Some(receive_trace_json(trace));
+        state.capture_receive_trace = false;
     }
     if r.is_err() {
         // Reopen next time; the link state is unknown after an error.
@@ -1151,6 +1221,8 @@ mod audio_trace_tests {
         assert!(receive_trace_enabled(Some(Step::AudioPowerSweepLow)));
         assert!(receive_trace_enabled(Some(Step::AudioPowerSweepFull)));
         assert!(!receive_trace_enabled(Some(Step::Frame)));
+        assert!(attempt_receive_trace_enabled(Some(Step::Frame), true));
+        assert!(!attempt_receive_trace_enabled(Some(Step::Frame), false));
     }
 }
 

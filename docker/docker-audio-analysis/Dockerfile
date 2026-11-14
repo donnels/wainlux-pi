@@ -5,6 +5,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY analyze_laser_audio.py /usr/local/bin/analyze_laser_audio.py
+COPY timeline.js /usr/local/bin/timeline.js
 COPY audio_api.py /usr/local/bin/audio_api.py
 COPY test_analyze_laser_audio.py /tests/test_analyze_laser_audio.py
 COPY test_audio_api.py /tests/test_audio_api.py

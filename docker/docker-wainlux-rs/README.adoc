@@ -12,7 +12,19 @@ Each review response includes `timing.raster_generation_ms` for composing stage 
 
 `GET /examples/audio-analysis` serves one self-contained report generated from a real recorded 2 mm frame test. It is an interpretation example, not a benchmark, statistical baseline or proof that audible activity is machine motion. Its embedded sample is loaded only when the user expands the example in the UI.
 
-Power-sweep attempts also return a bounded `receive_trace` in `GET /api/state`, the run outcome and the audit log. It includes per-job indices, monotonic receive timestamps, raw received bytes, decoded frame names/bytes, progress, quiet intervals, duration, captured-byte count and truncation status. Capture is capped at 1,024 RX bytes and 2,048 events per attempt. It contains no outgoing DATA/raster bytes or user content. The UI displays the trace after the run. Instrumentation does not change the 100% completion rule or the 90-second silence assumption.
+Power-sweep and sync-marked attempts also return a bounded `receive_trace` in `GET /api/state`, the run outcome and the audit log. It includes per-job indices, monotonic event timestamps, raw received bytes, decoded frame names/bytes, progress, quiet intervals, duration, captured-byte count and truncation status. Command writes made through the request/reply driver path have write-return timestamps and protocol bytes, except DATA payloads are always omitted. Bulk DATA transfer start/end/error events form spans; band metadata records row range, geometry, power and depth. This is not a complete wire capture: out-of-band STOP and direct-write paths are not included. Capture is capped at 1,024 RX bytes and 2,048 events per attempt. It contains no outgoing DATA/raster bytes or user content. The UI displays the trace after the run. Instrumentation does not change the 100% completion rule or the 90-second silence assumption.
+
+Audio reports use a shared clock for the signed waveform and separate Laser RX, Host TX, Jobs / bands and Run / sync lanes. The full recording fits at 1x; up to 128x redraws a continuous min/max envelope from 2 ms signed 16-bit bins of the decoded mono 8 kHz signal. At high zoom, minor ruler ticks are 200 ms apart; fractional labels appear where pixel spacing permits. These display intervals are not a claim of sync accuracy. A draggable overview window, its resize edges, horizontal scrolling and keyboard panning replace the timeline-position slider. Amplitude accepts 0.25x through 32x with peak-relative or full-scale reference. Selecting a packet or table row retains its decoded/raw details without seeking; a separate action seeks playback. The red cursor spans every lane and reports its time and difference from the selected event. Template/review/stage and band metadata identify jobs without retaining private card content. Truncation and unavailable historical traces are explicit; missing packets or job boundaries are not reconstructed from sound. A software finish marker remains duration-aligned to the nominal request, not an observation of stopped motion.
+
+When a trace budget fills, older packet events are evicted while job/transfer boundaries and recent progress remain available within the same limits. The trace is marked truncated; it is not a complete packet history. This keeps late progress and software-completion events available for audio comparison on long recordings.
+
+== Run Analysis With Optional Audio
+
+When an analysis URL and token are configured, ordinary runs also enable bounded event capture without requiring a recording or sync cue. After a Real attempt finishes, a background request checks the existing analysis container and submits only the completed, redacted `ran` event. Device completion, subsequent operator actions and ordinary burns never wait for analysis; an unavailable container produces no report and does not change the outcome.
+
+The existing audio analyzer accepts `application/json` at its unchanged `/api/analyze` endpoint with `attempt_id` and `run_log`. It persists a timing-only report without FFmpeg or an audio file. The report labels time since trace start (or run start when no trace exists), shows recorded RX/TX/job events and band timings, and explicitly marks audio absent. It never invents historical packets, sync sounds or physical completion. A later recording upload can replace the timing-only report with an audio-aligned report; a log-only request does not replace an existing audio-backed report.
+
+The Analysis tab links either kind of report. `POST /api/audio-analyses/{attempt_id}/report` requests an existing completed Real run's report when the container is available; its Analyze action permits backfilling older runs. Old runs without a saved trace can show only recorded summary/band timings. Success appends the compatible `audio_analysis` audit event with `has_audio=false`; recording uploads use `has_audio=true`. The newest event determines the current report. The Pi retains neither report HTML nor media. Container, route and configuration names remain unchanged.
 
 == Audio Recording Sync
 
@@ -36,7 +48,7 @@ This inventory is extracted from the current `app/src/lib.rs` dispatcher. `GET /
 | GET | `/docs/swagger-ui.css`, `/docs/swagger-ui-bundle.js` | Swagger UI assets
 | GET | `/docs/favicon-16x16.png`, `/docs/favicon-32x32.png` | Swagger UI icons
 | GET | `/assets/vsr-logo.png` | Operator UI logo
-| GET | `/api/machine`, `/api/mode`, `/api/materials` | Machine profile, mode, and material settings
+| GET | `/api/machine`, `/api/mode`, `/api/materials`, `/api/health` | Machine profile, mode, material settings, and service health
 | GET | `/api/templates`, `/api/assets`, `/api/assets/tiger.png` | Templates and prepared assets
 | GET | `/api/steps` | Supported test-ladder steps
 | GET, DELETE | `/api/state` | Read state; DELETE clears idle RAM state but retains the run log
@@ -48,7 +60,7 @@ This inventory is extracted from the current `app/src/lib.rs` dispatcher. `GET /
 | POST | `/api/mode` | Change real/simulator mode while idle
 | POST | `/api/plan`, `/api/run`, `/api/verdict`, `/api/stop` | Plan, run, judge, or request stop
 | POST | `/api/audio-analyses` | Upload a recording for a completed Real attempt with its matching sync marker; optional analyzer
-| GET | `/api/audio-analyses/{attempt_id}/report` | Read the attempt's annotated report from the Pi origin
+| GET, POST | `/api/audio-analyses/{attempt_id}/report` | Read a report, or request timing-only analysis for a completed Real run
 | GET | `/audio-upload/{attempt_id}` | iPhone-friendly Voice Memo file picker for a completed marked Real attempt
 | GET | `/api/audio-analyses/{attempt_id}/upload-qr.svg` | QR code linking to that attempt's phone upload page
 |===

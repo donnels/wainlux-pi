@@ -178,6 +178,7 @@ pub struct ReceiveTraceEvent {
     pub frame_bytes: Option<Vec<u8>>,
     pub percent: Option<u8>,
     pub quiet_ms: Option<u64>,
+    pub metadata: Option<String>,
 }
 
 impl Progress {

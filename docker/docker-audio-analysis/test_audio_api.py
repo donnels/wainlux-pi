@@ -42,6 +42,46 @@ def submission(attempt_id="1794321995-audio_power_sweep_low", step="audio_power_
 
 
 class AudioApiTests(unittest.TestCase):
+    def test_completed_run_without_audio_or_sync_gets_timing_report(self):
+        from audio_api import analyze_run_log
+
+        payload = {"attempt_id":"123456-content", "run_log":[{"event":"ran","attempt":{"id":"123456-content","mode":"real","goal":"Synthetic card"},"outcome":{"started":1000,"ended":1003,"elapsed_ms":3000,"receive_trace":{"started_at_unix_ms":1000100,"duration_ms":2800,"events":[{"at_ms":100,"kind":"status_frame","frame_bytes":"FF FF 00 63","percent":99,"job_index":1}]}}}]}
+        with tempfile.TemporaryDirectory() as directory:
+            report, timing = analyze_run_log(payload, directory)
+            document = report.decode()
+            self.assertIn("No audio recording", document)
+            self.assertIn("Synthetic card", document)
+            self.assertIn("FF FF 00 63", document)
+            self.assertIn('"has_audio":false', document)
+            self.assertNotIn("<audio", document)
+            self.assertTrue((Path(directory)/"123456-content"/"report.analysis.html").is_file())
+            self.assertGreaterEqual(timing["analyzer_total_ms"],0)
+
+    def test_log_only_request_preserves_existing_audio_report_and_sync_log(self):
+        from audio_api import analyze_run_log
+
+        with tempfile.TemporaryDirectory() as directory:
+            audio_path, log_path, attempt_id, _ = persist_submission(submission(), directory)
+            original_log = log_path.read_bytes()
+            report_path = audio_path.parent / "report.analysis.html"
+            report_path.write_text("<html>Existing recording report</html>")
+            events = json.loads(original_log)
+            report, _ = analyze_run_log({"attempt_id":attempt_id,"run_log":events}, directory)
+            self.assertIn(b"Existing recording report",report)
+            self.assertEqual(log_path.read_bytes(),original_log)
+
+    def test_log_only_request_without_trace_still_has_summary_timings(self):
+        from audio_api import analyze_run_log
+
+        payload = {"attempt_id":"123456-content","run_log":[{"event":"ran","attempt":{"id":"123456-content","mode":"real"},"outcome":{"elapsed_ms":4000,"band_timings":[{"transfer_ms":300,"setup_ms":200,"wait_ms":3500}]}}]}
+        with tempfile.TemporaryDirectory() as directory:
+            report, _ = analyze_run_log(payload,directory)
+        self.assertIn(b"no packet trace available",report)
+        self.assertIn(b"3500 ms",report)
+        payload["run_log"][0]["attempt"]["mode"] = "simulator"
+        with tempfile.TemporaryDirectory() as directory, self.assertRaisesRegex(ValueError,"completed Real run"):
+            analyze_run_log(payload,directory)
+
     def test_accepts_matching_completed_real_attempt(self):
         audio, suffix, attempt_id, expected_id, events = validate_submission(submission())
         self.assertEqual(audio, b"synthetic recording")

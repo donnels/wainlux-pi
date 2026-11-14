@@ -39,7 +39,7 @@ pub(crate) struct AttemptRecord {
 #[serde(untagged)]
 pub(crate) enum Target {
     Test { step: Step, material: Option<String> },
-    Card { review_id: String, stage: usize, stage_name: String },
+    Card { review_id: String, stage: usize, stage_name: String, template: Option<String> },
 }
 
 impl AttemptRecord {

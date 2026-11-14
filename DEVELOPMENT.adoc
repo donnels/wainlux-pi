@@ -1,0 +1,100 @@
+= Development Guide
+:toc: right
+:toclevels: 3
+
+This document explains how to set up a development environment for the Wainlux K6 laser service.
+
+== Quick Start
+
+This project uses **cross-compilation** on a workstation (Steam Deck, laptop) and runs the ARMv6 binary on the Pi Zero W. The Pi itself never compiles code.
+
+== Container Build
+
+The Dockerfile at `docker/docker-wainlux-rs/Dockerfile` is a multi-stage build optimized for the Pi Zero W.
+
+=== Stage 1: Cross-Compilation
+
+[source,dockerfile]
+----
+FROM --platform=$BUILDPLATFORM ghcr.io/rust-cross/rust-musl-cross@sha256:90fc4876d17c21346e55dfd4a344924b72c3bb38380749647461cd9595174789 AS build
+WORKDIR /w
+COPY . .
+RUN RUSTFLAGS="-C target-cpu=arm1176jzf-s" \
+    cargo build --release --locked -p app --target arm-unknown-linux-musleabihf
+----
+
+*Why this matters:*
+* `arm-unknown-linux-musleabihf`: Targets Pi Zero W's ARMv6 CPU
+* `-C target-cpu=arm1176jzf-s`: Optimizes for the exact CPU model (Raspberry Pi Zero W Rev 1.1)
+* `musl`: Static linking (no glibc dependency) produces smaller, self-contained binaries
+
+=== Stage 2: Runtime Image
+
+[source,dockerfile]
+----
+FROM docker.io/library/alpine@sha256:bc21487101ae47172509130ee1092cc273a831968d64b617776d1f69c81e42ab
+COPY --from=build /w/target/arm-unknown-linux-musleabihf/release/laser-app /usr/local/bin/laser-app
+COPY materials.toml /etc/laser/materials.toml
+COPY tests.toml /etc/laser/tests.toml
+COPY use-cases /etc/laser/use-cases
+----
+
+*Why this matters:*
+* Alpine: Minimal base image (~5MB)
+* Multi-platform: Supports `linux/arm/v6`
+* Pinned SHA: Ensures reproducible builds; no surprise updates
+* Runtime only: Contains only the compiled binary and config, no build tools
+
+== Build Command
+
+From repository root:
+
+[source,bash]
+----
+./scripts/build_laser.sh
+----
+
+This script:
+. Runs `cargo test --workspace --locked` in the pinned Rust container
+. Builds the Dockerfile for `linux/arm/v6`
+. Tags the result as `localhost/laser-app:arm`
+. Automatically uses Flatpak-aware host commands (`flatpak-spawn --host` or `host-spawn`) when running in a Flatpak
+
+== Dev Workflow
+
+. Code on workstation (Steam Deck, laptop)
+. Test locally (simulator mode requires no K6 hardware)
+. Build: `./scripts/build_laser.sh`
+. Deploy: `./scripts/deploy_laser.sh --target sean@piz-k6.fritz.box --confirm`
+
+== Local Testing (No Pi Required)
+
+Start in simulator mode:
+
+[source,bash]
+----
+MACHINE=sim docker compose -f docker/docker-wainlux-rs/compose.yaml up -d
+----
+
+Or use the build script which handles environment setup:
+
+[source,bash]
+----
+MACHINE=sim ./scripts/build_laser.sh
+# Then manually run the image, or:
+./scripts/deploy_laser.sh --target localhost:8081
+----
+
+== Flatpak Development
+
+When running VS Code or another IDE in Flatpak:
+
+* Use `flatpak-spawn --host` for host commands (Docker, Podman, SSH)
+* The repository scripts automatically detect Flatpak and use the correct host command
+* No host Rust toolchain is needed; everything runs in containers
+
+== See Also
+
+* link:docker/docker-wainlux-rs/README.adoc[Service API and operator workflow]
+* link:scripts/README.adoc[Repository scripts]
+* link:documentation/ADR/ADR-022-build-packaging.adoc[ARM Packaging Decision Record]

@@ -58,6 +58,9 @@ async function open(backend) {
             {step:"audio_power_sweep_full",title:"Audio compare: full power",controls:["x_mm"],settings:["power","depth"],materials:true,requires_real:true,requires_analyzer:true,requires_sync_marker:true,requires_recording_ack:true,fixed_y_mm:0,fixed_size_mm:19,power_values:[1000]}
           ]}; break;
           case "/api/audio-analyses/availability": value = {available:backend.audioAnalyzerAvailable !== false}; break;
+          case "/api/audio-analyses/analysis-9/report":
+            value = {event:"audio_analysis",attempt_id:"analysis-9",has_audio:false,report_url:"/api/audio-analyses/analysis-9/report",timing:{analyzer_total_ms:10}};
+            backend.logEntries.push(value); break;
           case "/api/plan":
             backend.plans ||= []; backend.plans.push(body);
             value = backend.lastPlan = body?.review_id
@@ -169,7 +172,9 @@ async function main() {
   assert.equal(standalonePage.window.document.getElementById("stop").hidden,false);
   standalonePage.window.close();
   backend.logEntries = Array.from({length:12},(_,index)=>({event:"ran",attempt:{id:`analysis-${index}`,mode:"real",stage_name:"content"},outcome:{ok:true,elapsed_ms:1000+index*100,band_timings:[{transfer_ms:100,setup_ms:200,wait_ms:300,phase:"reported_complete"}]}}));
-  backend.logEntries.push({event:"audio_analysis",attempt_id:"analysis-11",report_url:"/api/audio-analyses/analysis-11/report",timing:{pi_total_ms:900,analysis_process_ms:600}});
+  backend.logEntries.push({event:"audio_analysis",attempt_id:"analysis-11",has_audio:false,report_url:"/api/audio-analyses/analysis-11/older-report",timing:{analyzer_total_ms:10}});
+  backend.logEntries.push({event:"audio_analysis",attempt_id:"analysis-11",has_audio:true,report_url:"/api/audio-analyses/analysis-11/report",timing:{pi_total_ms:900,analysis_process_ms:600}});
+  backend.logEntries.push({event:"audio_analysis",attempt_id:"analysis-10",has_audio:false,report_url:"/api/audio-analyses/analysis-10/report",timing:{analyzer_total_ms:10}});
   window.tab("analysis");
   await window.loadAnalysis();
   assert.equal(document.querySelectorAll("#analysis-runs button").length,10,"analysis view is capped at the latest ten runs");
@@ -177,6 +182,17 @@ async function main() {
   assert(document.getElementById("analysis-chart").getAttribute("aria-label").includes("transfer 0.10 s"));
   assert.equal(document.getElementById("analysis-audio").hidden,false);
   assert.equal(document.getElementById("analysis-report-link").href,"http://localhost/api/audio-analyses/analysis-11/report");
+  const analysisReportDetails=document.getElementById("analysis-report-details");
+  assert.equal(analysisReportDetails.hidden,false);
+  analysisReportDetails.open=true; analysisReportDetails.dispatchEvent(new window.Event("toggle"));
+  assert.equal(document.getElementById("analysis-report-frame").src,"http://localhost/api/audio-analyses/analysis-11/report");
+  document.querySelectorAll("#analysis-runs button")[1].click();
+  assert.equal(document.getElementById("analysis-report-link").href,"http://localhost/api/audio-analyses/analysis-10/report");
+  assert.equal(document.getElementById("analysis-generate").hidden,true,"log-only reports are usable without an upload");
+  document.querySelectorAll("#analysis-runs button")[2].click();
+  assert.equal(document.getElementById("analysis-generate").hidden,false);
+  await window.generateAnalysis();
+  assert.equal(document.getElementById("analysis-report-link").href,"http://localhost/api/audio-analyses/analysis-9/report");
   window.tab("cards");
   assert.equal(element("step").value, "frame");
   assert.equal(element("layout-controls").open,false,"numeric layout controls are secondary, not the content form");
@@ -306,6 +322,23 @@ async function main() {
   assert.equal([...element("audio-timing").querySelectorAll("dt")].some(term=>term.textContent==="Browser report download"),true);
   assert.equal(backend.audioUploadHeaders["X-Attempt-ID"],"1794304104-audio_power_sweep_low");
   assert.equal(element("audio-report").src,"http://localhost/api/audio-analyses/1794304104-audio_power_sweep_low/report");
+  backend.logEntries = Array.from({length:12},(_,index)=>({event:"ran",attempt:{id:`comparison-${index}`,mode:"real",step:"audio_power_sweep_full",goal:`Power ${index*100}, Depth 10`},outcome:{ok:true,elapsed_ms:1000+index*100,band_timings:[{transfer_ms:100,setup_ms:200,wait_ms:300,phase:"reported_complete"}]}}));
+  backend.logEntries.push(
+    {event:"audio_analysis",attempt_id:"comparison-11",report_url:"/api/audio-analyses/comparison-11/report",timing:{pi_total_ms:900,analysis_process_ms:600}},
+    {event:"audio_analysis",attempt_id:"comparison-10",report_url:"/api/audio-analyses/comparison-10/report",timing:{pi_total_ms:950,analysis_process_ms:650}},
+  );
+  window.tab("analysis"); await window.loadAnalysis();
+  assert.equal(element("analysis-runs").querySelectorAll("button").length,10);
+  const compareBoxes = element("analysis-runs").querySelectorAll('input[type="checkbox"]');
+  compareBoxes[0].checked = true; compareBoxes[0].dispatchEvent(new window.Event("change"));
+  compareBoxes[1].checked = true; compareBoxes[1].dispatchEvent(new window.Event("change"));
+  await window.compareAnalysisRuns();
+  assert.equal(element("analysis-comparison-body").querySelectorAll("tr").length,2);
+  assert.equal(element("analysis-comparison-body").querySelectorAll(".analysis-bar").length,2);
+  assert.equal([...element("analysis-comparison-body").querySelectorAll("a")].length,1,"uploaded waveform report is linked for the matching run only");
+  assert.equal(element("analysis-compare-waveforms").hidden,false);
+  window.compareAnalysisWaveforms();
+  assert.equal(element("analysis-waveforms").querySelectorAll("iframe").length,2);
   const observation = element("comment");
   assert.equal(observation.hidden,false,"inspection feedback is always visible");
   assert.equal(observation.hasAttribute("data-secret"),false,"operator feedback is not treated as a credential");

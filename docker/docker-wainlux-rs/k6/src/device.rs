@@ -101,16 +101,25 @@ impl<P: Port> Device<P> {
                 started
             }
         };
-        if self.receive_trace.events.len() >= MAX_TRACE_EVENTS {
-            self.receive_trace.truncated = true;
-            return;
-        }
         if byte.is_some() {
             if self.receive_trace.bytes_captured >= MAX_TRACE_BYTES {
                 self.receive_trace.truncated = true;
+                if let Some(index) = self.receive_trace.events.iter().position(|event| event.kind == "rx_byte") {
+                    self.receive_trace.events.remove(index);
+                } else {
+                    return;
+                }
+            } else {
+                self.receive_trace.bytes_captured += 1;
+            }
+        }
+        if self.receive_trace.events.len() >= MAX_TRACE_EVENTS {
+            self.receive_trace.truncated = true;
+            if let Some(index) = self.receive_trace.events.iter().position(|event| event.kind == "rx_byte" || event.kind.ends_with("_frame") || event.kind == "tx_command") {
+                self.receive_trace.events.remove(index);
+            } else {
                 return;
             }
-            self.receive_trace.bytes_captured += 1;
         }
         self.receive_trace.events.push(ReceiveTraceEvent {
             at_ms: started.elapsed().as_millis() as u64,
@@ -122,6 +131,7 @@ impl<P: Port> Device<P> {
             frame_bytes,
             percent,
             quiet_ms,
+            metadata: None,
         });
     }
 
@@ -151,16 +161,16 @@ impl<P: Port> Device<P> {
     /// Send and collect until ACK (or any frame if `ack` is false) or timeout.
     fn cmd(&mut self, name: &'static str, pkt: &[u8], wait: Duration, ack: bool) -> Result<Vec<u8>> {
         self.send(pkt)?;
+        self.trace_event("command", "tx_command", None, Some(name), if name == "DATA" { None } else { Some(pkt.to_vec()) }, None, None);
         let end = Instant::now() + wait;
         let mut rx = Vec::new();
         while Instant::now() < end {
             self.check_cancelled()?;
             let Some(b) = self.port.recv(Duration::from_millis(50))? else { continue };
             rx.push(b);
-            if name == "INIT" {
-                self.trace_event("init", "rx_byte", Some(b), None, None, None, None);
-            }
+            self.trace_event(if name == "INIT" { "init" } else { "command" }, "rx_byte", Some(b), None, None, None, None);
             if ack && (b == ACK || b == NACK) {
+                self.trace_event("command", "ack_frame", None, Some(if b == ACK { "ACK" } else { "NACK" }), Some(vec![b]), None, None);
                 break;
             }
             if !ack && is_frame(&rx) {
@@ -246,6 +256,11 @@ impl<P: Port> Device<P> {
     ) -> Result<Done> {
         if self.receive_trace_enabled { self.receive_trace_job = self.receive_trace_job.saturating_add(1); }
         self.trace_event("job", "job_start", None, None, None, None, None);
+        if self.receive_trace_enabled {
+            if let Some(event) = self.receive_trace.events.last_mut().filter(|event| event.kind == "job_start") {
+                event.metadata = Some(format!("Band {}/{}; raster rows {}..{}; {}x{} px at ({x},{y}); power {power}; depth {depth}", band.0, band.1, band.2, band.3, r.width, r.height));
+            }
+        }
         let band_started = Instant::now();
         let (w, h) = match (u16::try_from(r.width), u16::try_from(r.height)) {
             (Ok(w), Ok(h)) if x as u32 + w as u32 <= BED as u32 && y as u32 + h as u32 <= BED as u32 => (w, h),
@@ -264,9 +279,14 @@ impl<P: Port> Device<P> {
         sleep(Duration::from_millis(500));
 
         let transfer_started = Instant::now();
+        self.trace_event("transfer", "transfer_start", None, None, None, None, None);
         for (i, chunk) in data.chunks(p::DATA_CHUNK).enumerate() {
-            self.send_chunk(chunk, i * p::DATA_CHUNK)?;
+            if let Err(error) = self.send_chunk(chunk, i * p::DATA_CHUNK) {
+                self.trace_event("transfer", "transfer_error", None, None, None, None, None);
+                return Err(error);
+            }
         }
+        self.trace_event("transfer", "transfer_end", None, None, None, None, None);
         let transfer_ms = transfer_started.elapsed().as_millis() as u64;
 
         sleep(Duration::from_millis(200));
@@ -560,6 +580,11 @@ mod tests {
         let trace = Machine::take_receive_trace(&mut device);
         assert_eq!(trace.events.first().unwrap().kind, "job_start");
         assert_eq!(trace.events.first().unwrap().job_index, Some(1));
+        assert!(trace.events.first().unwrap().metadata.as_ref().unwrap().contains("Band 1/1"));
+        assert_eq!(trace.events.iter().filter(|event| event.kind == "transfer_start").count(), 1);
+        assert_eq!(trace.events.iter().filter(|event| event.kind == "transfer_end").count(), 1);
+        assert!(trace.events.iter().any(|event| event.kind == "tx_command" && event.frame == Some("INIT")));
+        assert!(trace.events.iter().filter(|event| event.kind == "tx_command" && event.frame == Some("DATA")).all(|event| event.frame_bytes.is_none()));
         assert_eq!(trace.events.iter().filter(|event| event.phase == "init" && event.kind == "rx_byte").count(), 8);
         assert_eq!(trace.events.iter().filter(|event| event.phase == "init" && event.kind == "heartbeat_frame").count(), 2);
         assert!(trace.events.iter().all(|event| event.job_index == Some(1)));
@@ -576,6 +601,24 @@ mod tests {
         assert_eq!(trace.bytes_captured, MAX_TRACE_BYTES);
         assert_eq!(trace.events.len(), MAX_TRACE_BYTES);
         assert!(trace.truncated);
+    }
+
+    #[test]
+    fn full_trace_keeps_latest_progress_and_job_boundaries() {
+        let mut device = script(&[]);
+        Machine::set_receive_trace(&mut device, true);
+        device.trace_event("job", "job_start", None, None, None, None, None);
+        for _ in 0..MAX_TRACE_EVENTS + 10 {
+            device.trace_event("completion_wait", "status_frame", None, Some("progress"), Some(vec![255, 255, 0, 50]), Some(50), None);
+        }
+        device.trace_event("completion_wait", "status_frame", None, Some("progress"), Some(vec![255, 255, 0, 99]), Some(99), None);
+        device.trace_event("job", "silence_assumed", None, None, None, Some(99), Some(90000));
+        let trace = Machine::take_receive_trace(&mut device);
+        assert_eq!(trace.events.len(), MAX_TRACE_EVENTS);
+        assert!(trace.truncated);
+        assert_eq!(trace.events.first().unwrap().kind, "job_start");
+        assert_eq!(trace.events.last().unwrap().kind, "silence_assumed");
+        assert!(trace.events.iter().any(|event| event.kind == "status_frame" && event.percent == Some(99)));
     }
 
     #[test]

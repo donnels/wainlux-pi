@@ -14,5 +14,5 @@ ifdef::single-page[]
 * The methodology and contributor boundary are summarized in <<clean-room-statement>>. This record makes no legal conclusion.
 endif::single-page[]
 ifndef::single-page[]
-* The full methodology and contributor boundary are in link:../../CLEAN_ROOM.md[CLEAN_ROOM.md]. This record makes no legal conclusion.
+* The full methodology and contributor boundary are in link:../../CLEAN_ROOM.adoc[CLEAN_ROOM.adoc]. This record makes no legal conclusion.
 endif::single-page[]

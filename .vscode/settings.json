@@ -1,0 +1,6 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "./scripts/build_laser.sh": true
+    },
+    "python.terminal.useEnvFile": true
+}

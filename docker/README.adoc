@@ -41,6 +41,25 @@ ifndef::single-page[]
 Build and deployment: link:../documentation/GETTING_STARTED.adoc[Getting Started].
 endif::single-page[]
 
+[WARNING]
+====
+All tool containers must use **local Dockerfiles** with **pinned base images**. Never use `:latest` tags.
+
+The `:latest` tag creates unacceptable supply chain risk:
+* No version history — if `:latest` breaks, we cannot determine what version was previously working
+* No rollback path — there is no tag to revert to
+* Implicit updates — new versions may be pulled automatically, introducing breaking changes or vulnerabilities
+* Audit difficulty — cannot trace exactly what was used in historical builds
+
+With local Dockerfiles in git:
+* Git is the source of truth — all container definitions are in the repository
+* Versioned by commit — every change to a Dockerfile creates a new, auditable version
+* Rollback via git — `git checkout <commit>` restores the exact container that was used
+* Scan before merge — vulnerability scanning can be part of the CI/CD pipeline
+
+See <<adr-029-container-security,ADR-029: Local Container Builds for Supply Chain Security>> for the full rationale.
+====
+
 == Components
 
 [[api-contract]]
