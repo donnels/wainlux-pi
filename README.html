@@ -780,6 +780,20 @@ pre.rouge .gs {
 <li><a href="#_related">4.B.11.11. Related</a></li>
 </ul>
 </li>
+<li><a href="#adr-029-container-security">4.B.12. ADR-029: Local Container Builds for Supply Chain Security</a>
+<ul class="sectlevel4">
+<li><a href="#_status_13">4.B.12.1. Status</a></li>
+<li><a href="#_context_3">4.B.12.2. Context</a></li>
+<li><a href="#_decision_13">4.B.12.3. Decision</a></li>
+<li><a href="#_consequences_13">4.B.12.4. Consequences</a></li>
+<li><a href="#_rationale">4.B.12.5. Rationale</a></li>
+<li><a href="#_implementation">4.B.12.6. Implementation</a></li>
+<li><a href="#_container_inventory">4.B.12.7. Container Inventory</a></li>
+<li><a href="#_examples">4.B.12.8. Examples</a></li>
+<li><a href="#_related_decisions">4.B.12.9. Related Decisions</a></li>
+<li><a href="#_notes">4.B.12.10. Notes</a></li>
+</ul>
+</li>
 </ul>
 </li>
 <li><a href="#req-index">Appendix D: Requirements</a>
@@ -787,7 +801,7 @@ pre.rouge .gs {
 <li><a href="#_functional">4.D.1. Functional</a></li>
 <li><a href="#fr-001-burn-raster-image">Appendix C: FR-001: Reviewed Raster Execution</a>
 <ul class="sectlevel4">
-<li><a href="#_status_13">4.D.C.1. Status</a></li>
+<li><a href="#_status_14">4.D.C.1. Status</a></li>
 <li><a href="#_requirement">4.D.C.2. Requirement</a></li>
 <li><a href="#_acceptance">4.D.C.3. Acceptance</a></li>
 <li><a href="#_scope">4.D.C.4. Scope</a></li>
@@ -795,7 +809,7 @@ pre.rouge .gs {
 </li>
 <li><a href="#fr-002-generate-wifi-qr">4.D.2. FR-002: WiFi QR Composition</a>
 <ul class="sectlevel4">
-<li><a href="#_status_14">4.D.2.1. Status</a></li>
+<li><a href="#_status_15">4.D.2.1. Status</a></li>
 <li><a href="#_requirement_2">4.D.2.2. Requirement</a></li>
 <li><a href="#_acceptance_2">4.D.2.3. Acceptance</a></li>
 <li><a href="#_evidence">4.D.2.4. Evidence</a></li>
@@ -803,14 +817,14 @@ pre.rouge .gs {
 </li>
 <li><a href="#fr-003-progress-and-timing">4.D.3. FR-003: Progress and Timing</a>
 <ul class="sectlevel4">
-<li><a href="#_status_15">4.D.3.1. Status</a></li>
+<li><a href="#_status_16">4.D.3.1. Status</a></li>
 <li><a href="#_requirement_3">4.D.3.2. Requirement</a></li>
 <li><a href="#_acceptance_3">4.D.3.3. Acceptance</a></li>
 </ul>
 </li>
 <li><a href="#fr-007-emergency-stop">4.D.4. FR-007: Stop and Cancellation</a>
 <ul class="sectlevel4">
-<li><a href="#_status_16">4.D.4.1. Status</a></li>
+<li><a href="#_status_17">4.D.4.1. Status</a></li>
 <li><a href="#_requirement_4">4.D.4.2. Requirement</a></li>
 <li><a href="#_acceptance_4">4.D.4.3. Acceptance</a></li>
 <li><a href="#_attended_hardware_check_initial_result">4.D.4.4. Attended Hardware Check (Initial Result)</a></li>
@@ -818,28 +832,28 @@ pre.rouge .gs {
 </li>
 <li><a href="#fr-009-calibration-patterns">4.D.5. FR-009: Test Ladder</a>
 <ul class="sectlevel4">
-<li><a href="#_status_17">4.D.5.1. Status</a></li>
+<li><a href="#_status_18">4.D.5.1. Status</a></li>
 <li><a href="#_requirement_5">4.D.5.2. Requirement</a></li>
 <li><a href="#_acceptance_5">4.D.5.3. Acceptance</a></li>
 </ul>
 </li>
 <li><a href="#fr-011-placement">4.D.6. FR-011: Material Placement</a>
 <ul class="sectlevel4">
-<li><a href="#_status_18">4.D.6.1. Status</a></li>
+<li><a href="#_status_19">4.D.6.1. Status</a></li>
 <li><a href="#_requirement_6">4.D.6.2. Requirement</a></li>
 <li><a href="#_acceptance_6">4.D.6.3. Acceptance</a></li>
 </ul>
 </li>
 <li><a href="#fr-013">4.D.7. FR-013: Hardware-Independent Tests</a>
 <ul class="sectlevel4">
-<li><a href="#_status_19">4.D.7.1. Status</a></li>
+<li><a href="#_status_20">4.D.7.1. Status</a></li>
 <li><a href="#_requirement_7">4.D.7.2. Requirement</a></li>
 <li><a href="#_acceptance_7">4.D.7.3. Acceptance</a></li>
 </ul>
 </li>
 <li><a href="#fr-015-laser-test-ladder">4.D.8. FR-015: Operator Test Verdicts</a>
 <ul class="sectlevel4">
-<li><a href="#_status_20">4.D.8.1. Status</a></li>
+<li><a href="#_status_21">4.D.8.1. Status</a></li>
 <li><a href="#_requirement_8">4.D.8.2. Requirement</a></li>
 <li><a href="#_acceptance_8">4.D.8.3. Acceptance</a></li>
 <li><a href="#_full_screen_operator_ui_acceptance_pending">4.D.8.4. Full-Screen Operator UI Acceptance (Pending)</a></li>
@@ -847,14 +861,14 @@ pre.rouge .gs {
 </li>
 <li><a href="#fr-016-qr-cards">4.D.9. FR-016: Reviewed Card Jobs</a>
 <ul class="sectlevel4">
-<li><a href="#_status_21">4.D.9.1. Status</a></li>
+<li><a href="#_status_22">4.D.9.1. Status</a></li>
 <li><a href="#_requirement_9">4.D.9.2. Requirement</a></li>
 <li><a href="#_acceptance_9">4.D.9.3. Acceptance</a></li>
 </ul>
 </li>
 <li><a href="#fr-017-end-detection">4.D.10. FR-017: Physical End Estimates</a>
 <ul class="sectlevel4">
-<li><a href="#_status_22">4.D.10.1. Status</a></li>
+<li><a href="#_status_23">4.D.10.1. Status</a></li>
 <li><a href="#_requirement_10">4.D.10.2. Requirement</a></li>
 <li><a href="#_acceptance_10">4.D.10.3. Acceptance</a></li>
 </ul>
@@ -864,7 +878,7 @@ pre.rouge .gs {
 </li>
 <li><a href="#_nfr_005_redacted_run_history">4.10. NFR-005: Redacted Run History</a>
 <ul class="sectlevel3">
-<li><a href="#_status_23">4.10.1. Status</a></li>
+<li><a href="#_status_24">4.10.1. Status</a></li>
 <li><a href="#_requirement_11">4.10.2. Requirement</a></li>
 <li><a href="#_acceptance_11">4.10.3. Acceptance</a></li>
 </ul>
@@ -879,13 +893,14 @@ pre.rouge .gs {
 <li><a href="#api-contract">5.1.1. Laser Service API</a>
 <ul class="sectlevel4">
 <li><a href="#_timing">5.1.1.1. Timing</a></li>
-<li><a href="#_audio_recording_sync">5.1.1.2. Audio Recording Sync</a></li>
-<li><a href="#_submit_and_review">5.1.1.3. Submit and Review</a></li>
-<li><a href="#_types">5.1.1.4. Types</a></li>
-<li><a href="#_execute_one_stage">5.1.1.5. Execute One Stage</a></li>
-<li><a href="#_trust_and_lifetime">5.1.1.6. Trust and Lifetime</a></li>
-<li><a href="#_clear_pi_and_account_state">5.1.1.7. Clear Pi and Account State</a></li>
-<li><a href="#_tests">5.1.1.8. Tests</a></li>
+<li><a href="#_run_analysis_with_optional_audio">5.1.1.2. Run Analysis With Optional Audio</a></li>
+<li><a href="#_audio_recording_sync">5.1.1.3. Audio Recording Sync</a></li>
+<li><a href="#_submit_and_review">5.1.1.4. Submit and Review</a></li>
+<li><a href="#_types">5.1.1.5. Types</a></li>
+<li><a href="#_execute_one_stage">5.1.1.6. Execute One Stage</a></li>
+<li><a href="#_trust_and_lifetime">5.1.1.7. Trust and Lifetime</a></li>
+<li><a href="#_clear_pi_and_account_state">5.1.1.8. Clear Pi and Account State</a></li>
+<li><a href="#_tests">5.1.1.9. Tests</a></li>
 </ul>
 </li>
 <li><a href="#_k6_mcp_preview_client">5.1.2. K6 MCP Preview Client</a>
@@ -1211,7 +1226,7 @@ docker compose up <span class="nt">-d</span></code></pre>
 </div>
 </div>
 <div class="paragraph">
-<p>The script builds/reuses the pinned <code>docker/docker-audio-analysis</code> container, mounts the input and optional API log read-only, prints a JSON report, and writes the HTML report beside the recording. The HTML embeds a browser-compatible mono MP3 preview up to 40 MiB; larger reports write an MP3 sidecar. The analyzer decodes the optional DTMF recording ID only to associate it with the attempt, then reports filtered run-log events and measured processing timings. It does not classify audible activity or infer motion or laser state. Docker or Podman must be available on the host; Flatpak host routing is handled by the shared script helper.</p>
+<p>The script builds/reuses the pinned <code>docker/docker-audio-analysis</code> container, mounts the input and optional API log read-only, prints a JSON report, and writes the HTML report beside the recording. The HTML embeds a browser-compatible mono MP3 preview up to 40 MiB; larger reports write an MP3 sidecar. The analyzer decodes the optional DTMF recording ID only to associate it with the attempt, then shows the full recording waveform with time/amplitude zoom and seek, timestamp-aligned run events, and measured processing timings. When the run log includes a receive trace, each captured byte and decoded frame is shown on the waveform and in the packet table; an untraced or older run has no packet-level data to align. It does not classify audible activity or infer motion or laser state. Docker or Podman must be available on the host; Flatpak host routing is handled by the shared script helper.</p>
 </div>
 <div class="paragraph">
 <p>The UI&#8217;s <strong>Machine tests &gt; Archived exploratory audio report</strong> opens an earlier self-contained example built from an actual 2 mm frame recording. Its sound-activity annotations are historical and are not generated by current uploads. The source recording is embedded in that archive; the old <code>Verification/</code> working folder is not needed.</p>
@@ -1276,6 +1291,20 @@ podman compose <span class="nt">-f</span> docker/docker-audio-analysis/compose.y
 </div>
 <div class="paragraph">
 <p>Replace the example host with the SSH name or IP for the intended Pi, or set <code>LASER_SSH_TARGET</code> in the environment. The script refuses unless the remote model is Raspberry Pi Zero W Rev 1.1 (<code>armv6l</code>) and the service API reports idle, Simulator mode, no attempt, no outcome, and no loaded review. It streams the already-built ARM image from the Deck, verifies the loaded image ID matches, and recreates <code>laser-app</code> through the Pi&#8217;s Compose file. SSH host-key verification remains enabled. The Pi only loads and runs the image; Rust compilation stays on the Deck. The script never starts a laser job.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+<div class="paragraph">
+<p>The Pi&#8217;s configured hostname is <code>piz-k3</code>, but it is also reachable via <code>piz-k6.local</code> (mDNS) and <code>piz-k6.fritz.box</code> (router DNS). YMMV depending on your network setup. SSH config may make one name work while others fail.</p>
+</div>
+</td>
+</tr>
+</table>
 </div>
 </div>
 <div class="sect4">
@@ -2515,7 +2544,7 @@ custody are not all enforced or verified by this tool. It is your choice to use 
 </div>
 </div>
 <div class="paragraph">
-<p>The current upload report includes the recording for playback, its decoded ID match, filtered run-log events and measured processing timings. It does not display or classify audible activity. The in-app archived example at <code>/examples/audio-analysis</code> is an older exploratory report and is explicitly not the current analysis method.</p>
+<p>The current upload report includes the recording for playback, its decoded ID when available, a full-length auto-scaled min/max amplitude waveform with time/amplitude zoom, seek and Jump to end, timestamp-aligned receive bytes/decoded frames when captured, run-log markers, and measured processing timings. The packet table lets operators inspect which received values preceded progress/completion events; untraced runs explicitly lack those packet events. It does not classify audible activity or infer laser state. The Analysis tab compares the latest ten run goals/settings and durations, with links to individual uploaded reports and optional side-by-side waveform views. The in-app <code>/examples/audio-analysis</code> page is an older exploratory report.</p>
 </div>
 <div class="paragraph">
 <p>The M4A creation-time tag differed from the API marker wall clock by about 2 h 40 min even though the audio DTMF ID matched. Use the ID for association; do not treat file metadata as a physical timing reference. The analyzer uses FFmpeg 5.1.9 in its pinned container and Python standard-library Goertzel analysis for the sync ID; no audio packages are installed on the Deck.</p>
@@ -2666,7 +2695,8 @@ Packet hypotheses and safety-gated experiments remain in <code>documentation/unv
 * <a href="#adr-025-placement">ADR-025: Card placement</a>
 * <a href="#adr-026-mcp-hub">ADR-026: Network MCP hub</a>
 * <a href="#adr-027-audio-end-detection">ADR-027: Audio-first end-detection evidence</a>
-* <a href="#adr-028-distributed-audio-analysis">ADR-028: Pi-coordinated capture and external analysis</a></p>
+* <a href="#adr-028-distributed-audio-analysis">ADR-028: Pi-coordinated capture and external analysis</a>
+* <a href="#adr-029-container-security">ADR-029: Local Container Builds for Supply Chain Security</a></p>
 </div>
 <div class="sect3">
 <h4 id="adr-002-serial-communication">Appendix A: ADR-002: K6 Serial Transport</h4>
@@ -3064,7 +3094,7 @@ Packet hypotheses and safety-gated experiments remain in <code>documentation/unv
 <p>Capture bounded receive traces for each power-sweep job: monotonic relative time, job index, received bytes, decoded status/heartbeat frames, progress and quiet intervals. Cap raw RX bytes and event count; report truncation. Never capture outgoing raster/job data or user content.</p>
 </li>
 <li>
-<p>Process recordings with <code>./scripts/analyze_laser_audio.sh</code> in a pinned Docker/Podman container. The audio file is mounted read-only. FFmpeg decodes the recording; Python&#8217;s standard-library Goertzel implementation reads the DTMF ID only for association with the run log. The report presents playback, filtered run-log events and measured processing timings; it does not classify audible activity. No audio tools or Python packages are installed on the Deck.</p>
+<p>Process recordings with <code>./scripts/analyze_laser_audio.sh</code> in a pinned Docker/Podman container. The audio file is mounted read-only. FFmpeg decodes the recording; Python&#8217;s standard-library Goertzel implementation reads the DTMF ID only for association with the run log. The report presents playback, a full-length zoomable amplitude envelope, timestamp-aligned received bytes and decoded frames when a receive trace exists, run events and measured processing timings. Older/untraced runs cannot show packet arrivals. It does not classify audible activity. No audio tools or Python packages are installed on the Deck.</p>
 </li>
 <li>
 <p>Keep OK/deviation/comment as a separate human judgment. Logs, timings, sync matching and playback do not prove physical completion.</p>
@@ -3111,10 +3141,10 @@ Packet hypotheses and safety-gated experiments remain in <code>documentation/unv
 <div class="olist arabic">
 <ol class="arabic">
 <li>
-<p>Phone-audio proof of concept: decode the six-digit marker and inspect candidate audible intervals. Complete for one real 2 mm frame recording; the ID matched, but creation-time metadata was offset from the Pi log. Its self-contained report is available at <code>/examples/audio-analysis</code>.</p>
+<p>Phone-audio proof of concept: decode the six-digit marker and inspect a recording. Complete for one real 2 mm frame recording; creation-time metadata was offset from the Pi log. Its self-contained report is archived at <code>/examples/audio-analysis</code>.</p>
 </li>
 <li>
-<p>Visualization and log join: implemented in the analyzer. The HTML report includes playable audio, waveform/activity, cue/DTMF markers, run timing and trace limits. It shows candidate evidence, not proof of movement.</p>
+<p>Visualization and log join: implemented in the analyzer. Current reports include playable audio, a full-length min/max amplitude waveform with amplitude/time zoom, seeking and Jump to end, receive-byte/frame markers with an aligned packet table, sync/log events and timings. This is visual evidence only; no acoustic activity classifier or physical-state inference is performed.</p>
 </li>
 <li>
 <p>Pi capture integration: coordinate local microphone capture and the laser run from the Pi, use monotonic capture-relative event times, then submit audio and filtered run metadata to an external analysis service. Keep the optional cue for phone/independent capture. Measure capture CPU, memory and storage before enabling it in routine runs; see <a href="#adr-028-distributed-audio-analysis">ADR-028</a>.</p>
@@ -3195,7 +3225,7 @@ Packet hypotheses and safety-gated experiments remain in <code>documentation/unv
 <div class="title">Figure 46. Future Pi-local HAT capture</div>
 </div>
 <div class="paragraph">
-<p>The Pi upload route accepts a completed Real attempt with its matching sync marker. It accepts a raw recording up to 64 MiB and forwards only the matching marker and run event to the configured analyzer. The analyzer URL and bearer token are server-side configuration; neither is exposed to the browser. The report provides recording playback, sync matching, filtered run-log events and measured processing timings only; it does not classify sound activity or infer physical state. The human physical verdict remains authoritative.</p>
+<p>The Pi upload route accepts a completed Real attempt with its matching sync marker. It accepts a raw recording up to 64 MiB and forwards only the matching marker and run event to the configured analyzer. The analyzer URL and bearer token are server-side configuration; neither is exposed to the browser. The report provides recording playback, a full-length seekable min/max amplitude waveform, sync/run-log markers and measured processing timings. The Analysis tab lists the latest ten runs for goal/settings and duration comparison, with links to each uploaded waveform. Sound is not classified as laser state and does not establish physical rest; the human physical verdict remains authoritative.</p>
 </div>
 </div>
 <div class="sect4">
@@ -3273,6 +3303,312 @@ Packet hypotheses and safety-gated experiments remain in <code>documentation/unv
 </div>
 </div>
 </div>
+<div class="sect3">
+<h4 id="adr-029-container-security">4.B.12. ADR-029: Local Container Builds for Supply Chain Security</h4>
+<div class="sect4">
+<h5 id="_status_13">4.B.12.1. Status</h5>
+<div class="paragraph">
+<p>Accepted; ongoing constraint.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_context_3">4.B.12.2. Context</h5>
+<div class="paragraph">
+<p>The project uses Docker containers for:
+* Cross-compiling Rust code for ARMv6 (Pi Zero W)
+* Generating protocol diagrams (bytefield-svg)
+* Generating architecture diagrams (PlantUML)
+* Running the laser service and supporting tools</p>
+</div>
+<div class="paragraph">
+<p>Historically, some containers used remote images (e.g., <code>plantuml/plantuml:latest</code>, <code>rust:1.x</code>), while others used local Dockerfiles (e.g., <code>docker-bytefield</code>). This inconsistency creates supply chain risks and maintainability issues.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_decision_13">4.B.12.3. Decision</h5>
+<div class="paragraph">
+<p><strong>All tool containers must use local Dockerfiles in the <code>docker/</code> directory with pinned base images.</strong></p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Build containers once from pinned base images</p>
+</li>
+<li>
+<p>Scan containers for vulnerabilities before use</p>
+</li>
+<li>
+<p>Version containers in git history</p>
+</li>
+<li>
+<p>Never use <code>:latest</code> tags for tool containers</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_consequences_13">4.B.12.4. Consequences</h5>
+<div class="sect5">
+<h6 id="_positive">4.B.12.4.1. Positive</h6>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Supply chain security:</strong> We control all dependencies; no implicit trust in external registries</p>
+</li>
+<li>
+<p><strong>Reproducibility:</strong> Exact container versions are committed to git</p>
+</li>
+<li>
+<p><strong>Rollback capability:</strong> If a build breaks, git history shows exactly what changed</p>
+</li>
+<li>
+<p><strong>Cost control:</strong> Avoids Docker Hub rate limits and bandwidth costs</p>
+</li>
+<li>
+<p><strong>Vulnerability management:</strong> We scan containers before deployment</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect5">
+<h6 id="_negative">4.B.12.4.2. Negative</h6>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Maintenance burden:</strong> More Dockerfiles to maintain</p>
+</li>
+<li>
+<p><strong>Storage overhead:</strong> Larger repository size</p>
+</li>
+<li>
+<p><strong>Build time:</strong> Initial build takes longer</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_rationale">4.B.12.5. Rationale</h5>
+<div class="sect5">
+<h6 id="_the_latest_problem">4.B.12.5.1. The <code>:latest</code> Problem</h6>
+<div class="paragraph">
+<p>Using <code>:latest</code> tags creates several risks:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>No version history:</strong> When <code>:latest</code> breaks, we cannot determine what version was previously working</p>
+</li>
+<li>
+<p><strong>No rollback path:</strong> There is no tag to revert to</p>
+</li>
+<li>
+<p><strong>Implicit updates:</strong> New versions may be pulled automatically, introducing breaking changes or vulnerabilities</p>
+</li>
+<li>
+<p><strong>Audit difficulty:</strong> Cannot trace exactly what was used in historical builds</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect5">
+<h6 id="_the_local_dockerfile_solution">4.B.12.5.2. The Local Dockerfile Solution</h6>
+<div class="paragraph">
+<p>With local Dockerfiles:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Git is the source of truth:</strong> All container definitions are in the repository</p>
+</li>
+<li>
+<p><strong>Versioned by commit:</strong> Every change to a Dockerfile creates a new, auditable version</p>
+</li>
+<li>
+<p><strong>Rollback via git:</strong> <code>git checkout &lt;commit&gt;</code> restores the exact container that was used</p>
+</li>
+<li>
+<p><strong>Scan before merge:</strong> Vulnerability scanning can be part of the CI/CD pipeline</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_implementation">4.B.12.6. Implementation</h5>
+
+</div>
+<div class="sect4">
+<h5 id="_container_inventory">4.B.12.7. Container Inventory</h5>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 25%;">
+<col style="width: 25%;">
+<col style="width: 25%;">
+<col style="width: 25%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Container</th>
+<th class="tableblock halign-left valign-top">Directory</th>
+<th class="tableblock halign-left valign-top">Status</th>
+<th class="tableblock halign-left valign-top">Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">bytefield-svg</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>docker/docker-bytefield/</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">✅ Local Dockerfile</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Keep</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">plantuml</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Not in docker/</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">❌ Remote <code>:latest</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Create local Dockerfile</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">rust-cross</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Not in docker/</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">⚠️ Remote pinned</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Create local Dockerfile</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">wainlux-rs</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>docker/docker-wainlux-rs/</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">✅ Local Dockerfile</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Keep</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">mcp</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>docker/docker-mcp/</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">✅ Local Dockerfile</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Keep</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">audio-analysis</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>docker/docker-audio-analysis/</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">✅ Local Dockerfile</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Keep</p></td>
+</tr>
+</tbody>
+</table>
+<div class="sect5">
+<h6 id="_build_process">4.B.12.7.1. Build Process</h6>
+<div class="paragraph">
+<p>Create <code>docker-compose.build.yml</code> at repository root:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="yaml"><span class="na">version</span><span class="pi">:</span> <span class="s1">'</span><span class="s">3.8'</span>
+<span class="na">services</span><span class="pi">:</span>
+  <span class="na">bytefield-svg</span><span class="pi">:</span>
+    <span class="na">build</span><span class="pi">:</span> <span class="s">./docker/docker-bytefield</span>
+    <span class="na">image</span><span class="pi">:</span> <span class="s">localhost/bytefield-svg:latest</span>
+  <span class="na">plantuml</span><span class="pi">:</span>
+    <span class="na">build</span><span class="pi">:</span> <span class="s">./docker/docker-plantuml</span>
+    <span class="na">image</span><span class="pi">:</span> <span class="s">localhost/plantuml:latest</span>
+  <span class="na">rust-cross</span><span class="pi">:</span>
+    <span class="na">build</span><span class="pi">:</span> <span class="s">./docker/docker-rust</span>
+    <span class="na">image</span><span class="pi">:</span> <span class="s">localhost/rust-cross:arm</span></code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Build all tool containers:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="bash">docker compose <span class="nt">-f</span> docker-compose.build.yml build</code></pre>
+</div>
+</div>
+</div>
+<div class="sect5">
+<h6 id="_scanning">4.B.12.7.2. Scanning</h6>
+<div class="paragraph">
+<p>Scan all local containers before use:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="bash">trivy image localhost/bytefield-svg:latest
+trivy image localhost/plantuml:latest
+trivy image localhost/rust-cross:arm</code></pre>
+</div>
+</div>
+</div>
+<div class="sect5">
+<h6 id="_versioning">4.B.12.7.3. Versioning</h6>
+<div class="paragraph">
+<p>After scanning, tag containers with semantic versions:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="rouge highlight"><code data-lang="bash">docker tag localhost/bytefield-svg:latest localhost/bytefield-svg:v1.0.0
+docker tag localhost/plantuml:latest localhost/plantuml:v1.0.0
+docker tag localhost/rust-cross:arm localhost/rust-cross:v1.0.0</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Update scripts to reference versioned tags.</p>
+</div>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_examples">4.B.12.8. Examples</h5>
+<div class="sect5">
+<h6 id="_plantuml_container">4.B.12.8.1. PlantUML Container</h6>
+<div class="listingblock">
+<div class="title">docker/docker-plantuml/Dockerfile</div>
+<div class="content">
+<pre class="rouge highlight"><code data-lang="dockerfile"><span class="k">FROM</span><span class="s"> eclipse-temurin:17-jre-alpine@sha256:589a938476b126362d575a248e24c9b795947319c3d6283f54482e79744f8444</span>
+
+<span class="k">RUN </span>apk add <span class="nt">--no-cache</span> openjdk17-jre
+<span class="k">RUN </span><span class="nb">mkdir</span> <span class="nt">-p</span> /opt/plantuml <span class="o">&amp;&amp;</span> <span class="nb">cd</span> /opt/plantuml <span class="o">&amp;&amp;</span> <span class="se">\
+</span>    curl <span class="nt">-L</span> https://github.com/plantuml/plantuml/releases/download/v1.2026.10/plantuml-1.2026.10.jar <span class="nt">-o</span> plantuml.jar
+
+<span class="k">WORKDIR</span><span class="s"> /diagrams</span>
+<span class="k">ENTRYPOINT</span><span class="s"> ["java", "-jar", "/opt/plantuml/plantuml.jar"]</span>
+<span class="k">CMD</span><span class="s"> ["-help"]</span></code></pre>
+</div>
+</div>
+</div>
+<div class="sect5">
+<h6 id="_rust_cross_compile_container">4.B.12.8.2. Rust Cross-Compile Container</h6>
+<div class="listingblock">
+<div class="title">docker/docker-rust/Dockerfile</div>
+<div class="content">
+<pre class="rouge highlight"><code data-lang="dockerfile"><span class="k">FROM</span><span class="s"> rust:1.85.0-slim@sha256:9daf2b244ccc30523e55cafe32edf8465671ba567d0101620e5612ccb76ea1a7</span>
+
+<span class="k">RUN </span>rustup target add arm-unknown-linux-musleabihf
+<span class="k">RUN </span>apt-get update <span class="o">&amp;&amp;</span> apt-get <span class="nb">install</span> <span class="nt">-y</span> <span class="nt">--no-install-recommends</span> <span class="se">\
+</span>    gcc-arm-linux-gnueabihf <span class="se">\
+</span>    <span class="o">&amp;&amp;</span> <span class="nb">rm</span> <span class="nt">-rf</span> /var/lib/apt/lists/<span class="k">*</span>
+
+<span class="k">WORKDIR</span><span class="s"> /workspace</span></code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_related_decisions">4.B.12.9. Related Decisions</h5>
+<div class="ulist">
+<ul>
+<li>
+<p><a href="#adr-022-build-packaging">ADR-022: ARM Packaging</a> - Service build and deployment workflow</p>
+</li>
+<li>
+<p><a href="#adr-006-clean-room">ADR-006: Clean-Room Protocol Work</a> - Clean-room methodology that benefits from supply chain security</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_notes">4.B.12.10. Notes</h5>
+<div class="paragraph">
+<p>The <code>:latest</code> tag should never be used for tool containers. For runtime containers (like the laser service), <code>:latest</code> may be acceptable if the service itself handles versioning, but tool containers that affect build reproducibility must be pinned and local.</p>
+</div>
+</div>
+</div>
 </div>
 <div class="sect2">
 <h3 id="req-index">Appendix D: Requirements</h3>
@@ -3298,7 +3634,7 @@ Packet hypotheses and safety-gated experiments remain in <code>documentation/unv
 <div class="sect3">
 <h4 id="fr-001-burn-raster-image">Appendix C: FR-001: Reviewed Raster Execution</h4>
 <div class="sect4">
-<h5 id="_status_13">4.D.C.1. Status</h5>
+<h5 id="_status_14">4.D.C.1. Status</h5>
 <div class="paragraph">
 <p>Implemented; see the service API contract and HTTP tests.</p>
 </div>
@@ -3338,7 +3674,7 @@ Packet hypotheses and safety-gated experiments remain in <code>documentation/unv
 <div class="sect3">
 <h4 id="fr-002-generate-wifi-qr">4.D.2. FR-002: WiFi QR Composition</h4>
 <div class="sect4">
-<h5 id="_status_14">4.D.2.1. Status</h5>
+<h5 id="_status_15">4.D.2.1. Status</h5>
 <div class="paragraph">
 <p>Implemented in the <code>wifi-login</code> use case; physical acceptance is material and phone dependent.</p>
 </div>
@@ -3382,7 +3718,7 @@ Packet hypotheses and safety-gated experiments remain in <code>documentation/unv
 <div class="sect3">
 <h4 id="fr-003-progress-and-timing">4.D.3. FR-003: Progress and Timing</h4>
 <div class="sect4">
-<h5 id="_status_15">4.D.3.1. Status</h5>
+<h5 id="_status_16">4.D.3.1. Status</h5>
 <div class="paragraph">
 <p>Implemented; Rust API and UI tests cover the structured report.</p>
 </div>
@@ -3420,7 +3756,7 @@ See <a href="#burn-timing">Burn Timing</a>.</p>
 <div class="sect3">
 <h4 id="fr-007-emergency-stop">4.D.4. FR-007: Stop and Cancellation</h4>
 <div class="sect4">
-<h5 id="_status_16">4.D.4.1. Status</h5>
+<h5 id="_status_17">4.D.4.1. Status</h5>
 <div class="paragraph">
 <p>Software cancellation implemented; physical stop behavior is not certified.</p>
 </div>
@@ -3488,7 +3824,7 @@ See <a href="#burn-timing">Burn Timing</a>.</p>
 <div class="sect3">
 <h4 id="fr-009-calibration-patterns">4.D.5. FR-009: Test Ladder</h4>
 <div class="sect4">
-<h5 id="_status_17">4.D.5.1. Status</h5>
+<h5 id="_status_18">4.D.5.1. Status</h5>
 <div class="paragraph">
 <p>Implemented for the K6 and simulator; individual steps have machine capability gates.</p>
 </div>
@@ -3525,7 +3861,7 @@ See <a href="#burn-timing">Burn Timing</a>.</p>
 <div class="sect3">
 <h4 id="fr-011-placement">4.D.6. FR-011: Material Placement</h4>
 <div class="sect4">
-<h5 id="_status_18">4.D.6.1. Status</h5>
+<h5 id="_status_19">4.D.6.1. Status</h5>
 <div class="paragraph">
 <p>Implemented in the Rust composition layer.</p>
 </div>
@@ -3563,7 +3899,7 @@ Card dimensions and placement assumptions are in <a href="#adr-025-placement">AD
 <div class="sect3">
 <h4 id="fr-013">4.D.7. FR-013: Hardware-Independent Tests</h4>
 <div class="sect4">
-<h5 id="_status_19">4.D.7.1. Status</h5>
+<h5 id="_status_20">4.D.7.1. Status</h5>
 <div class="paragraph">
 <p>Implemented for simulator-backed tests. No real-device dry run exists.</p>
 </div>
@@ -3600,7 +3936,7 @@ Card dimensions and placement assumptions are in <a href="#adr-025-placement">AD
 <div class="sect3">
 <h4 id="fr-015-laser-test-ladder">4.D.8. FR-015: Operator Test Verdicts</h4>
 <div class="sect4">
-<h5 id="_status_20">4.D.8.1. Status</h5>
+<h5 id="_status_21">4.D.8.1. Status</h5>
 <div class="paragraph">
 <p>Implemented for planned test steps and card stages.</p>
 </div>
@@ -3662,7 +3998,7 @@ Card dimensions and placement assumptions are in <a href="#adr-025-placement">AD
 <div class="sect3">
 <h4 id="fr-016-qr-cards">4.D.9. FR-016: Reviewed Card Jobs</h4>
 <div class="sect4">
-<h5 id="_status_21">4.D.9.1. Status</h5>
+<h5 id="_status_22">4.D.9.1. Status</h5>
 <div class="paragraph">
 <p>Implemented for WiFi, vCard and GitHub recovery templates; integration and physical acceptance remain use-case dependent.</p>
 </div>
@@ -3708,7 +4044,7 @@ Card dimensions and placement assumptions are in <a href="#adr-025-placement">AD
 <div class="sect3">
 <h4 id="fr-017-end-detection">4.D.10. FR-017: Physical End Estimates</h4>
 <div class="sect4">
-<h5 id="_status_22">4.D.10.1. Status</h5>
+<h5 id="_status_23">4.D.10.1. Status</h5>
 <div class="paragraph">
 <p>Partially implemented. Bounded per-job receive traces and recording synchronization are available for power-sweep attempts. No validated physical end estimator exists.</p>
 </div>
@@ -3733,7 +4069,7 @@ Card dimensions and placement assumptions are in <a href="#adr-025-placement">AD
 <p>A Real-mode UI run can play a preamble plus a six-digit DTMF recording ID derived from the planned attempt ID. The audit log records the attempt ID, recording ID, nominal cue duration/lead and marker time; this metadata does not prove a microphone captured the cue.</p>
 </li>
 <li>
-<p>A containerized analysis tool accepts an audio recording read-only, decodes the DTMF ID only to associate the recording with its attempt, and reports filtered run-log events and measured processing timings. It does not classify audible activity or infer head motion, laser state or physical completion from sound.</p>
+<p>A containerized analysis tool accepts an audio recording read-only, decodes the DTMF ID only to associate the recording with its attempt, and presents a full-length time/amplitude-zoomable waveform, timestamp-aligned receive bytes/decoded frames when a receive trace exists, run-log markers, and measured processing timings. It does not classify audible activity or infer head motion, laser state or physical completion from sound; untraced runs must be identified as such.</p>
 </li>
 <li>
 <p>Pi-local capture associates audio with the attempt through a capture-relative monotonic time origin, without requiring an audible cue. Filtered run events and recordings are analyzed off-Pi, and the Pi UI presents processing state and the resulting report. An audible cue remains optional for phone or independent capture.</p>
@@ -3772,7 +4108,7 @@ Card dimensions and placement assumptions are in <a href="#adr-025-placement">AD
 <div class="sect2">
 <h3 id="_nfr_005_redacted_run_history">4.10. NFR-005: Redacted Run History</h3>
 <div class="sect3">
-<h4 id="_status_23">4.10.1. Status</h4>
+<h4 id="_status_24">4.10.1. Status</h4>
 <div class="paragraph">
 <p>Implemented for run, stop, mode and verdict events.</p>
 </div>
@@ -3869,6 +4205,37 @@ docker compose up <span class="nt">-d</span></code></pre>
 <p>The service uses <code>/dev/ttyUSB0</code> and port <code>8081</code>.
 Build and deployment: <a href="#build-and-test-the-rust-service">[build-and-test-the-rust-service]</a>.</p>
 </div>
+<div class="admonitionblock warning">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-warning" title="Warning"></i>
+</td>
+<td class="content">
+<div class="paragraph">
+<p>All tool containers must use <strong>local Dockerfiles</strong> with <strong>pinned base images</strong>. Never use <code>:latest</code> tags.</p>
+</div>
+<div class="paragraph">
+<p>The <code>:latest</code> tag creates unacceptable supply chain risk:
+* No version history — if <code>:latest</code> breaks, we cannot determine what version was previously working
+* No rollback path — there is no tag to revert to
+* Implicit updates — new versions may be pulled automatically, introducing breaking changes or vulnerabilities
+* Audit difficulty — cannot trace exactly what was used in historical builds</p>
+</div>
+<div class="paragraph">
+<p>With local Dockerfiles in git:
+* Git is the source of truth — all container definitions are in the repository
+* Versioned by commit — every change to a Dockerfile creates a new, auditable version
+* Rollback via git — <code>git checkout &lt;commit&gt;</code> restores the exact container that was used
+* Scan before merge — vulnerability scanning can be part of the CI/CD pipeline</p>
+</div>
+<div class="paragraph">
+<p>See <a href="#adr-029-container-security">ADR-029: Local Container Builds for Supply Chain Security</a> for the full rationale.</p>
+</div>
+</td>
+</tr>
+</table>
+</div>
 <div class="sect2">
 <h3 id="_components">5.1. Components</h3>
 <div class="sect3">
@@ -3891,11 +4258,29 @@ Build and deployment: <a href="#build-and-test-the-rust-service">[build-and-test
 <p><code>GET /examples/audio-analysis</code> serves one self-contained report generated from a real recorded 2 mm frame test. It is an interpretation example, not a benchmark, statistical baseline or proof that audible activity is machine motion. Its embedded sample is loaded only when the user expands the example in the UI.</p>
 </div>
 <div class="paragraph">
-<p>Power-sweep attempts also return a bounded <code>receive_trace</code> in <code>GET /api/state</code>, the run outcome and the audit log. It includes per-job indices, monotonic receive timestamps, raw received bytes, decoded frame names/bytes, progress, quiet intervals, duration, captured-byte count and truncation status. Capture is capped at 1,024 RX bytes and 2,048 events per attempt. It contains no outgoing DATA/raster bytes or user content. The UI displays the trace after the run. Instrumentation does not change the 100% completion rule or the 90-second silence assumption.</p>
+<p>Power-sweep and sync-marked attempts also return a bounded <code>receive_trace</code> in <code>GET /api/state</code>, the run outcome and the audit log. It includes per-job indices, monotonic event timestamps, raw received bytes, decoded frame names/bytes, progress, quiet intervals, duration, captured-byte count and truncation status. Command writes made through the request/reply driver path have write-return timestamps and protocol bytes, except DATA payloads are always omitted. Bulk DATA transfer start/end/error events form spans; band metadata records row range, geometry, power and depth. This is not a complete wire capture: out-of-band STOP and direct-write paths are not included. Capture is capped at 1,024 RX bytes and 2,048 events per attempt. It contains no outgoing DATA/raster bytes or user content. The UI displays the trace after the run. Instrumentation does not change the 100% completion rule or the 90-second silence assumption.</p>
+</div>
+<div class="paragraph">
+<p>Audio reports use a shared clock for the signed waveform and separate Laser RX, Host TX, Jobs / bands and Run / sync lanes. The full recording fits at 1x; up to 128x redraws a continuous min/max envelope from 2 ms signed 16-bit bins of the decoded mono 8 kHz signal. At high zoom, minor ruler ticks are 200 ms apart; fractional labels appear where pixel spacing permits. These display intervals are not a claim of sync accuracy. A draggable overview window, its resize edges, horizontal scrolling and keyboard panning replace the timeline-position slider. Amplitude accepts 0.25x through 32x with peak-relative or full-scale reference. Selecting a packet or table row retains its decoded/raw details without seeking; a separate action seeks playback. The red cursor spans every lane and reports its time and difference from the selected event. Template/review/stage and band metadata identify jobs without retaining private card content. Truncation and unavailable historical traces are explicit; missing packets or job boundaries are not reconstructed from sound. A software finish marker remains duration-aligned to the nominal request, not an observation of stopped motion.</p>
+</div>
+<div class="paragraph">
+<p>When a trace budget fills, older packet events are evicted while job/transfer boundaries and recent progress remain available within the same limits. The trace is marked truncated; it is not a complete packet history. This keeps late progress and software-completion events available for audio comparison on long recordings.</p>
 </div>
 </div>
 <div class="sect4">
-<h5 id="_audio_recording_sync">5.1.1.2. Audio Recording Sync</h5>
+<h5 id="_run_analysis_with_optional_audio">5.1.1.2. Run Analysis With Optional Audio</h5>
+<div class="paragraph">
+<p>When an analysis URL and token are configured, ordinary runs also enable bounded event capture without requiring a recording or sync cue. After a Real attempt finishes, a background request checks the existing analysis container and submits only the completed, redacted <code>ran</code> event. Device completion, subsequent operator actions and ordinary burns never wait for analysis; an unavailable container produces no report and does not change the outcome.</p>
+</div>
+<div class="paragraph">
+<p>The existing audio analyzer accepts <code>application/json</code> at its unchanged <code>/api/analyze</code> endpoint with <code>attempt_id</code> and <code>run_log</code>. It persists a timing-only report without FFmpeg or an audio file. The report labels time since trace start (or run start when no trace exists), shows recorded RX/TX/job events and band timings, and explicitly marks audio absent. It never invents historical packets, sync sounds or physical completion. A later recording upload can replace the timing-only report with an audio-aligned report; a log-only request does not replace an existing audio-backed report.</p>
+</div>
+<div class="paragraph">
+<p>The Analysis tab links either kind of report. <code>POST /api/audio-analyses/{attempt_id}/report</code> requests an existing completed Real run&#8217;s report when the container is available; its Analyze action permits backfilling older runs. Old runs without a saved trace can show only recorded summary/band timings. Success appends the compatible <code>audio_analysis</code> audit event with <code>has_audio=false</code>; recording uploads use <code>has_audio=true</code>. The newest event determines the current report. The Pi retains neither report HTML nor media. Container, route and configuration names remain unchanged.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_audio_recording_sync">5.1.1.3. Audio Recording Sync</h5>
 <div class="paragraph">
 <p>For Real-mode UI runs, the checked-by-default audio cue plays a short three-tone preamble followed by six standard DTMF digits. The six digits are the last six decimal digits of the planned attempt&#8217;s timestamp ID and are shown in the planned-run panel. Leave the computer&#8217;s speakers audible to the phone recorder; the cue takes about 2 seconds, followed by a logged 700 ms lead before <code>/api/run</code> is requested. The <code>sync_marker</code> audit event stores the attempt ID, six-digit recording ID, cue duration, lead and request timestamp. Use the digits in the audio filename or notes to match the recording to the run log. This is a timing marker, not confirmation of laser motion or completion.</p>
 </div>
@@ -3965,8 +4350,8 @@ Build and deployment: <a href="#build-and-test-the-rust-service">[build-and-test
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">GET</p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/api/machine</code>, <code>/api/mode</code>, <code>/api/materials</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Machine profile, mode, and material settings</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>/api/machine</code>, <code>/api/mode</code>, <code>/api/materials</code>, <code>/api/health</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Machine profile, mode, material settings, and service health</p></td>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">GET</p></td>
@@ -4024,9 +4409,9 @@ Build and deployment: <a href="#build-and-test-the-rust-service">[build-and-test
 <td class="tableblock halign-left valign-top"><p class="tableblock">Upload a recording for a completed Real attempt with its matching sync marker; optional analyzer</p></td>
 </tr>
 <tr>
-<td class="tableblock halign-left valign-top"><p class="tableblock">GET</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">GET, POST</p></td>
 <td class="tableblock halign-left valign-top"><p class="tableblock"><code>/api/audio-analyses/{attempt_id}/report</code></p></td>
-<td class="tableblock halign-left valign-top"><p class="tableblock">Read the attempt&#8217;s annotated report from the Pi origin</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Read a report, or request timing-only analysis for a completed Real run</p></td>
 </tr>
 <tr>
 <td class="tableblock halign-left valign-top"><p class="tableblock">GET</p></td>
@@ -4042,7 +4427,7 @@ Build and deployment: <a href="#build-and-test-the-rust-service">[build-and-test
 </table>
 </div>
 <div class="sect4">
-<h5 id="_submit_and_review">5.1.1.3. Submit and Review</h5>
+<h5 id="_submit_and_review">5.1.1.4. Submit and Review</h5>
 <div class="paragraph">
 <p>Two submission forms are available. Neither opens the serial connection or starts the laser.</p>
 </div>
@@ -4095,7 +4480,7 @@ Different sides are separate rasters, never composited together.
 </div>
 </div>
 <div class="sect4">
-<h5 id="_types">5.1.1.4. Types</h5>
+<h5 id="_types">5.1.1.5. Types</h5>
 <div class="ulist">
 <ul>
 <li>
@@ -4120,7 +4505,7 @@ Private payloads remain in RAM, not template files or operational logs.</p>
 </div>
 </div>
 <div class="sect4">
-<h5 id="_execute_one_stage">5.1.1.5. Execute One Stage</h5>
+<h5 id="_execute_one_stage">5.1.1.6. Execute One Stage</h5>
 <div class="olist arabic">
 <ol class="arabic">
 <li>
@@ -4155,7 +4540,7 @@ The K6&#8217;s temporary completion policy assumes completion after 90 seconds w
 </div>
 </div>
 <div class="sect4">
-<h5 id="_trust_and_lifetime">5.1.1.6. Trust and Lifetime</h5>
+<h5 id="_trust_and_lifetime">5.1.1.7. Trust and Lifetime</h5>
 <div class="paragraph">
 <p>This is a trusted-LAN service, not a public authenticated API. Producer/operator role separation and session leases remain open.
 Non-revealable fields are omitted from operator source projections, but visible raster/QR pixels can disclose their contents.
@@ -4163,7 +4548,7 @@ Reviews and acceptance are RAM-only; restart loses them. Do not write payloads i
 </div>
 </div>
 <div class="sect4">
-<h5 id="_clear_pi_and_account_state">5.1.1.7. Clear Pi and Account State</h5>
+<h5 id="_clear_pi_and_account_state">5.1.1.8. Clear Pi and Account State</h5>
 <div class="paragraph">
 <p>The operator UI&#8217;s <strong>Options &gt; Clear session</strong> control calls <code>DELETE /api/state</code>. It clears the in-memory review, planned attempt, progress, and pending outcome, drops idle device handles, and refuses while a run is active. The redacted <code>runs.jsonl</code> audit log is retained; a clear event is appended. Clearing is not a laser command and does not prove or change physical machine state.</p>
 </div>
@@ -4172,7 +4557,7 @@ Reviews and acceptance are RAM-only; restart loses them. Do not write payloads i
 </div>
 </div>
 <div class="sect4">
-<h5 id="_tests">5.1.1.8. Tests</h5>
+<h5 id="_tests">5.1.1.9. Tests</h5>
 <div class="paragraph">
 <p>Power and audio sweep previews composite the same positioned job rasters used for execution; line length and pixel rounding are not drawn by a separate schematic. Per-job powers and bed placement remain in the goal. Preview pixels do not simulate burn darkness or prove physical placement. Basic test dimensions are checked against reach before allocation, and QR-test goals omit payload text so audit logs do not retain it.</p>
 </div>
@@ -4967,7 +5352,7 @@ used or redistributed.</p>
 </div>
 <div id="footer">
 <div id="footer-text">
-Last updated 2026-11-13 08:06:28 UTC
+Last updated 2026-11-14 00:38:26 UTC
 </div>
 </div>
 </body>
