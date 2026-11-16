@@ -1,4 +1,4 @@
-@startuml activity-audio-test
+@startuml
 !include style-plantuml.puml
 title Phone-driven audio test through the Pi UI (implemented upload path)
 

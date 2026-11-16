@@ -11,9 +11,14 @@ Tools exposed:
 * `list_templates`: declared card templates.
 * `preview_job`: calls `POST /api/jobs/preview` and returns layout/stage geometry only.
 * `get_updates`: polls state and new redacted run-log entries using an integer `cursor`; pass `next_cursor` on the next call.
+* `get_job_toc`: lists recent completed jobs with compact outcomes, final progress, trace retention flags, and verdicts. Use its `attempt_id` to inspect a specific trace.
+* `get_job_trace_head`: returns a bounded window from the beginning of the retained trace for one completed job.
+* `get_job_trace_tail`: returns a bounded window from the end of the retained trace for one completed job.
 * `get_audio_analysis`: returns analyzer availability and the latest timing/report metadata event for an attempt. It never returns audio bytes or report HTML.
 
 All MCP tools are read-only. There is no push-notification path in this integration; `get_updates` is cursor polling. The operator UI remains the place to inspect exact pixels, start work and record the physical verdict. No MCP tool can create a review, plan, run, stop, or record a verdict.
+
+For log review, start with `get_job_toc` and use the returned attempt ID with the trace head or tail tool. These tools request bounded server-side windows, not the full audit log. Each trace call returns at most 100 events and reports whether capture was truncated. Raster payload events appear only when explicitly enabled for a run; they can reveal the burned image or QR data.
 
 == Run
 

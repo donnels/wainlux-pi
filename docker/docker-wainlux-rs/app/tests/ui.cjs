@@ -49,6 +49,7 @@ async function open(backend) {
         const body = options?.body ? (typeof options.body === "string" ? JSON.parse(options.body) : options.body) : null;
         let value;
         switch (url) {
+          case "/api/config": value = {debug:true}; break;
           case "/api/steps": value = {machine,defaults:{text:"",size_mm:20,x_mm:0,y_mm:0},steps:[
             {step:"frame",title:"Frame",controls:["x_mm","y_mm","size_mm"],settings:[],materials:false},
             {step:"qr",title:"QR",controls:["text","x_mm","y_mm","size_mm"],settings:["power","depth"],materials:true},
@@ -58,6 +59,11 @@ async function open(backend) {
             {step:"audio_power_sweep_full",title:"Audio compare: full power",controls:["x_mm"],settings:["power","depth"],materials:true,requires_real:true,requires_analyzer:true,requires_sync_marker:true,requires_recording_ack:true,fixed_y_mm:0,fixed_size_mm:19,power_values:[1000]}
           ]}; break;
           case "/api/audio-analyses/availability": value = {available:backend.audioAnalyzerAvailable !== false}; break;
+          case "/api/audio-analyses/analysis-9/retention": value = {attempt_id:"analysis-9",pinned:false,artifacts:["run-log.json"],bytes:10,raster_payload_included:false}; break;
+          case "/api/audio-analyses/analysis-10/retention": value = {attempt_id:"analysis-10",pinned:false,artifacts:["run-log.json"],bytes:10,raster_payload_included:false}; break;
+          case "/api/audio-analyses/analysis-11/retention": value = {attempt_id:"analysis-11",pinned:false,artifacts:["run-log.json"],bytes:10,raster_payload_included:false}; break;
+          case "/api/audio-analyses/comparison-10/retention": value = {attempt_id:"comparison-10",pinned:false,artifacts:["run-log.json"],bytes:10,raster_payload_included:false}; break;
+          case "/api/audio-analyses/comparison-11/retention": value = {attempt_id:"comparison-11",pinned:false,artifacts:["run-log.json"],bytes:10,raster_payload_included:false}; break;
           case "/api/audio-analyses/analysis-9/report":
             value = {event:"audio_analysis",attempt_id:"analysis-9",has_audio:false,report_url:"/api/audio-analyses/analysis-9/report",timing:{analyzer_total_ms:10}};
             backend.logEntries.push(value); break;

@@ -16,15 +16,16 @@ mod prepared;
 use job::JobReq;
 use base64::Engine;
 use ladder::{Params, Step};
-use laser::{Info, Machine, Progress, ProgressPhase, ReceiveTrace, Stop};
+use laser::{Info, Machine, Progress, ProgressPhase, ReceiveTraceEvent, Stop, TraceSink};
 use materials::Material;
 use workflow::{Attempt, AttemptRecord, Outcome, Target, VerdictStatus, Work, Workflow};
 use serde::Deserialize;
 use serde_json::{json, Value};
-use std::fs::OpenOptions;
+use std::fs::{File, OpenOptions};
 use std::fmt::Write as FmtWrite;
 use std::io::{Read, Write};
 use std::net::SocketAddr;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{sync_channel, SyncSender};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -42,6 +43,8 @@ pub struct Config {
     pub test_catalog_path: String,
     pub audio_analyzer_url: Option<String>,
     pub audio_analyzer_token: Option<String>,
+    pub debug: bool,
+    pub run_trace_max_bytes: usize,
 }
 
 impl Config {
@@ -57,6 +60,8 @@ impl Config {
             test_catalog_path: env("TEST_CATALOG", "tests.toml"),
             audio_analyzer_url: std::env::var("AUDIO_ANALYZER_URL").ok().filter(|url| !url.trim().is_empty()),
             audio_analyzer_token: std::env::var("AUDIO_ANALYZER_TOKEN").ok().filter(|token| !token.is_empty()),
+            debug: env("DEBUG", "true").eq_ignore_ascii_case("true"),
+            run_trace_max_bytes: env("RUN_TRACE_MAX_BYTES", "4194304").parse().unwrap_or(4194304),
         }
     }
 }
@@ -67,7 +72,6 @@ struct State {
     progress: Option<Progress>,
     band_timings: Vec<Progress>,
     receive_trace: Option<Value>,
-    capture_receive_trace: bool,
     review: Option<Review>,
 }
 
@@ -90,14 +94,21 @@ struct App {
     templates: Vec<templates::Template>,
     test_catalog: Vec<test_catalog::TestDefinition>,
     log_path: String,
+    jobs_dir: String,
+    debug: bool,
+    run_trace_max_bytes: usize,
     audio_analyzer_url: Option<String>,
     audio_analyzer_token: Option<String>,
     state: Mutex<State>,
+    analysis_locks: Mutex<HashMap<String, Arc<Mutex<()>>>>,
     executor: SyncSender<DeviceCommand>,
     stopper: Mutex<Option<Box<dyn Stop>>>,
 }
 
-enum DeviceCommand { Run(Attempt), Reset(SyncSender<()>) }
+enum DeviceCommand { Run(Attempt, Option<Arc<Mutex<TraceFileState>>>, bool), Reset(SyncSender<()>) }
+
+#[derive(Default)]
+struct TraceFileState { file: Option<std::io::BufWriter<File>>, bytes: usize, received_bytes: usize, events: usize, last_progress: Option<u8>, truncated: bool, max_bytes: usize }
 
 /// The only place that names a driver.
 fn driver_info(driver: &str) -> Result<Info, String> {
@@ -147,9 +158,13 @@ pub fn serve(cfg: Config) -> Result<SocketAddr, String> {
         driver: cfg.driver,
         port_path: cfg.port_path,
         log_path: format!("{}/runs.jsonl", cfg.data_dir),
+        jobs_dir: format!("{}/jobs", cfg.data_dir),
+        debug: cfg.debug,
+        run_trace_max_bytes: cfg.run_trace_max_bytes.max(1024),
         audio_analyzer_url: cfg.audio_analyzer_url,
         audio_analyzer_token: cfg.audio_analyzer_token,
         state: Mutex::new(State::default()),
+        analysis_locks: Mutex::new(HashMap::new()),
         executor,
         stopper: Mutex::new(None),
     });
@@ -163,30 +178,60 @@ pub fn serve(cfg: Config) -> Result<SocketAddr, String> {
                     *worker_app.stopper.lock().unwrap_or_else(|error| error.into_inner()) = None;
                     let _ = done.send(());
                 }
-                DeviceCommand::Run(attempt) => {
+                DeviceCommand::Run(attempt, trace_sink, trace_raster) => {
                     let started = now();
                     let operation_started = Instant::now();
-                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| execute(&worker_app, &attempt.work, &mut machine)))
+                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| execute(&worker_app, &attempt.work, &mut machine, trace_sink.clone(), trace_raster)))
                         .unwrap_or_else(|_| Err("execution panicked; confirm physical rest before further work".into()));
                     if result.is_err() {
                         machine = None;
                         *worker_app.stopper.lock().unwrap_or_else(|error| error.into_inner()) = None;
                     }
-                    let (timings, receive_trace) = {
+                    let (timings, mut receive_trace) = {
                         let mut state = worker_app.state.lock().unwrap();
-                        state.capture_receive_trace = false;
                         (state.band_timings.iter().copied().map(progress_json).collect(), state.receive_trace.clone())
                     };
+                    if let Some(writer) = &trace_sink {
+                        let mut trace = writer.lock().unwrap();
+                        let flush_ok = trace.file.as_mut().is_some_and(|file| file.flush().and_then(|_| file.get_ref().sync_all()).is_ok());
+                        if !flush_ok { trace.truncated = true; }
+                        let run_ok=result.is_ok();
+                        let trace_timing=receive_trace.clone().unwrap_or(Value::Null);
+                        let summary = json!({"path":format!("jobs/{}/trace.jsonl", attempt.record.id),"events":trace.events,"bytes":trace.bytes,"bytes_captured":trace.received_bytes,"last_progress":trace.last_progress,"truncated":trace.truncated,"complete":!trace.truncated,"duration_ms":trace_timing["duration_ms"],"started_at_unix_ms":trace_timing["started_at_unix_ms"],"run_completed":true,"run_ok":run_ok,"raster_payload_included":trace_raster});
+                        let _ = std::fs::write(format!("{}/{}/trace-summary.json", worker_app.jobs_dir, attempt.record.id), summary.to_string());
+                        receive_trace = Some(summary.clone());
+                        drop(trace);
+                        let mut state = worker_app.state.lock().unwrap();
+                        state.receive_trace = Some(summary);
+                    }
+                    let receive_trace = receive_trace;
                     let outcome = Outcome { ok:result.is_ok(), saw:match result { Ok(message) | Err(message) => message }, started, ended:now(), elapsed_ms:operation_started.elapsed().as_millis() as u64, band_timings:timings, receive_trace };
-                    log(&worker_app, json!({"event":"ran","attempt":attempt.record,"outcome":outcome}));
+                    let ran_event = json!({"event":"ran","attempt":attempt.record,"outcome":outcome});
+                    log(&worker_app, ran_event.clone());
+                    let attempt_dir = format!("{}/{}", worker_app.jobs_dir, attempt.record.id);
+                    let _ = std::fs::create_dir_all(&attempt_dir);
+                    let _ = std::fs::write(format!("{attempt_dir}/run.json"), ran_event.to_string());
+                    let delivery_status = if worker_app.audio_analyzer_url.is_some() && worker_app.audio_analyzer_token.is_some() { "pending" } else { "not_configured" };
+                    let _ = std::fs::write(format!("{attempt_dir}/delivery.json"), json!({"status":delivery_status}).to_string());
                     if let Err(error) = worker_app.state.lock().unwrap().workflow.finish(&attempt.record.id, outcome) { eprintln!("workflow completion rejected: {error}"); }
-                    if attempt.record.mode == "real" && worker_app.audio_analyzer_url.is_some() && worker_app.audio_analyzer_token.is_some() {
+                    if worker_app.audio_analyzer_url.is_some() && worker_app.audio_analyzer_token.is_some() {
                         let analysis_app = worker_app.clone();
                         let attempt_id = attempt.record.id.clone();
-                        std::thread::spawn(move || { let _ = analyze_run_log(&analysis_app, &attempt_id); });
+                        std::thread::spawn(move || {
+                            match analyze_run_log(&analysis_app, &attempt_id) { Ok(_) => finalize_delivery(&analysis_app, &attempt_id), Err((_,error)) => record_delivery_error(&analysis_app,&attempt_id,error) }
+                        });
                     }
                 }
             }
+        }
+    });
+    let retry_app = app.clone();
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_secs(30));
+        if retry_app.audio_analyzer_url.is_none() || retry_app.audio_analyzer_token.is_none() { continue; }
+        let pending = read_log(&retry_app).into_iter().filter(|entry| entry["event"] == "ran").filter_map(|entry| entry["attempt"]["id"].as_str().map(str::to_owned)).filter(|id| !std::path::Path::new(&format!("{}/{id}/delivery.json", retry_app.jobs_dir)).exists() || std::fs::read_to_string(format!("{}/{id}/delivery.json", retry_app.jobs_dir)).is_ok_and(|status| status.contains("pending") || status.contains("not_configured"))).collect::<Vec<_>>();
+        for attempt_id in pending {
+            match analyze_run_log(&retry_app, &attempt_id) { Ok(_) => finalize_delivery(&retry_app, &attempt_id), Err((_,error)) => record_delivery_error(&retry_app,&attempt_id,error) }
         }
     });
     eprintln!("{} on {}, http://{addr}, log {}", app.info.model, app.port_path, app.log_path);
@@ -201,6 +246,22 @@ pub fn serve(cfg: Config) -> Result<SocketAddr, String> {
 
 fn handle(app: &Arc<App>, mut req: Request) {
     if req.method() == &Method::Post {
+        if let Some(attempt_id) = req.url().strip_prefix("/api/audio-analyses/").and_then(|path| path.strip_suffix("/delete")).map(str::to_owned) {
+            match delete_analysis_artifacts(app, &attempt_id) {
+                Ok(value) => respond_json(req, 200, value),
+                Err((status,error)) => respond_json(req,status,json!({"error":error})),
+            }
+            return;
+        }
+        if let Some(attempt_id) = req.url().strip_prefix("/api/audio-analyses/").and_then(|path| path.strip_suffix("/pin")).map(str::to_owned) {
+            let mut body = String::new();
+            let _ = req.as_reader().read_to_string(&mut body);
+            match set_analysis_pin(app, &attempt_id, &body) {
+                Ok(value) => respond_json(req, 200, value),
+                Err((status, error)) => respond_json(req, status, json!({"error":error})),
+            }
+            return;
+        }
         if let Some(attempt_id) = req.url().strip_prefix("/api/audio-analyses/").and_then(|path| path.strip_suffix("/report")).map(str::to_owned) {
             match analyze_run_log(app, &attempt_id) {
                 Ok(result) => respond_json(req, 200, result),
@@ -219,6 +280,47 @@ fn handle(app: &Arc<App>, mut req: Request) {
     }
     if req.method() == &Method::Get {
         let url = req.url().to_string();
+        if url == "/api/audio-analyses/retention" {
+            match analysis_storage_summary(app) {
+                Ok(value) => respond_json(req, 200, value),
+                Err((status,error)) => respond_json(req,status,json!({"error":error})),
+            }
+            return;
+        }
+        if let Some(query) = url.strip_prefix("/api/jobs/toc") {
+            let limit = query.strip_prefix("?limit=").and_then(|value| value.parse::<usize>().ok()).unwrap_or(10).clamp(1,50);
+            respond_json(req,200,json!({"jobs":job_toc(app,limit)}));
+            return;
+        }
+        if let Some(query) = url.strip_prefix("/api/log?") {
+            let cursor=query.split('&').find_map(|part|part.strip_prefix("cursor=").and_then(|value|value.parse::<usize>().ok())).unwrap_or(0);
+            let limit=query.split('&').find_map(|part|part.strip_prefix("limit=").and_then(|value|value.parse::<usize>().ok())).unwrap_or(100).clamp(1,500);
+            let entries=read_log(app); let start=cursor.min(entries.len()); let end=(start+limit).min(entries.len());
+            respond_json(req,200,json!({"events":&entries[start..end],"next_cursor":end,"has_more":end<entries.len()}));
+            return;
+        }
+        if let Some(attempt_id)=url.strip_prefix("/api/audio-analyses/").and_then(|path|path.strip_suffix("/metadata")) {
+            if !valid_attempt_id(attempt_id) { respond_json(req,400,json!({"error":"invalid attempt ID"})); return; }
+            let entries=read_log(app);
+            let start=entries.iter().rposition(|entry|entry["event"]=="artifact_deleted"&&entry["attempt_id"]==attempt_id).map_or(0,|index|index+1);
+            let result=entries.iter().skip(start).rev().find(|entry|entry["event"]=="audio_analysis"&&entry["attempt_id"]==attempt_id).cloned().unwrap_or(Value::Null);
+            respond_json(req,200,json!({"attempt_id":attempt_id,"analysis":result})); return;
+        }
+        if let Some((attempt_id, suffix)) = url.strip_prefix("/api/jobs/").and_then(|path| path.split_once("/trace/")) {
+            let (side, query) = suffix.split_once('?').map_or((suffix,""),|(side,query)|(side,query));
+            if side == "head" || side == "tail" {
+                let count=query.strip_prefix("count=").and_then(|value|value.parse::<usize>().ok()).unwrap_or(30).clamp(1,100);
+                match trace_window_file(app,attempt_id,count,side) { Ok(value)=>respond_json(req,200,value),Err((status,error))=>respond_json(req,status,json!({"error":error})) }
+                return;
+            }
+        }
+        if let Some(attempt_id) = url.strip_prefix("/api/audio-analyses/").and_then(|path| path.strip_suffix("/retention")) {
+            match analysis_retention(app, attempt_id) {
+                Ok(value) => respond_json(req, 200, value),
+                Err((status, error)) => respond_json(req, status, json!({"error":error})),
+            }
+            return;
+        }
         if let Some(attempt_id) = url.strip_prefix("/audio-upload/") {
             audio_upload_page(app, req, attempt_id.to_string());
             return;
@@ -294,6 +396,7 @@ fn handle(app: &Arc<App>, mut req: Request) {
         }
         (Method::Get, "/api/machine") => (200, machine(&app.info)),
         (Method::Get, "/api/health") => (200, health(app)),
+        (Method::Get, "/api/config") => (200, json!({"debug":app.debug})),
         (Method::Get, "/api/mode") => (200, mode(app)),
         (Method::Post, "/api/mode") => set_mode(app, &body),
         (Method::Get, "/api/materials") => (200, materials_json(app)),
@@ -357,10 +460,13 @@ fn valid_attempt_id(attempt_id: &str) -> bool {
 
 fn analyze_run_log(app: &App, attempt_id: &str) -> Result<Value, (u16, &'static str)> {
     if !valid_attempt_id(attempt_id) { return Err((400, "invalid attempt ID")); }
+    let attempt_lock=analysis_lock(app,attempt_id);
+    let _guard=attempt_lock.lock().unwrap_or_else(|error|error.into_inner());
     let entries = read_log(app);
-    let ran = entries.iter().find(|entry| entry["event"] == "ran" && entry["attempt"]["id"] == attempt_id && entry["attempt"]["mode"] == "real")
-        .ok_or((409, "analysis requires a completed Real run"))?;
-    if let Some(existing) = entries.iter().rev().find(|entry| entry["event"] == "audio_analysis" && entry["attempt_id"] == attempt_id && entry["report_url"].is_string()) {
+    let ran = entries.iter().find(|entry| entry["event"] == "ran" && entry["attempt"]["id"] == attempt_id)
+        .ok_or((409, "analysis requires a completed run"))?;
+    let deleted_at = entries.iter().rposition(|entry| entry["event"] == "artifact_deleted" && entry["attempt_id"] == attempt_id).map_or(0, |index| index + 1);
+    if let Some(existing) = entries.iter().skip(deleted_at).rev().find(|entry| entry["event"] == "audio_analysis" && entry["attempt_id"] == attempt_id && entry["report_url"].is_string()) {
         return Ok(existing.clone());
     }
     let (Some(url), Some(token)) = (app.audio_analyzer_url.as_deref(), app.audio_analyzer_token.as_deref()) else {
@@ -368,14 +474,22 @@ fn analyze_run_log(app: &App, attempt_id: &str) -> Result<Value, (u16, &'static 
     };
     if !analyzer_is_available(app) { return Err((503, "analysis container is unavailable")); }
     let started = Instant::now();
+    let trace_path = format!("{}/{}/trace.jsonl", app.jobs_dir, attempt_id);
+    let trace = std::fs::read_to_string(&trace_path).unwrap_or_default();
+    let trace_summary: Value = std::fs::read_to_string(format!("{}/{}/trace-summary.json", app.jobs_dir, attempt_id)).ok().and_then(|json| serde_json::from_str(&json).ok()).unwrap_or_else(|| json!({"complete":false,"events":0,"bytes":0}));
     let response = ureq::AgentBuilder::new()
         .timeout_connect(std::time::Duration::from_secs(2))
         .timeout_read(std::time::Duration::from_secs(15))
         .build().post(url)
         .set("Content-Type", "application/json")
         .set("Authorization", &format!("Bearer {token}"))
-        .send_string(&json!({"attempt_id":attempt_id,"run_log":[ran]}).to_string())
-        .map_err(|_| (502, "analysis request failed"))?;
+        .send_string(&json!({"attempt_id":attempt_id,"run_log":[ran],"trace_jsonl":trace,"trace_summary":trace_summary}).to_string());
+    let response = match response {
+        Ok(response) => response,
+        Err(ureq::Error::Status(507, _)) => return Err((507,"analyzer storage capacity exceeded")),
+        Err(ureq::Error::Status(_, _)) => return Err((502,"analysis container rejected the run artifact")),
+        Err(_) => return Err((502,"analysis request failed")),
+    };
     if !response.header("Content-Type").is_some_and(|value| value.starts_with("text/html")) {
         return Err((502, "analysis container did not return HTML"));
     }
@@ -386,6 +500,74 @@ fn analyze_run_log(app: &App, attempt_id: &str) -> Result<Value, (u16, &'static 
     let result = json!({"event":"audio_analysis","attempt_id":attempt_id,"report_url":format!("/api/audio-analyses/{attempt_id}/report"),"has_audio":false,"timing":timing,"pi_total_ms":started.elapsed().as_millis() as u64,"at":now()});
     log(app, result.clone());
     Ok(result)
+}
+
+fn analysis_lock(app: &App, attempt_id: &str) -> Arc<Mutex<()>> {
+    let mut locks=app.analysis_locks.lock().unwrap_or_else(|error|error.into_inner());
+    locks.entry(attempt_id.to_owned()).or_insert_with(||Arc::new(Mutex::new(()))).clone()
+}
+
+fn analyzer_base(app: &App) -> Result<(&str, &str), (u16, &'static str)> {
+    let (Some(url), Some(token)) = (app.audio_analyzer_url.as_deref(), app.audio_analyzer_token.as_deref()) else { return Err((503,"analysis container is not configured")); };
+    let Some(base) = url.strip_suffix("/api/analyze") else { return Err((503,"analysis URL must end with /api/analyze")); };
+    Ok((base,token))
+}
+
+fn set_analysis_pin(app: &App, attempt_id: &str, body: &str) -> Result<Value, (u16, &'static str)> {
+    if !valid_attempt_id(attempt_id) { return Err((400,"invalid attempt ID")); }
+    let request: Value = serde_json::from_str(body).map_err(|_| (400,"invalid pin request"))?;
+    if !request["pinned"].is_boolean() { return Err((400,"pinned must be boolean")); }
+    let (base,token)=analyzer_base(app)?;
+    let response=ureq::AgentBuilder::new().timeout_connect(std::time::Duration::from_secs(2)).timeout_read(std::time::Duration::from_secs(5)).build().post(&format!("{base}/api/pin/{attempt_id}")).set("Authorization",&format!("Bearer {token}")).send_string(&request.to_string()).map_err(|error|match error { ureq::Error::Status(507,_) => (507,"pinned artifact capacity exceeded"), _ => (502,"retention request failed") })?;
+    let body = response.into_string().map_err(|_|(502,"invalid retention response"))?;
+    serde_json::from_str(&body).map_err(|_|(502,"invalid retention response"))
+}
+
+fn analysis_retention(app: &App, attempt_id: &str) -> Result<Value, (u16, &'static str)> {
+    if !valid_attempt_id(attempt_id) { return Err((400,"invalid attempt ID")); }
+    let (base,token)=analyzer_base(app)?;
+    let response=ureq::AgentBuilder::new().timeout_connect(std::time::Duration::from_secs(2)).timeout_read(std::time::Duration::from_secs(5)).build().get(&format!("{base}/api/retention/{attempt_id}")).set("Authorization",&format!("Bearer {token}")).call().map_err(|_|(404,"analysis not found"))?;
+    let body = response.into_string().map_err(|_|(502,"invalid retention response"))?;
+    serde_json::from_str(&body).map_err(|_|(502,"invalid retention response"))
+}
+
+fn analysis_storage_summary(app: &App) -> Result<Value,(u16,&'static str)> {
+    let (base,token)=analyzer_base(app)?;
+    let response=ureq::AgentBuilder::new().timeout_connect(std::time::Duration::from_secs(2)).timeout_read(std::time::Duration::from_secs(5)).build().get(&format!("{base}/api/retention")).set("Authorization",&format!("Bearer {token}")).call().map_err(|_|(503,"analyzer retention service is unavailable"))?;
+    let body=response.into_string().map_err(|_|(502,"invalid retention response"))?;
+    serde_json::from_str(&body).map_err(|_|(502,"invalid retention response"))
+}
+
+fn delete_analysis_artifacts(app: &App, attempt_id: &str) -> Result<Value, (u16, &'static str)> {
+    if !valid_attempt_id(attempt_id) { return Err((400,"invalid attempt ID")); }
+    let attempt_lock=analysis_lock(app,attempt_id);
+    let _guard=attempt_lock.lock().unwrap_or_else(|error|error.into_inner());
+    let (base,token)=analyzer_base(app)?;
+    let response=ureq::AgentBuilder::new().timeout_connect(std::time::Duration::from_secs(2)).timeout_read(std::time::Duration::from_secs(5)).build().post(&format!("{base}/api/delete/{attempt_id}")).set("Authorization",&format!("Bearer {token}")).send_string("").map_err(|error|match error { ureq::Error::Status(409,_) => (409,"attempt analysis is in progress"), _ => (502,"analyzer deletion request failed") })?;
+    let body=response.into_string().map_err(|_|(502,"invalid deletion response"))?;
+    let value:Value=serde_json::from_str(&body).map_err(|_|(502,"invalid deletion response"))?;
+    log(app,json!({"event":"artifact_deleted","attempt_id":attempt_id,"at":now()}));
+    Ok(value)
+}
+
+fn finalize_delivery(app: &App, attempt_id: &str) {
+    let _ = std::fs::write(format!("{}/{attempt_id}/delivery.json", app.jobs_dir), "{\"status\":\"delivered\"}");
+    rotate_delivered_jobs(app);
+}
+
+fn record_delivery_error(app: &App, attempt_id: &str, error: &str) {
+    let detail=json!({"status":"pending","last_error":error,"updated_at":now()});
+    let _=std::fs::write(format!("{}/{attempt_id}/delivery.json",app.jobs_dir),detail.to_string());
+}
+
+fn rotate_delivered_jobs(app: &App) {
+    let runs = read_log(app).into_iter().filter(|entry| entry["event"] == "ran").filter_map(|entry| entry["attempt"]["id"].as_str().map(str::to_owned)).collect::<Vec<_>>();
+    let keep_from = runs.len().saturating_sub(10);
+    for attempt_id in runs.iter().take(keep_from) {
+        let directory = format!("{}/{attempt_id}", app.jobs_dir);
+        let delivered = std::fs::read_to_string(format!("{directory}/delivery.json")).is_ok_and(|status| status.contains("delivered"));
+        if delivered { let _ = std::fs::remove_dir_all(directory); }
+    }
 }
 
 fn request_header<'a>(req: &'a Request, name: &str) -> Option<&'a str> {
@@ -475,6 +657,8 @@ fn upload_audio(app: &Arc<App>, mut req: Request) {
         respond_json(req, 400, json!({"error":"valid X-Attempt-ID header required"}));
         return;
     };
+    let attempt_lock=analysis_lock(app,&attempt_id);
+    let _analysis_guard=attempt_lock.lock().unwrap_or_else(|error|error.into_inner());
     let content_type = request_header(&req, "Content-Type").unwrap_or("").to_ascii_lowercase();
     let (suffix, audio_type) = if content_type.starts_with("audio/mp4") || content_type.starts_with("audio/m4a") || content_type.starts_with("audio/x-m4a") {
         ("m4a", "audio/mp4")
@@ -724,25 +908,37 @@ fn progress_json(progress: Progress) -> Value {
     json!({"phase":phase,"percent":progress.percent,"band":progress.band,"bands":progress.bands,"row_start":progress.row_start,"row_end":progress.row_end,"previous_assumed":progress.previous_assumed,"transfer_ms":progress.transfer_ms,"setup_ms":progress.setup_ms,"wait_ms":progress.wait_ms,"elapsed_ms":progress.elapsed_ms})
 }
 
-fn receive_trace_json(trace: ReceiveTrace) -> Value {
-    json!({
-        "bytes_captured": trace.bytes_captured,
-        "truncated": trace.truncated,
-        "duration_ms": trace.duration_ms,
-        "started_at_unix_ms": trace.started_at_unix_ms,
-        "events": trace.events.into_iter().map(|event| json!({
-            "at_ms": event.at_ms,
-            "job_index": event.job_index,
-            "phase": event.phase,
-            "kind": event.kind,
-            "byte": event.byte.map(|byte| format!("{byte:02X}")),
-            "frame": event.frame,
-            "frame_bytes": event.frame_bytes.map(|bytes| bytes.iter().map(|byte| format!("{byte:02X}")).collect::<Vec<_>>().join(" ")),
-            "percent": event.percent,
-            "quiet_ms": event.quiet_ms,
-            "metadata": event.metadata,
-        })).collect::<Vec<_>>(),
-    })
+fn create_trace_file(app: &App, attempt_id: &str) -> std::io::Result<Arc<Mutex<TraceFileState>>> {
+    std::fs::create_dir_all(&app.jobs_dir)?;
+    let space = std::process::Command::new("df").args(["-Pk", &app.jobs_dir]).output()?;
+    if !space.status.success() { return Err(std::io::Error::new(std::io::ErrorKind::Other,"could not read free space for trace reservation")); }
+    let output=String::from_utf8_lossy(&space.stdout);
+    let available_kib=output.lines().last().and_then(|line|line.split_whitespace().nth(3)).and_then(|value|value.parse::<u64>().ok()).ok_or_else(||std::io::Error::new(std::io::ErrorKind::Other,"could not parse free space for trace reservation"))?;
+    let reserve=(app.run_trace_max_bytes as u64).saturating_add(1024*1024);
+    if available_kib.saturating_mul(1024) < reserve { return Err(std::io::Error::new(std::io::ErrorKind::Other,"insufficient free space for the configured trace limit")); }
+    let directory = format!("{}/{}", app.jobs_dir, attempt_id);
+    std::fs::create_dir_all(&directory)?;
+    let file = OpenOptions::new().create(true).append(true).open(format!("{directory}/trace.jsonl"))?;
+    Ok(Arc::new(Mutex::new(TraceFileState { file:Some(std::io::BufWriter::new(file)),bytes:0,received_bytes:0,events:0,last_progress:None,truncated:false,max_bytes:app.run_trace_max_bytes })))
+}
+
+fn trace_event_json(event: &ReceiveTraceEvent) -> Value {
+    json!({"at_ms":event.at_ms,"job_index":event.job_index,"phase":event.phase,"kind":event.kind,"byte":event.byte.map(|byte|format!("{byte:02X}")),"frame":event.frame,"frame_bytes":event.frame_bytes.as_ref().map(|bytes|bytes.iter().map(|byte|format!("{byte:02X}")).collect::<Vec<_>>().join(" ")),"percent":event.percent,"quiet_ms":event.quiet_ms,"metadata":event.metadata})
+}
+
+fn write_trace_event(writer: &Arc<Mutex<TraceFileState>>, event: &ReceiveTraceEvent) {
+    let mut trace = writer.lock().unwrap();
+    if trace.truncated { return; }
+    let mut line = trace_event_json(event).to_string();
+    line.push('\n');
+    if trace.bytes.saturating_add(line.len()) > trace.max_bytes { trace.truncated = true; return; }
+    if let Some(file) = trace.file.as_mut() {
+        if file.write_all(line.as_bytes()).is_err() { trace.truncated = true; return; }
+        trace.bytes += line.len();
+        if event.byte.is_some() { trace.received_bytes += 1; }
+        if event.kind == "status_frame" { trace.last_progress = event.percent; }
+        trace.events += 1;
+    } else { trace.truncated = true; }
 }
 
 fn mode(app: &App) -> Value {
@@ -1089,6 +1285,8 @@ struct RunReq {
     recording_id: Option<String>,
     cue_duration_ms: Option<u16>,
     post_cue_lead_ms: Option<u16>,
+    #[serde(default)]
+    raster_trace: bool,
 }
 
 fn run(app: &Arc<App>, body: &str) -> (u16, Value) {
@@ -1100,6 +1298,7 @@ fn run(app: &Arc<App>, body: &str) -> (u16, Value) {
             Err(error) => return (400, json!({"error": error.to_string()})),
         }
     };
+    if req.raster_trace && !app.debug { return (400, json!({"error":"raster trace requires DEBUG=true"})); }
     let post_cue_lead_ms = req.post_cue_lead_ms.unwrap_or(DEFAULT_SYNC_CUE_POST_LEAD_MS);
     if req.sync_marker {
         let Some(recording_id) = req.recording_id.as_deref() else { return (400, json!({"error":"recording_id is required when sync_marker is true"})); };
@@ -1110,12 +1309,15 @@ fn run(app: &Arc<App>, body: &str) -> (u16, Value) {
             return (400, json!({"error":"sync cue duration must be 2000 ms and post-cue lead must be 0..=2000 ms"}));
         }
     }
-    let attempt = {
+    let (attempt, trace_state) = {
         let mut s = app.state.lock().unwrap();
         let Some(planned) = s.workflow.attempt() else {
             return (409, json!({"error": "plan first"}));
         };
         let a = &planned.record;
+        if req.attempt_id.as_deref().is_some_and(|attempt_id| attempt_id != a.id) {
+            return (409, json!({"error":"attempt_id does not match the planned attempt"}));
+        }
         let requires_sync_marker = a.step().and_then(|step| app.test_catalog.iter().find(|definition| definition.step == step)).map(|definition| definition.requires_sync_marker).unwrap_or(false);
         if requires_sync_marker && !req.sync_marker {
             return (409, json!({"error":"audio-recorded power sweep requires its recording-ID sync marker"}));
@@ -1126,14 +1328,18 @@ fn run(app: &Arc<App>, body: &str) -> (u16, Value) {
                 return (409, json!({"error":"recording_id does not match the planned attempt"}));
             }
         }
-        let capture_trace = attempt_receive_trace_enabled(a.step(), req.sync_marker) || (app.audio_analyzer_url.is_some() && app.audio_analyzer_token.is_some());
+        let trace_state = if app.debug && a.mode == "real" {
+            match create_trace_file(app, &a.id) {
+                Ok(state) => Some(state),
+                Err(error) => return (507, json!({"error":format!("could not reserve trace file: {error}")})),
+            }
+        } else { None };
         let started = match s.workflow.start(req.attempt_id.as_deref()) { Ok(attempt) => attempt, Err(error) => return (409, json!({"error":error})) };
         s.progress = None;
         s.band_timings.clear();
         s.receive_trace = None;
-        s.capture_receive_trace = capture_trace;
         app.cancel_requested.store(false, Ordering::SeqCst);
-        started
+        (started, trace_state)
     };
     let attempt_id = attempt.record.id.clone();
     if req.sync_marker {
@@ -1141,7 +1347,7 @@ fn run(app: &Arc<App>, body: &str) -> (u16, Value) {
         let recording_id = req.recording_id.clone().unwrap_or_default();
         log(app, json!({"event":"sync_marker","attempt_id":attempt_id,"recording_id":recording_id,"encoding":"three-tone preamble + six DTMF digits (last six attempt-id digits)","cue":"preamble_dtmf6","cue_duration_ms":cue_duration_ms,"post_cue_lead_ms":post_cue_lead_ms,"cue_to_request_ms":cue_duration_ms + post_cue_lead_ms,"at_ms":now_ms()}));
     }
-    if app.executor.try_send(DeviceCommand::Run(attempt)).is_err() {
+    if app.executor.try_send(DeviceCommand::Run(attempt, trace_state, req.raster_trace)).is_err() {
         let outcome = Outcome { ok:false, saw:"device executor is unavailable".into(), started:now(), ended:now(), elapsed_ms:0, band_timings:vec![], receive_trace:None };
         let _ = app.state.lock().unwrap().workflow.finish(&attempt_id, outcome);
         return (503, json!({"error":"device executor is unavailable"}));
@@ -1159,29 +1365,32 @@ fn now_ms() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64
 }
 
-fn receive_trace_enabled(step: Option<Step>) -> bool {
-    matches!(step, Some(Step::PowerSweep | Step::AudioPowerSweepLow | Step::AudioPowerSweepFull))
-}
-
-fn attempt_receive_trace_enabled(step: Option<Step>, sync_marker: bool) -> bool {
-    sync_marker || receive_trace_enabled(step)
-}
-
 fn reset_device(app: &App) -> Result<(), &'static str> {
     let (done, completed) = sync_channel(0);
     app.executor.try_send(DeviceCommand::Reset(done)).map_err(|_| "device executor is unavailable")?;
     completed.recv().map_err(|_| "device executor stopped before resetting")
 }
 
-fn execute(app: &App, work: &Work, slot: &mut Option<Box<dyn Machine>>) -> Result<String, String> {
+fn execute(app: &App, work: &Work, slot: &mut Option<Box<dyn Machine>>, trace_file: Option<Arc<Mutex<TraceFileState>>>, trace_raster: bool) -> Result<String, String> {
     if app.cancel_requested.load(Ordering::SeqCst) { return Err("execution cancelled before device access".into()); }
     let talk = work.step() == Some(Step::Talk);
+    let trace_enabled = app.debug && trace_file.is_some();
+    let trace_sink: Option<TraceSink> = trace_file.map(|writer| {
+        let sink: TraceSink = Arc::new(move |event| write_trace_event(&writer, event));
+        sink
+    });
+    let mut traced_while_opening = false;
     if talk || slot.is_none() {
         *slot = None;
         // The stop handle shares the port's exclusive lock: drop it too, or the reopen fails.
         *app.stopper.lock().unwrap() = None;
         let mut m = open(app).map_err(|e| e.to_string())?;
         *app.stopper.lock().unwrap() = m.stopper().ok();
+        if trace_enabled {
+            m.set_receive_trace(true);
+            m.set_receive_trace_sink(trace_sink.clone(), trace_raster);
+            traced_while_opening = true;
+        }
         if app.cancel_requested.load(Ordering::SeqCst) { return Err("execution cancelled before connection".into()); }
         if !talk {
             m.connect().map_err(|e| e.to_string())?;
@@ -1195,35 +1404,22 @@ fn execute(app: &App, work: &Work, slot: &mut Option<Box<dyn Machine>>) -> Resul
         state.progress = Some(progress);
         if matches!(progress.phase, ProgressPhase::ReportedComplete | ProgressPhase::AssumedComplete) { state.band_timings.push(progress); }
     };
-    let trace_enabled = app.state.lock().unwrap().capture_receive_trace || receive_trace_enabled(work.step());
-    if trace_enabled { m.set_receive_trace(true); }
+    if trace_enabled && !traced_while_opening {
+        m.set_receive_trace(true);
+        m.set_receive_trace_sink(trace_sink, trace_raster);
+    }
     let r = work.prepared().run(m.as_mut(), &mut progress, &|| app.cancel_requested.load(Ordering::SeqCst));
     if trace_enabled {
         let trace = m.take_receive_trace();
+        m.set_receive_trace_sink(None, false);
         let mut state = app.state.lock().unwrap();
-        state.receive_trace = Some(receive_trace_json(trace));
-        state.capture_receive_trace = false;
+        state.receive_trace = Some(json!({"bytes_captured":trace.bytes_captured,"duration_ms":trace.duration_ms,"started_at_unix_ms":trace.started_at_unix_ms}));
     }
     if r.is_err() {
         // Reopen next time; the link state is unknown after an error.
         *slot = None;
     }
     r
-}
-
-#[cfg(test)]
-mod audio_trace_tests {
-    use super::*;
-
-    #[test]
-    fn both_power_sweep_steps_enable_receive_tracing() {
-        assert!(receive_trace_enabled(Some(Step::PowerSweep)));
-        assert!(receive_trace_enabled(Some(Step::AudioPowerSweepLow)));
-        assert!(receive_trace_enabled(Some(Step::AudioPowerSweepFull)));
-        assert!(!receive_trace_enabled(Some(Step::Frame)));
-        assert!(attempt_receive_trace_enabled(Some(Step::Frame), true));
-        assert!(!attempt_receive_trace_enabled(Some(Step::Frame), false));
-    }
 }
 
 #[derive(Deserialize)]
@@ -1312,4 +1508,42 @@ fn pending_verdicts(app: &App) -> Vec<Value> {
         (record["event"] == "verdict" && record["id"] == entry["attempt"]["id"])
             || (record["event"] == "clear" && record["attempt_id"] == entry["attempt"]["id"])
     })).cloned().collect()
+}
+
+fn short_text(value: &Value, limit: usize) -> Value {
+    let Some(text) = value.as_str() else { return Value::Null; };
+    let mut chars=text.chars();
+    let clipped=chars.by_ref().take(limit).collect::<String>();
+    if chars.next().is_some() { json!(format!("{}…",clipped.trim_end())) } else { json!(clipped) }
+}
+
+fn job_toc(app: &App, limit: usize) -> Vec<Value> {
+    let entries=read_log(app);
+    let verdicts=entries.iter().filter(|entry|entry["event"]=="verdict").map(|entry|(entry["id"].as_str().unwrap_or_default().to_owned(),entry.clone())).collect::<std::collections::HashMap<_,_>>();
+    let mut jobs=entries.iter().filter(|entry|entry["event"]=="ran").map(|entry| {
+        let attempt_id=entry["attempt"]["id"].as_str().unwrap_or_default();
+        let trace=entry["outcome"]["receive_trace"].clone();
+        let delivery:Value=std::fs::read_to_string(format!("{}/{attempt_id}/delivery.json",app.jobs_dir)).ok().and_then(|text|serde_json::from_str(&text).ok()).unwrap_or_else(||json!({"status":"not_configured"}));
+        let verdict=verdicts.get(attempt_id).map(|value|json!({"status":value["status"],"ok":value["ok"],"at":value["at"],"comment":short_text(&value["comment"],120)}));
+        json!({"attempt_id":attempt_id,"started":entry["outcome"]["started"],"ended":entry["outcome"]["ended"],"step":entry["attempt"]["step"],"goal":short_text(&entry["attempt"]["goal"],180),"stage":entry["attempt"]["stage_name"],"ok":entry["outcome"]["ok"],"saw":short_text(&entry["outcome"]["saw"],180),"completion":completion_kind(entry["outcome"]["saw"].as_str().unwrap_or_default()),"elapsed_ms":entry["outcome"]["elapsed_ms"],"last_progress":trace["last_progress"],"trace_bytes_captured":trace["bytes_captured"],"trace_file_bytes":trace["bytes"],"trace_event_count":trace["events"],"trace_truncated":trace["truncated"],"trace_complete":trace["complete"],"raster_payload_included":trace["raster_payload_included"],"delivery":delivery,"verdict":verdict})
+    }).collect::<Vec<_>>();
+    let mut recent=jobs.into_iter().rev().take(limit).collect::<Vec<_>>(); recent.reverse(); recent
+}
+
+fn completion_kind(saw: &str) -> &'static str {
+    if saw.contains("assumed complete") || saw.contains("assumed completion") { "silence_assumed" }
+    else if saw.contains("reported complete") { "reported_complete" }
+    else if saw.contains("cancelled") { "cancelled" }
+    else if saw.is_empty() { "unknown" }
+    else { "returned_or_failed" }
+}
+
+fn trace_window_file(app: &App, attempt_id: &str, count: usize, side: &str) -> Result<Value,(u16,&'static str)> {
+    if !valid_attempt_id(attempt_id) { return Err((400,"invalid attempt ID")); }
+    let base=format!("{}/{attempt_id}",app.jobs_dir);
+    let events=std::fs::read_to_string(format!("{base}/trace.jsonl")).map_err(|_|(404,"trace not found"))?.lines().filter_map(|line|serde_json::from_str::<Value>(line).ok()).collect::<Vec<_>>();
+    let summary:Value=std::fs::read_to_string(format!("{base}/trace-summary.json")).ok().and_then(|text|serde_json::from_str(&text).ok()).unwrap_or_else(||json!({}));
+    let start=if side=="head" {0}else{events.len().saturating_sub(count)};
+    let end=if side=="head" {events.len().min(count)}else{events.len()};
+    Ok(json!({"attempt_id":attempt_id,"side":side,"event_count":summary["events"],"returned_events":end.saturating_sub(start),"bytes_captured":summary["bytes_captured"],"trace_file_bytes":summary["bytes"],"truncated":summary["truncated"],"complete":summary["complete"],"duration_ms":null,"events":&events[start..end]}))
 }

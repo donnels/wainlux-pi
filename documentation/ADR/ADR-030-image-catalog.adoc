@@ -1,0 +1,39 @@
+= ADR-030: File-Based Image Catalog
+
+== Status
+
+Accepted.
+
+== Context
+
+The image catalog should be easy to regenerate and should not keep a second inventory of image names, titles, sources, or documentation references. Image files already have category prefixes. PlantUML sources can provide titles for diagrams. Other images can be named from their filenames.
+
+Sidecar metadata or one AsciiDoc wrapper per image could add descriptions. Wrappers would still need dynamic reference data, and maintaining both metadata and generated entries would duplicate information.
+
+== Decision
+
+Generate `documentation/images/README.adoc` from files in `documentation/images/`.
+
+* Image filenames determine catalog entries and category, using the prefixes documented in `README-include.adoc`.
+* A matching `.plantuml` or `.puml` source may provide the entry title.
+* Without a PlantUML title, the filename stem provides the title.
+* The generated catalog does not claim to list documentation references. Such references change with document usage and would need to be scanned dynamically.
+* Keep the generator in one Bash script. It has one caller and no shared logic that warrants a separate library.
+
+== Consequences
+
+=== Positive
+
+* Adding or removing an image needs no mapping update.
+* The generator has no per-image data table.
+* The generated index stays small and can be rebuilt from the directory contents.
+
+=== Negative
+
+* Filename-derived titles may be less descriptive than hand-written titles.
+* The catalog does not show where each image is referenced.
+* Captions and other per-image metadata cannot be added without a new source of metadata.
+
+== Future Option
+
+If maintainers need descriptions or alternate titles, consider a same-name metadata sidecar. Add it only when the need is clear, and keep the index generated from the image directory. Avoid individual AsciiDoc wrappers unless they provide value beyond the generated catalog.

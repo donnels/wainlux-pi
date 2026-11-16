@@ -79,8 +79,9 @@ class AudioApiTests(unittest.TestCase):
         self.assertIn(b"no packet trace available",report)
         self.assertIn(b"3500 ms",report)
         payload["run_log"][0]["attempt"]["mode"] = "simulator"
-        with tempfile.TemporaryDirectory() as directory, self.assertRaisesRegex(ValueError,"completed Real run"):
-            analyze_run_log(payload,directory)
+        with tempfile.TemporaryDirectory() as directory:
+            report, _ = analyze_run_log(payload,directory)
+        self.assertIn(b"4000 ms",report)
 
     def test_accepts_matching_completed_real_attempt(self):
         audio, suffix, attempt_id, expected_id, events = validate_submission(submission())

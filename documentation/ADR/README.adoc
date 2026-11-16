@@ -17,6 +17,9 @@ Clean-room methodology is summarized in <<clean-room-statement>>.
 * <<adr-027-audio-end-detection,ADR-027: Audio-first end-detection evidence>>
 * <<adr-028-distributed-audio-analysis,ADR-028: Pi-coordinated capture and external analysis>>
 * <<adr-029-container-security,ADR-029: Local Container Builds for Supply Chain Security>>
+* <<adr-030-image-catalog,ADR-030: File-Based Image Catalog>>
+* <<adr-031-mcp-job-log-tools,ADR-031: Compact MCP Job Log Inspection>>
+* <<adr-032-run-artifact-retention,ADR-032: Run Capture and Artifact Retention>>
 endif::single-page[]
 
 ifdef::single-page[]
@@ -47,6 +50,12 @@ include::ADR-027-audio-end-detection.adoc[leveloffset=+1]
 include::ADR-028-distributed-audio-analysis.adoc[leveloffset=+1]
 [[adr-029-container-security]]
 include::ADR-029-container-security.adoc[leveloffset=+1]
+[[adr-030-image-catalog]]
+include::ADR-030-image-catalog.adoc[leveloffset=+1]
+[[adr-031-mcp-job-log-tools]]
+include::ADR-031-mcp-job-log-tools.adoc[leveloffset=+1]
+[[adr-032-run-artifact-retention]]
+include::ADR-032-run-artifact-retention.adoc[leveloffset=+1]
 endif::single-page[]
 ifndef::single-page[]
 Clean-room methodology lives in link:../../CLEAN_ROOM.adoc[the clean-room statement].
@@ -63,4 +72,7 @@ Clean-room methodology lives in link:../../CLEAN_ROOM.adoc[the clean-room statem
 * link:ADR-027-audio-end-detection.adoc[ADR-027: Audio-first end-detection evidence]
 * link:ADR-028-distributed-audio-analysis.adoc[ADR-028: Pi-coordinated capture and external analysis]
 * link:ADR-029-container-security.adoc[ADR-029: Local Container Builds for Supply Chain Security]
+* link:ADR-030-image-catalog.adoc[ADR-030: File-Based Image Catalog]
+* link:ADR-031-mcp-job-log-tools.adoc[ADR-031: Compact MCP Job Log Inspection]
+* link:ADR-032-run-artifact-retention.adoc[ADR-032: Run Capture and Artifact Retention]
 endif::single-page[]

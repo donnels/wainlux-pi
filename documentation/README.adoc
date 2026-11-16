@@ -82,6 +82,8 @@ include::software-design.adoc[leveloffset=+1]
 [[protocol-reference]]
 include::reference-k6_protocol.adoc[leveloffset=+1]
 
+include::unverified-protocol-experiments.adoc[leveloffset=+1]
+
 [[hardware-observations]]
 include::hardware-observations.adoc[leveloffset=+1]
 

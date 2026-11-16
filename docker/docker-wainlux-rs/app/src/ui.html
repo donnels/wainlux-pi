@@ -258,6 +258,9 @@
       <div class="analysis-legend"><span style="--swatch:#367abe">Transfer</span><span style="--swatch:#d68a27">Setup</span><span style="--swatch:#8b1e2d">Feedback wait</span><span style="--swatch:#718394">Other</span></div>
       <dl id="analysis-timing" class="timing-grid"></dl>
       <button id="analysis-generate" type="button" onclick="generateAnalysis()" hidden>Analyze</button>
+      <button id="analysis-retain" type="button" onclick="toggleAnalysisRetention()" hidden>Retain run</button>
+      <button id="analysis-delete" type="button" onclick="deleteAnalysisArtifacts()" hidden>Delete stored artifacts</button>
+      <p id="analysis-retention-status" class="meta" role="status"></p>
       <section id="analysis-audio" hidden>
         <h3>Analysis report</h3>
         <div id="analysis-audio-timing" class="timing-grid"></div>
@@ -273,6 +276,7 @@
 <section id="planned" class="hidden">
   <h2>Ready to start</h2>
   <div class="goal" id="goal"></div>
+  <fieldset id="debug-capture" hidden><legend>Serial capture</legend><label><input id="raster-trace" type="checkbox"> Include sent raster bytes</label><p class="meta">Raster bytes can reveal the burned image, including QR data. This setting applies to this run only.</p></fieldset>
   <label id="audio-sync-cue-control" hidden><input id="audio-sync-cue" type="checkbox" checked> Play sync cue (preamble + 6 DTMF digits; recording ID <code id="sync-recording-id"></code>)</label>
   <button id="start-attempt" class="primary" onclick="action(run)">Start planned test</button>
   <button onclick="skip()">Skip with reason</button>
@@ -322,6 +326,7 @@ let machine, materials = [], state = null, prepared = null, phase = null, ownedA
 let frozen = false, working = false, stopped = false, plannedAttempt = null;
 let stopGeneration = 0;
 let modeInfo = {real:false, real_available:false};
+let debugEnabled = true;
 let audioAnalysisAvailable = false, audioAvailabilityCheckedAt = 0;
 let audioUploadEligibilityAttemptId = null, audioUploadEligible = false;
 const AUDIO_RECORDING_ATTEMPT_KEY = "laser_audio_recording_attempt_id";
@@ -576,8 +581,13 @@ function drawAnalysisRun(run, entries) {
     segment.style.flexGrow=String(value); segment.style.flexBasis="0"; segment.title=`${kind}: ${msText(value)}`; chart.append(segment);
   }
   renderTimingGrid("analysis-timing", {total_ms:total,transfer_ms:transfer,setup_ms:setup,wait_ms:wait,other_ms:other}, {total_ms:"Total",transfer_ms:"Raster transfer",setup_ms:"Protocol setup",wait_ms:"Feedback wait",other_ms:"Outside measured bands"});
-  const analysis = entries.findLast(entry => entry.event === "audio_analysis" && entry.attempt_id === attempt.id);
-  $("analysis-generate").hidden = Boolean(analysis?.report_url) || !audioAnalysisAvailable || attempt.mode !== "real";
+  const deletion = entries.findLastIndex(entry => entry.event === "artifact_deleted" && entry.attempt_id === attempt.id);
+  const analysis = entries.slice(deletion + 1).findLast(entry => entry.event === "audio_analysis" && entry.attempt_id === attempt.id);
+  $("analysis-generate").hidden = Boolean(analysis?.report_url) || !audioAnalysisAvailable;
+  $("analysis-retain").hidden = !audioAnalysisAvailable || !analysis?.report_url;
+  $("analysis-delete").hidden = !audioAnalysisAvailable || !analysis?.report_url;
+  if (analysis?.report_url) refreshAnalysisRetention(attempt.id).catch(error => { $("analysis-retention-status").textContent = error.message; });
+  else $("analysis-retention-status").textContent = "Waiting for analyzer delivery.";
   $("analysis-audio").hidden = !analysis;
   $("analysis-report-link").hidden = !analysis?.report_url;
   $("analysis-report-details").hidden = !analysis?.report_url;
@@ -589,6 +599,39 @@ function drawAnalysisRun(run, entries) {
     $("analysis-report-frame").dataset.src = analysis.report_url;
   } else { $("analysis-audio-timing").replaceChildren(); $("analysis-report-frame").removeAttribute("data-src"); }
 }
+async function refreshAnalysisRetention(attemptId) {
+  if (!attemptId || analysisSelectedAttemptId !== attemptId) return;
+  const result = await api(`/api/audio-analyses/${encodeURIComponent(attemptId)}/retention`);
+  const button = $("analysis-retain");
+  button.dataset.pinned = String(Boolean(result.pinned));
+  button.textContent = result.pinned ? "Unlock run" : "Retain run";
+  const artifacts = result.artifacts?.join(", ") || "no stored artifacts";
+  $("analysis-retention-status").textContent = `${result.pinned ? "Retained" : "Unpinned"} · ${artifacts} · ${result.bytes} bytes`;
+}
+async function toggleAnalysisRetention() {
+  const attemptId = analysisSelectedAttemptId;
+  if (!attemptId) return;
+  try {
+    const pinned = $("analysis-retain").dataset.pinned === "true";
+    const current = await api(`/api/audio-analyses/${encodeURIComponent(attemptId)}/retention`);
+    const action = pinned ? "Unlock" : "Retain";
+    const sensitive = current.raster_payload_included ? "\n\nThis run contains transmitted raster bytes. They can reveal the burned image or QR data." : "";
+    if (!confirm(`${action} ${attemptId}? Stored artifacts: ${current.artifacts.join(", ") || "none"}.${sensitive}`)) return;
+    await api(`/api/audio-analyses/${encodeURIComponent(attemptId)}/pin`, {pinned:!pinned});
+    await refreshAnalysisRetention(attemptId);
+  } catch (error) { $("analysis-retention-status").textContent = error.message; }
+}
+async function deleteAnalysisArtifacts() {
+  const attemptId = analysisSelectedAttemptId;
+  if (!attemptId) return;
+  try {
+    const current = await api(`/api/audio-analyses/${encodeURIComponent(attemptId)}/retention`);
+    const sensitive = current.raster_payload_included ? "\n\nStored raster bytes can reveal the burned image or QR data." : "";
+    if (!confirm(`Delete all analyzer artifacts for ${attemptId}? Files: ${current.artifacts.join(", ") || "none"}. This also removes pinned data.${sensitive}`)) return;
+    await api(`/api/audio-analyses/${encodeURIComponent(attemptId)}/delete`, {});
+    await loadAnalysis();
+  } catch (error) { $("analysis-retention-status").textContent = error.message; }
+}
 function controls() {
   const active = Boolean(state?.attempt || state?.running);
   const stages = prepared?.preview.stages || [];
@@ -599,6 +642,8 @@ function controls() {
   for (const field of $("card-inputs").querySelectorAll("input,select,textarea")) field.disabled = working || frozen || active || (field.definition && !field.definition.editable);
   $("preview-card").disabled = working || frozen || active || !activeTemplate;
   $("mode").disabled = working || frozen || active;
+  $("debug-capture").hidden = !debugEnabled || !modeInfo.real;
+  $("raster-trace").disabled = working || active || !debugEnabled || !modeInfo.real;
   $("clear-pi").disabled = working || Boolean(state?.running);
   $("start-attempt").disabled = working || Boolean(state?.running || state?.outcome);
   const recordingAttempt = plannedAttempt || state?.attempt;
@@ -1051,6 +1096,7 @@ function presentPlan(a) {
   const changed = plannedAttempt?.id !== a.id;
   plannedAttempt = a; $("goal").textContent = a.goal;
   if (changed) {
+    $("raster-trace").checked = false;
     $("sync-recording-id").textContent = recordingIdForAttempt(a.id);
     audioUploadEligibilityAttemptId = null; audioUploadEligible = false;
     const requiresSync = attemptRequires("requires_sync_marker", a);
@@ -1085,11 +1131,14 @@ async function run() {
   }
   const syncMarker = modeInfo.real && (attemptRequires("requires_sync_marker") || recordingStarted || $("audio-sync-cue").checked);
   let runRequest = {attempt_id:plannedAttempt?.id};
+  const rasterTrace = debugEnabled && $("raster-trace").checked;
+  if (rasterTrace && !confirm("This run will save the raster bytes sent to the laser. They can reveal the full burned image, including QR data. Continue?")) return;
+  runRequest.raster_trace = rasterTrace;
   if (syncMarker) {
     try {
       const recordingId = recordingIdForAttempt(plannedAttempt?.id);
       await playSyncCue(recordingId);
-      runRequest = {attempt_id:plannedAttempt?.id,sync_marker:true,recording_id:recordingId,cue_duration_ms:SYNC_CUE_DURATION_MS,post_cue_lead_ms:SYNC_CUE_POST_LEAD_MS};
+      runRequest = {attempt_id:plannedAttempt?.id,sync_marker:true,recording_id:recordingId,cue_duration_ms:SYNC_CUE_DURATION_MS,post_cue_lead_ms:SYNC_CUE_POST_LEAD_MS,raster_trace:rasterTrace};
     }
     catch (error) { message(`Cannot play sync cue; run not started: ${error.message}`, true); return; }
   }
@@ -1155,7 +1204,7 @@ async function poll() {
     $("band-timing-details").hidden = timings.length === 0;
     $("band-timing").textContent = bandTimingText(timings);
     const trace = s.outcome.receive_trace || s.receive_trace;
-    $("receive-trace-details").hidden = !trace || !trace.events?.length;
+    $("receive-trace-details").hidden = !trace || (!trace.events?.length && trace.complete === undefined);
     $("receive-trace").textContent = trace ? JSON.stringify(trace, null, 2) : "";
     const needsAnalyzer = attemptRequires("requires_analyzer", s.attempt);
     const hasRecording = storedAudioRecordingAttempt() === s.attempt?.id;
@@ -1195,6 +1244,9 @@ async function poll() {
 async function refreshLog() { const log = await api("/api/log"); $("log").textContent = log.slice(-10).reverse().map(entry => JSON.stringify(entry)).join("\n"); }
 async function init() {
   updateFullscreenControl();
+  const config = await api("/api/config");
+  debugEnabled = config?.debug !== false;
+  $("debug-capture").hidden = !debugEnabled;
   await checkAudioAnalyzer(true);
   const d = await (await fetch("/api/steps")).json();
   const m = d.machine;

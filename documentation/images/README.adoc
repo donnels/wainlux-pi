@@ -1,97 +1,258 @@
-= Images Directory Structure
-:imagesdir: .
+= Images Catalog
+:toc:
+:toclevels: 5
+:sectnums:
+:sectnumlevels: 5
 
-This directory contains all diagrams, screenshots, and images used in the project documentation.
+include::README-include.adoc[leveloffset=+1]
+== Architecture
 
-== File Naming Convention
+[[image-arch-cmp]]
+=== Component: Rust Laser Service
 
-Files are organized by TOGAF phase using the following prefix scheme:
+.Component: Rust Laser Service
+image::arch-cmp.png[Component: Rust Laser Service,align=center,width=80%]
+[[image-arch-ctx]]
+=== System Context: Wainlux K6 Laser Service
 
-.Naming Prefixes (4-8 characters)
-[cols="1,1,2,4",options="header"]
-|===
-| Prefix | Phase | Category | Description
-| `arch-` | Architecture | Architecture | System context, component, deployment, and decision diagrams
-| `app-` | Application | Application | Software components and service diagrams
-| `biz-` | Business | Business | Workflows and process diagrams
-| `test-` | Testing | Test | Test scenarios, sequences, and validation diagrams
-| `prot-` | Technology | Protocol | K6 protocol documentation (EDN + SVG)
-| `hw-` | Technology | Hardware | Physical component photos
-| `capt-` | Capture | Capture | Screenshots and photo evidence
-| `style-` | N/A | Style | Configuration files (e.g., PlantUML styles)
-|===
+.System Context: Wainlux K6 Laser Service
+image::arch-ctx.png[System Context: Wainlux K6 Laser Service,align=center,width=80%]
+[[image-arch-dec]]
+=== Decision Tree
 
-=== Examples by Prefix
+.Decision Tree
+image::arch-dec.png[Decision Tree,align=center,width=80%]
+[[image-arch-dep]]
+=== Deployment: Pi Zero W
 
-.Architecture (`arch-*`)
-* `arch-ctx.plantuml` / `arch-ctx.png` - System context diagram
-* `arch-cmp.plantuml` / `arch-cmp.png` - Component diagram
-* `arch-dep.plantuml` / `arch-dep.png` - Deployment diagram
-* `arch-dec.plantuml` / `arch-dec.png` - Architecture decision tree
+.Deployment: Pi Zero W
+image::arch-dep.png[Deployment: Pi Zero W,align=center,width=80%]
+== Application
 
-.Application (`app-*`)
-* `app-rust.plantuml` / `app-rust.png` - Rust service architecture
-* `app-api.plantuml` / `app-api.png` - API client sequence
-* `app-topo.plantuml` / `app-topo.png` - Codebase topology
+[[image-app-api]]
+=== API-fed card examples - no automatic laser execution
 
-.Business (`biz-*`)
-* `biz-wfl-job.plantuml` / `biz-wfl-job.png` - Job lifecycle workflow
+.API-fed card examples - no automatic laser execution
+image::app-api.png[API-fed card examples - no automatic laser execution,align=center,width=80%]
+[[image-app-rust]]
+=== Wainlux K6 service - runtime ownership
 
-.Test (`test-*`)
-* `test-audio.plantuml` / `test-audio.png` - Phone-driven audio test
-* `test-recovery.plantuml` / `test-recovery.png` - Recovery workflow
-* `test-seq-audio.plantuml` / `test-seq-audio.png` - Audio capture sequence
-* `test-seq-ghidra.plantuml` / `test-seq-ghidra.png` - Ghidra analysis sequence
-* `test-seq-stage.plantuml` / `test-seq-stage.png` - Stage run sequence
-* `test-*.svg` - Test pattern SVG diagrams
+.Wainlux K6 service - runtime ownership
+image::app-rust.png[Wainlux K6 service - runtime ownership,align=center,width=80%]
+[[image-app-topo]]
+=== Wainlux source topology - ownership and dependencies
 
-.Protocol (`prot-*`)
-* `prot-rx-*.edn` / `prot-rx-*.svg` - K6 RX protocol messages
-* `prot-tx-*.edn` / `prot-tx-*.svg` - K6 TX protocol messages
+.Wainlux source topology - ownership and dependencies
+image::app-topo.png[Wainlux source topology - ownership and dependencies,align=center,width=80%]
+== Business
 
-.Hardware (`hw-*`)
-* `hw-cyd-28-tft.jpg` - CYD 2.8" TFT display
-* `hw-nfc-reader-hw147-front.jpg` - NFC reader front view
-* `hw-nfc-reader-hw147-back.jpg` - NFC reader back view
+[[image-biz-wfl-job]]
+=== Workflow: Card Job Lifecycle
 
-.Capture (`capt-*`)
-* `capt-ui-simulator.png` - UI simulator screenshot
-* `capt-recovery-qr.png` - Recovery QR code capture
-* `capt-*.jpg` - Historical capture photos
+.Workflow: Card Job Lifecycle
+image::biz-wfl-job.png[Workflow: Card Job Lifecycle,align=center,width=80%]
+== Testing
 
-== Diagram Generation
+[[image-test-analysis-timeline]]
+=== Test analysis timeline
 
-=== PlantUML Diagrams
+.Test analysis timeline
+image::test-analysis-timeline.svg[Test analysis timeline,align=center,width=80%]
+[[image-test-audio]]
+=== Phone-driven audio test through the Pi UI (implemented upload path)
 
-All `*.plantuml` files use the shared `style-plantuml.puml` for consistent styling.
+.Phone-driven audio test through the Pi UI (implemented upload path)
+image::test-audio.png[Phone-driven audio test through the Pi UI (implemented upload path),align=center,width=80%]
+[[image-test-card-guide]]
+=== Test card guide
 
- Render all PlantUML diagrams to PNG:
-.Render command
-[source,bash]
-----
-cd documentation/images
-# Use podman/flatpak as shown in scripts/generate_diagrams.sh
-flatpak-spawn --host podman run --rm --user root -v "$(pwd):/repo" \
-  docker.io/plantuml/plantuml:latest /repo/<FILE>.plantuml
-----
+.Test card guide
+image::test-card-guide.svg[Test card guide,align=center,width=80%]
+[[image-test-card-items]]
+=== Test card items
 
-=== Bytefield-SVG Diagrams
+.Test card items
+image::test-card-items.svg[Test card items,align=center,width=80%]
+[[image-test-card-placement]]
+=== Test card placement
 
-Protocol diagrams (`prot-*.edn` -> `prot-*.svg`) are generated using Bytefield-SVG in the `docker/docker-bytefield/` container.
+.Test card placement
+image::test-card-placement.svg[Test card placement,align=center,width=80%]
+[[image-test-case-07a-limit-stairs]]
+=== Test case 07a limit stairs
 
-== File Mapping Reference
+.Test case 07a limit stairs
+image::test-case-07a-limit-stairs.svg[Test case 07a limit stairs,align=center,width=80%]
+[[image-test-case-07c-seven-squares]]
+=== Test case 07c seven squares
 
-A complete mapping from old filenames to new names is available in `FILE_MAPPING.csv`.
-This file can be deleted after the migration is complete.
+.Test case 07c seven squares
+image::test-case-07c-seven-squares.svg[Test case 07c seven squares,align=center,width=80%]
+[[image-test-case-08-blank-rows]]
+=== Test case 08 blank rows
 
-== Security Notes
+.Test case 08 blank rows
+image::test-case-08-blank-rows.svg[Test case 08 blank rows,align=center,width=80%]
+[[image-test-case-09-corners]]
+=== Test case 09 corners
 
-* `capt-recovery-qr.png` contains synthetic instructions and codes, not current Pi rasters
-* `test-recovery.plantuml` describes Pi-reviewed card submission and recovery workflow
-* No real credentials, SSIDs, or IP addresses are embedded in any diagrams
-* All hardware photos show proposed/referenced devices, not installed/tested equipment
+.Test case 09 corners
+image::test-case-09-corners.svg[Test case 09 corners,align=center,width=80%]
+[[image-test-ladder]]
+=== Test ladder
 
-== Cleanup
+.Test ladder
+image::test-ladder.svg[Test ladder,align=center,width=80%]
+[[image-test-power-sweep]]
+=== Test power sweep
 
-Unverified design proposals and retired Python/UI diagrams have been removed.
-Measured results are documented in <<hardware-observations>>.
+.Test power sweep
+image::test-power-sweep.svg[Test power sweep,align=center,width=80%]
+[[image-test-recovery]]
+=== Pi-rendered recovery card and manual NFC read-back
+
+.Pi-rendered recovery card and manual NFC read-back
+image::test-recovery.png[Pi-rendered recovery card and manual NFC read-back,align=center,width=80%]
+[[image-test-seq-audio]]
+=== Pi-coordinated capture with external analysis
+
+.Pi-coordinated capture with external analysis
+image::test-seq-audio.png[Pi-coordinated capture with external analysis,align=center,width=80%]
+[[image-test-seq-ghidra]]
+=== Ghidra-assisted protocol analysis - separated Copilot roles
+
+.Ghidra-assisted protocol analysis - separated Copilot roles
+image::test-seq-ghidra.png[Ghidra-assisted protocol analysis - separated Copilot roles,align=center,width=80%]
+[[image-test-seq-stage]]
+=== One reviewed card stage - preview is not permission to burn
+
+.One reviewed card stage - preview is not permission to burn
+image::test-seq-stage.png[One reviewed card stage - preview is not permission to burn,align=center,width=80%]
+== Protocol
+
+[[image-prot-rx-08-error]]
+=== Prot rx 08 error
+
+.Prot rx 08 error
+image::prot-rx-08-error.svg[Prot rx 08 error,align=center,width=80%]
+[[image-prot-rx-09-ack]]
+=== Prot rx 09 ack
+
+.Prot rx 09 ack
+image::prot-rx-09-ack.svg[Prot rx 09 ack,align=center,width=80%]
+[[image-prot-rx-heartbeat]]
+=== Prot rx heartbeat
+
+.Prot rx heartbeat
+image::prot-rx-heartbeat.svg[Prot rx heartbeat,align=center,width=80%]
+[[image-prot-rx-status]]
+=== Prot rx status
+
+.Prot rx status
+image::prot-rx-status.svg[Prot rx status,align=center,width=80%]
+[[image-prot-rx-version]]
+=== Prot rx version
+
+.Prot rx version
+image::prot-rx-version.svg[Prot rx version,align=center,width=80%]
+[[image-prot-tx-0a-connect]]
+=== Prot tx 0a connect
+
+.Prot tx 0a connect
+image::prot-tx-0a-connect.svg[Prot tx 0a connect,align=center,width=80%]
+[[image-prot-tx-16-stop]]
+=== Prot tx 16 stop
+
+.Prot tx 16 stop
+image::prot-tx-16-stop.svg[Prot tx 16 stop,align=center,width=80%]
+[[image-prot-tx-17-home]]
+=== Prot tx 17 home
+
+.Prot tx 17 home
+image::prot-tx-17-home.svg[Prot tx 17 home,align=center,width=80%]
+[[image-prot-tx-20-bounds]]
+=== Prot tx 20 bounds
+
+.Prot tx 20 bounds
+image::prot-tx-20-bounds.svg[Prot tx 20 bounds,align=center,width=80%]
+[[image-prot-tx-21-framing]]
+=== Prot tx 21 framing
+
+.Prot tx 21 framing
+image::prot-tx-21-framing.svg[Prot tx 21 framing,align=center,width=80%]
+[[image-prot-tx-22-data]]
+=== Prot tx 22 data
+
+.Prot tx 22 data
+image::prot-tx-22-data.svg[Prot tx 22 data,align=center,width=80%]
+[[image-prot-tx-23-job-header]]
+=== Prot tx 23 job header
+
+.Prot tx 23 job header
+image::prot-tx-23-job-header.svg[Prot tx 23 job header,align=center,width=80%]
+[[image-prot-tx-24-init]]
+=== Prot tx 24 init
+
+.Prot tx 24 init
+image::prot-tx-24-init.svg[Prot tx 24 init,align=center,width=80%]
+[[image-prot-tx-ff-version]]
+=== Prot tx ff version
+
+.Prot tx ff version
+image::prot-tx-ff-version.svg[Prot tx ff version,align=center,width=80%]
+== Hardware
+
+[[image-hw-cyd-28-tft]]
+=== Hw cyd 28 tft
+
+.Hw cyd 28 tft
+image::hw-cyd-28-tft.jpg[Hw cyd 28 tft,align=center,width=80%]
+[[image-hw-nfc-reader-hw147-back]]
+=== Hw nfc reader hw147 back
+
+.Hw nfc reader hw147 back
+image::hw-nfc-reader-hw147-back.jpg[Hw nfc reader hw147 back,align=center,width=80%]
+[[image-hw-nfc-reader-hw147-front]]
+=== Hw nfc reader hw147 front
+
+.Hw nfc reader hw147 front
+image::hw-nfc-reader-hw147-front.jpg[Hw nfc reader hw147 front,align=center,width=80%]
+== Capture
+
+[[image-capt-20260127-124112]]
+=== Capt 20260127 124112
+
+.Capt 20260127 124112
+image::capt-20260127-124112.jpg[Capt 20260127 124112,align=center,width=80%]
+[[image-capt-20260127-124223]]
+=== Capt 20260127 124223
+
+.Capt 20260127 124223
+image::capt-20260127-124223.jpg[Capt 20260127 124223,align=center,width=80%]
+[[image-capt-20260127-124337]]
+=== Capt 20260127 124337
+
+.Capt 20260127 124337
+image::capt-20260127-124337.jpg[Capt 20260127 124337,align=center,width=80%]
+[[image-capt-2426611769506763096]]
+=== Capt 2426611769506763096
+
+.Capt 2426611769506763096
+image::capt-2426611769506763096.jpg[Capt 2426611769506763096,align=center,width=80%]
+[[image-capt-recovery-qr]]
+=== Capt recovery qr
+
+.Capt recovery qr
+image::capt-recovery-qr.png[Capt recovery qr,align=center,width=80%]
+[[image-capt-ui-simulator]]
+=== Capt ui simulator
+
+.Capt ui simulator
+image::capt-ui-simulator.png[Capt ui simulator,align=center,width=80%]
+== Documentation
+
+[[image-doc-hierarchy]]
+=== Documentation include hierarchy
+
+.Documentation include hierarchy
+image::doc-hierarchy.png[Documentation include hierarchy,align=center,width=80%]

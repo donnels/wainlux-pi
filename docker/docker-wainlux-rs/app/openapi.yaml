@@ -56,6 +56,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Health'
+  /api/config:
+    get:
+      operationId: getRuntimeConfig
+      summary: Get runtime capture switches
+      responses:
+        '200':
+          description: DEBUG setting
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  debug: {type: boolean}
   /api/mode:
     get:
       operationId: getMode
@@ -214,6 +227,13 @@ paths:
     get:
       operationId: getRunLog
       summary: Get redacted run, stop, mode and verdict events
+      parameters:
+        - in: query
+          name: cursor
+          schema: {type: integer, minimum: 0}
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 500, default: 100}
       responses:
         '200':
           description: JSONL event records
@@ -388,6 +408,7 @@ paths:
                 recording_id: {type: string, pattern: '^[0-9]{6}$'}
                 cue_duration_ms: {type: integer, const: 2000}
                 post_cue_lead_ms: {type: integer, minimum: 0, maximum: 2000, default: 700}
+                raster_trace: {type: boolean, default: false, description: Captures sent raster DATA bytes. Sensitive; can reveal the burned image. Requires DEBUG=true.}
       responses:
         '202':
           description: Execution started
@@ -403,6 +424,14 @@ paths:
                   recording_id: {type: [string, 'null'], pattern: '^[0-9]{6}$'}
         '409':
           $ref: '#/components/responses/Problem'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '507':
+          description: Insufficient free space to reserve the configured trace file; the planned attempt remains unstarted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Problem'
   /api/audio-analyses:
     post:
       operationId: uploadAudioForAnalysis
@@ -528,7 +557,7 @@ paths:
     post:
       operationId: analyzeCompletedRun
       summary: Request an analysis report without requiring audio or a sync marker
-      description: Requires a completed Real run and an available configured analyzer. Never starts or changes a laser job. Returns an existing report when already present.
+      description: Requires a completed run and an available configured analyzer. Never starts or changes a laser job. Returns an existing report when already present.
       parameters:
         - in: path
           name: attempt_id
@@ -552,6 +581,113 @@ paths:
         '502':
           $ref: '#/components/responses/Problem'
         '503':
+          $ref: '#/components/responses/Problem'
+  /api/jobs/toc:
+    get:
+      operationId: getJobToc
+      summary: Get compact completed-job summaries
+      parameters:
+        - in: query
+          name: limit
+          schema: {type: integer, minimum: 1, maximum: 50, default: 10}
+      responses:
+        '200':
+          description: Recent job summaries without raw trace events
+          content:
+            application/json:
+              schema: {type: object, additionalProperties: true}
+  /api/jobs/{attempt_id}/trace/{side}:
+    get:
+      operationId: getJobTraceWindow
+      summary: Get a bounded head or tail of a job trace
+      parameters:
+        - in: path
+          name: attempt_id
+          required: true
+          schema: {type: string}
+        - in: path
+          name: side
+          required: true
+          schema: {type: string, enum: [head, tail]}
+        - in: query
+          name: count
+          schema: {type: integer, minimum: 1, maximum: 100, default: 30}
+      responses:
+        '200':
+          description: Trace events and capture completeness metadata
+          content:
+            application/json:
+              schema: {type: object, additionalProperties: true}
+        '404':
+          $ref: '#/components/responses/Problem'
+  /api/audio-analyses/{attempt_id}/retention:
+    get:
+      operationId: getAnalysisRetention
+      summary: List stored analyzer artifacts and pin state
+      parameters:
+        - in: path
+          name: attempt_id
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Artifacts, managed bytes, raster sensitivity and pin state
+          content:
+            application/json:
+              schema: {type: object, additionalProperties: true}
+  /api/audio-analyses/retention:
+    get:
+      operationId: getAnalysisStorageSummary
+      summary: Get analyzer storage totals and oldest attempt
+      responses:
+        '200':
+          description: Managed, pinned and rolling byte counts
+          content:
+            application/json:
+              schema: {type: object, additionalProperties: true}
+  /api/audio-analyses/{attempt_id}/pin:
+    post:
+      operationId: setAnalysisRetention
+      summary: Pin or unpin analyzer artifacts
+      parameters:
+        - in: path
+          name: attempt_id
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pinned]
+              properties:
+                pinned: {type: boolean}
+      responses:
+        '200':
+          description: Updated pin state
+          content:
+            application/json:
+              schema: {type: object, additionalProperties: true}
+        '507':
+          $ref: '#/components/responses/Problem'
+  /api/audio-analyses/{attempt_id}/delete:
+    post:
+      operationId: deleteAnalysisArtifacts
+      summary: Delete stored analyzer artifacts for an attempt
+      description: The UI asks for confirmation and warns when raster bytes were captured. Deletion cannot run while analysis is active.
+      parameters:
+        - in: path
+          name: attempt_id
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Artifacts deleted
+          content:
+            application/json:
+              schema: {type: object, additionalProperties: true}
+        '409':
           $ref: '#/components/responses/Problem'
   /api/verdict:
     post:

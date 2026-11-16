@@ -16,4 +16,6 @@ services:
     environment:
       AUDIO_ANALYZER_URL: ${AUDIO_ANALYZER_URL:-}
       AUDIO_ANALYZER_TOKEN: ${AUDIO_ANALYZER_TOKEN:-}
+      DEBUG: ${DEBUG:-true}
+      RUN_TRACE_MAX_BYTES: ${RUN_TRACE_MAX_BYTES:-4194304}
     restart: unless-stopped

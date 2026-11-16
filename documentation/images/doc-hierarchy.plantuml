@@ -1,0 +1,83 @@
+@startwbs
+!include style-plantuml.puml
+title Documentation include hierarchy
+<style>
+wbsDiagram {
+  .main {
+    BackgroundColor #fff/lawngreen
+  }
+  .appendix {
+    BackgroundColor #fff/blue
+  }
+  .include {
+    BackgroundColor #fff/orange
+  }
+}
+</style>
+
++ README.asciidoc <<main>>
+++ includes/include-formatting-book-header.adoc <<include>>
+++ includes/include-formatting-content-html-pdf.adoc <<include>>
+++ documentation/README.adoc <<main>>
++++ GETTING_STARTED.adoc <<main>>
+++++ includes/include-steamdeck-flatpack-warning.adoc <<include>>
++++ software-design.adoc <<main>>
++++ reference-k6_protocol.adoc <<main>>
++++ unverified-protocol-experiments.adoc <<main>>
++++ hardware-observations.adoc <<main>>
++++ nfc-cards.adoc <<main>>
++++ doing-debugging.adoc <<main>>
++++ next-steps.adoc <<main>>
++++ ADR/README.adoc <<appendix>>
+++++ ADR-xxx <<appendix>>
+'++++ ADR-002-serial-communication.adoc <<appendix>>
+'++++ ADR-006-clean-room.adoc <<appendix>>
+'++++ ADR-007-asciidoc.adoc <<appendix>>
+'++++ ADR-010-bytefield-diagrams.adoc <<appendix>>
+'++++ ADR-013-simulator-testing.adoc <<appendix>>
+'++++ ADR-019-http-review-boundary.adoc <<appendix>>
+'++++ ADR-021-rust-core.adoc <<appendix>>
+'++++ ADR-022-build-packaging.adoc <<appendix>>
+'++++ ADR-025-placement.adoc <<appendix>>
+'++++ ADR-026-mcp-hub.adoc <<appendix>>
+'++++ ADR-027-audio-end-detection.adoc <<appendix>>
+'++++ ADR-028-distributed-audio-analysis.adoc <<appendix>>
+'++++ ADR-029-container-security.adoc <<appendix>>
+'++++ ADR-030-image-catalog.adoc <<appendix>>
+'++++ ADR-031-mcp-job-log-tools.adoc <<appendix>>
+'++++ ADR-032-run-artifact-retention.adoc <<appendix>>
++++ REQ/README.adoc <<appendix>>
+++++ FR-xxx <<appendix>>
+'++++ FR-001-burn-raster-image.adoc <<appendix>>
+'++++ FR-002-generate-wifi-qr.adoc <<appendix>>
+'++++ FR-003-progress-and-timing.adoc <<appendix>>
+'++++ FR-007-emergency-stop.adoc <<appendix>>
+'++++ FR-009-calibration-patterns.adoc <<appendix>>
+'++++ FR-011-placement.adoc <<appendix>>
+'++++ FR-013.adoc <<appendix>>
+'++++ FR-015-laser-test-ladder.adoc <<appendix>>
+'++++ FR-016-qr-cards.adoc <<appendix>>
+'++++ FR-017-end-detection.adoc <<appendix>>
+++++ NFR-xxx <<appendix>>
+'++++ NFR-005-run-history.adoc <<appendix>>
++++ images/README.adoc <<main>>
+++++ images/README-include.adoc <<main>>
+++ docker/README.adoc <<main>>
++++ docker-wainlux-rs/README.adoc <<main>>
++++ docker-mcp/README.adoc <<main>>
++++ docker-bytefield/README.adoc <<main>>
+++ scripts/README.adoc <<main>>
+++ cli/README.adoc <<main>>
+++ DEVELOPMENT.adoc <<main>>
+++ CLEAN_ROOM.adoc <<main>>
+++ includes/include-glossary.adoc <<include>>
+++ includes/include-license.adoc <<include>>
++++ LICENSE <<include>>
+
+legend
+  <back:#ccffcc> Main body</back>
+  <back:#ccccff> Appendices (ADR / REQ)</back>
+  <back:#ffe0aa> Shared includes/ Document infrastructure</back>
+endlegend
+
+@endwbs

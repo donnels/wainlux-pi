@@ -1,6 +1,12 @@
 import unittest
 
-from mcp_server import audio_analysis_for_attempt, updates_since
+from mcp_server import (
+    audio_analysis_for_attempt,
+    find_job,
+    job_entries,
+    trace_window,
+    updates_since,
+)
 
 
 class McpReadOnlyTests(unittest.TestCase):
@@ -24,6 +30,46 @@ class McpReadOnlyTests(unittest.TestCase):
             updates_since([], -1, 10)
         with self.assertRaises(ValueError):
             updates_since([], 0, 501)
+
+    def test_job_toc_summarizes_ran_events_without_copying_trace(self):
+        events = [
+            {
+                "event": "ran",
+                "attempt": {"id": "job-1", "step": "square", "goal": "test"},
+                "outcome": {
+                    "ok": True,
+                    "saw": "assumed complete after 90 seconds",
+                    "started": 10,
+                    "ended": 20,
+                    "receive_trace": {
+                        "bytes_captured": 1024,
+                        "truncated": True,
+                        "events": [{"kind": "status_frame", "percent": 99}, {"kind": "rx_byte", "byte": "FF"}],
+                    },
+                },
+            },
+            {"event": "verdict", "id": "job-1", "ok": True, "comment": "stopped"},
+        ]
+        result = job_entries(events)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["attempt_id"], "job-1")
+        self.assertEqual(result[0]["completion"], "silence_assumed")
+        self.assertEqual(result[0]["last_progress"], 99)
+        self.assertTrue(result[0]["trace_truncated"])
+        self.assertNotIn("events", result[0])
+        self.assertEqual(result[0]["verdict"]["comment"], "stopped")
+
+    def test_trace_window_returns_bounded_head_and_tail(self):
+        events = [{"event": "ran", "attempt": {"id": "job-1"}, "outcome": {
+            "receive_trace": {"bytes_captured": 4, "truncated": False, "duration_ms": 50,
+                              "events": [{"n": 1}, {"n": 2}, {"n": 3}, {"n": 4}]}
+        }}]
+        self.assertEqual([item["n"] for item in trace_window(events, "job-1", 2, "head")["events"]], [1, 2])
+        self.assertEqual([item["n"] for item in trace_window(events, "job-1", 2, "tail")["events"]], [3, 4])
+        with self.assertRaises(ValueError):
+            trace_window(events, "job-1", 101, "tail")
+        with self.assertRaises(ValueError):
+            find_job(events, "missing")
 
 
 if __name__ == "__main__":

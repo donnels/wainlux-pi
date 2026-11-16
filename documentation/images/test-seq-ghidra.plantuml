@@ -1,4 +1,4 @@
-@startuml sequence-ghidra-analysis
+@startuml
 !include style-plantuml.puml
 ' Method as reported by Sean Donnellan. No source/artifacts leave the isolated analysis boundary.
 title Ghidra-assisted protocol analysis - separated Copilot roles

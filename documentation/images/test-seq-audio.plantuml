@@ -1,4 +1,4 @@
-@startuml sequence-audio-capture
+@startuml
 !include style-plantuml.puml
 title Pi-coordinated capture with external analysis
 hide footbox

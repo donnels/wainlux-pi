@@ -1,4 +1,4 @@
-@startuml sequence-stage-run
+@startuml
 !include style-plantuml.puml
 ' Current Rust card-stage lifecycle. Physical verdict remains with Sean.
 title One reviewed card stage - preview is not permission to burn

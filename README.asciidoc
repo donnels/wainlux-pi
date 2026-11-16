@@ -94,6 +94,12 @@ Project owner and decision authority: Sean Donnellan. Sean triggered and verifie
 * Show what's possible across multiple concepts. 
 * A small, rounded project.
 * A demonstration of what one can create.
+* A demonstration/investigation of what one can do with an LLM.
+** Copilot (mixed models - clean room ghidra reverse engineering approach and (separate session) coding)
+** Claude (just basic tests of the LLM)
+** Mistral (LLM capability tests through reviews mainly and some limited coding)
+** Codex (some coding and also reviews)
+** Gemini (some coding and also reviews)
 
 .Project status
 * [x] Architecture
@@ -140,6 +146,8 @@ include::documentation/README.adoc[leveloffset=+1]
 include::docker/README.adoc[leveloffset=+1]
 include::scripts/README.adoc[leveloffset=+1]
 include::cli/README.adoc[leveloffset=+1]
+include::DEVELOPMENT.adoc[leveloffset=+1]
+include::CLEAN_ROOM.adoc[leveloffset=+1]
 
 [appendix]
 == Glossary

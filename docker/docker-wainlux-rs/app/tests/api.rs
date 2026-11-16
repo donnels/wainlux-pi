@@ -35,6 +35,8 @@ fn start_with_template(driver: &str, source: Option<&str>) -> (SocketAddr, Strin
         test_catalog_path: concat!(env!("CARGO_MANIFEST_DIR"), "/../tests.toml").into(),
         audio_analyzer_url: None,
         audio_analyzer_token: None,
+        debug: true,
+        run_trace_max_bytes: 4 * 1024 * 1024,
     })
     .unwrap();
     (addr, data.join("runs.jsonl").to_string_lossy().into())
@@ -55,6 +57,8 @@ fn start_with_analyzer(driver: &str, url: String, token: &str) -> (SocketAddr, S
         test_catalog_path: concat!(env!("CARGO_MANIFEST_DIR"), "/../tests.toml").into(),
         audio_analyzer_url: Some(url),
         audio_analyzer_token: Some(token.into()),
+        debug: true,
+        run_trace_max_bytes: 4 * 1024 * 1024,
     }).unwrap();
     (addr, data.join("runs.jsonl").to_string_lossy().into())
 }

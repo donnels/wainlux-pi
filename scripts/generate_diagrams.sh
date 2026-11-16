@@ -1,5 +1,5 @@
 #!/bin/bash
-# Generate protocol diagrams using bytefield-svg container
+# Generate protocol and PlantUML diagrams, and update image catalog index
 
 set -e
 
@@ -31,5 +31,33 @@ for edn_file in "$IMAGES_DIR"/*.edn; do
             -o "/diagrams/${base_name}.svg"
     fi
 done
+
+# Render PlantUML diagrams if container engine is available
+PLANTUML_IMAGE=""
+for candidate in "docker.io/plantuml/plantuml:1.2025.4" "docker.io/plantuml/plantuml:latest"; do
+    if container_host image inspect "$candidate" >/dev/null 2>&1; then
+        PLANTUML_IMAGE="$candidate"
+        break
+    fi
+done
+
+if [ -n "$PLANTUML_IMAGE" ]; then
+    echo "Generating diagrams from PlantUML specs using $PLANTUML_IMAGE..."
+    for puml_file in "$IMAGES_DIR"/*.plantuml; do
+        if [ -f "$puml_file" ]; then
+            base_name=$(basename "$puml_file")
+            echo "  $base_name → PNG"
+            container_host run --rm \
+                -v "$IMAGES_DIR:/repo" \
+                -w /repo \
+                "$PLANTUML_IMAGE" \
+                "/repo/${base_name}"
+        fi
+    done
+fi
+
+# Rebuild image catalog index
+echo "Generating image catalog index..."
+"$SCRIPT_DIR/generate_image_index.sh"
 
 echo "Done."

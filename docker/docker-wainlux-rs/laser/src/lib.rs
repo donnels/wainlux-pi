@@ -9,6 +9,7 @@ pub use raster::Raster;
 
 use std::collections::BTreeMap;
 use std::fmt;
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub enum Error {
@@ -181,6 +182,9 @@ pub struct ReceiveTraceEvent {
     pub metadata: Option<String>,
 }
 
+/// Receives protocol events synchronously. Implementations should keep each call short.
+pub type TraceSink = Arc<dyn Fn(&ReceiveTraceEvent) + Send + Sync>;
+
 impl Progress {
     pub fn whole(percent: u8) -> Self {
         Progress { phase: if percent >= 100 { ProgressPhase::ReportedComplete } else { ProgressPhase::Waiting }, percent: Some(percent), band: None, bands: None, row_start: None, row_end: None, previous_assumed: false, transfer_ms:None, setup_ms:None, wait_ms:None, elapsed_ms:None }
@@ -217,8 +221,9 @@ pub trait Machine: Send {
     fn stopper(&self) -> Result<Box<dyn Stop>>;
     /// Upload and burn. Blocks until done.
     fn burn(&mut self, job: &Job, progress: &mut dyn FnMut(Progress)) -> Result<Done>;
-    /// Opt in to a bounded receive-only trace around the next raster completion exchange.
+    /// Enable bounded in-memory tracing when no streaming sink is configured.
     fn set_receive_trace(&mut self, _enabled: bool) {}
+    fn set_receive_trace_sink(&mut self, _sink: Option<TraceSink>, _include_raster: bool) {}
     fn take_receive_trace(&mut self) -> ReceiveTrace { ReceiveTrace::default() }
     fn calibrate_limits(&mut self, _job: &Job, _progress: &mut dyn FnMut(Progress)) -> Result<Done> {
         Err(Error::Unsupported("limit calibration"))

@@ -1,4 +1,4 @@
-@startuml card-api-clients
+@startuml
 !include style-plantuml.puml
 title API-fed card examples - no automatic laser execution
 hide footbox

@@ -1,7 +1,7 @@
 //! Device sequences over a serial port. Timings follow the first working burn.
 
 use crate::protocol::{self as p, ACK, HEARTBEAT, NACK};
-use laser::{Done, Job, Machine, Progress, ProgressPhase, Raster, ReceiveTrace, ReceiveTraceEvent, Rect};
+use laser::{Done, Job, Machine, Progress, ProgressPhase, Raster, ReceiveTrace, ReceiveTraceEvent, Rect, TraceSink};
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
 use std::thread::sleep;
@@ -77,6 +77,8 @@ pub struct Device<P: Port> {
     receive_trace_started: Option<Instant>,
     receive_trace: ReceiveTrace,
     receive_trace_job: u16,
+    receive_trace_sink: Option<TraceSink>,
+    trace_raster: bool,
 }
 
 /// Bed size the firmware accepts, in pixels (0.05 mm). Mechanics reach less.
@@ -87,10 +89,14 @@ const MAX_TRACE_EVENTS: usize = 2048;
 
 impl<P: Port> Device<P> {
     pub fn new(port: P) -> Self {
-        Device { port, cancelled: Arc::new(AtomicBool::new(false)), write_gate: Arc::new(Mutex::new(())), receive_trace_enabled: false, receive_trace_started: None, receive_trace: ReceiveTrace::default(), receive_trace_job: 0 }
+        Device { port, cancelled: Arc::new(AtomicBool::new(false)), write_gate: Arc::new(Mutex::new(())), receive_trace_enabled: false, receive_trace_started: None, receive_trace: ReceiveTrace::default(), receive_trace_job: 0, receive_trace_sink: None, trace_raster: false }
     }
 
     fn trace_event(&mut self, phase: &'static str, kind: &'static str, byte: Option<u8>, frame: Option<&'static str>, frame_bytes: Option<Vec<u8>>, percent: Option<u8>, quiet_ms: Option<u64>) {
+        self.trace_event_with_metadata(phase, kind, byte, frame, frame_bytes, percent, quiet_ms, None);
+    }
+
+    fn trace_event_with_metadata(&mut self, phase: &'static str, kind: &'static str, byte: Option<u8>, frame: Option<&'static str>, frame_bytes: Option<Vec<u8>>, percent: Option<u8>, quiet_ms: Option<u64>, metadata: Option<String>) {
         if !self.receive_trace_enabled { return; }
         let started = match self.receive_trace_started {
             Some(started) => started,
@@ -101,19 +107,16 @@ impl<P: Port> Device<P> {
                 started
             }
         };
+        let streaming = self.receive_trace_sink.is_some();
         if byte.is_some() {
-            if self.receive_trace.bytes_captured >= MAX_TRACE_BYTES {
-                self.receive_trace.truncated = true;
-                if let Some(index) = self.receive_trace.events.iter().position(|event| event.kind == "rx_byte") {
-                    self.receive_trace.events.remove(index);
-                } else {
-                    return;
-                }
-            } else {
+            if streaming || self.receive_trace.bytes_captured < MAX_TRACE_BYTES {
                 self.receive_trace.bytes_captured += 1;
+            } else {
+                self.receive_trace.truncated = true;
+                return;
             }
         }
-        if self.receive_trace.events.len() >= MAX_TRACE_EVENTS {
+        if !streaming && self.receive_trace.events.len() >= MAX_TRACE_EVENTS {
             self.receive_trace.truncated = true;
             if let Some(index) = self.receive_trace.events.iter().position(|event| event.kind == "rx_byte" || event.kind.ends_with("_frame") || event.kind == "tx_command") {
                 self.receive_trace.events.remove(index);
@@ -121,7 +124,7 @@ impl<P: Port> Device<P> {
                 return;
             }
         }
-        self.receive_trace.events.push(ReceiveTraceEvent {
+        let event = ReceiveTraceEvent {
             at_ms: started.elapsed().as_millis() as u64,
             job_index: Some(self.receive_trace_job),
             phase,
@@ -131,8 +134,10 @@ impl<P: Port> Device<P> {
             frame_bytes,
             percent,
             quiet_ms,
-            metadata: None,
-        });
+            metadata,
+        };
+        if let Some(sink) = &self.receive_trace_sink { sink(&event); }
+        else { self.receive_trace.events.push(event); }
     }
 
     fn take_trace(&mut self) -> ReceiveTrace {
@@ -160,8 +165,14 @@ impl<P: Port> Device<P> {
 
     /// Send and collect until ACK (or any frame if `ack` is false) or timeout.
     fn cmd(&mut self, name: &'static str, pkt: &[u8], wait: Duration, ack: bool) -> Result<Vec<u8>> {
-        self.send(pkt)?;
-        self.trace_event("command", "tx_command", None, Some(name), if name == "DATA" { None } else { Some(pkt.to_vec()) }, None, None);
+        if let Err(error) = self.send(pkt) {
+            self.trace_event_with_metadata("command", "tx_error", None, Some(name), None, None, None, Some(error.to_string()));
+            return Err(error);
+        }
+        self.trace_event_with_metadata("command", "tx_command", None, Some(name), if name == "DATA" { None } else { Some(pkt.to_vec()) }, None, None, (name == "DATA").then(|| format!("raster packet bytes={}", pkt.len())));
+        if name == "DATA" && self.trace_raster {
+            self.trace_event("raster", "tx_raster_payload", None, Some(name), Some(pkt.to_vec()), None, None);
+        }
         let end = Instant::now() + wait;
         let mut rx = Vec::new();
         while Instant::now() < end {
@@ -185,12 +196,16 @@ impl<P: Port> Device<P> {
             }
         }
         self.check_cancelled()?;
-        match (ack, rx.last()) {
+        let result = match (ack, rx.last()) {
             (_, None) => Err(Error::Timeout(name)),
             (true, Some(&ACK)) => Ok(rx),
             (true, _) => Err(Error::NoAck(name, rx)),
             (false, _) => Ok(rx),
+        };
+        if let Err(error) = &result {
+            self.trace_event_with_metadata("command", "command_error", None, Some(name), None, None, None, Some(error.to_string()));
         }
+        result
     }
 
     fn drain(&mut self) -> Result<()> {
@@ -255,12 +270,7 @@ impl<P: Port> Device<P> {
         band: (usize, usize, u32, u32, bool),
     ) -> Result<Done> {
         if self.receive_trace_enabled { self.receive_trace_job = self.receive_trace_job.saturating_add(1); }
-        self.trace_event("job", "job_start", None, None, None, None, None);
-        if self.receive_trace_enabled {
-            if let Some(event) = self.receive_trace.events.last_mut().filter(|event| event.kind == "job_start") {
-                event.metadata = Some(format!("Band {}/{}; raster rows {}..{}; {}x{} px at ({x},{y}); power {power}; depth {depth}", band.0, band.1, band.2, band.3, r.width, r.height));
-            }
-        }
+        self.trace_event_with_metadata("job", "job_start", None, None, None, None, None, Some(format!("Band {}/{}; raster rows {}..{}; {}x{} px at ({x},{y}); power {power}; depth {depth}", band.0, band.1, band.2, band.3, r.width, r.height)));
         let band_started = Instant::now();
         let (w, h) = match (u16::try_from(r.width), u16::try_from(r.height)) {
             (Ok(w), Ok(h)) if x as u32 + w as u32 <= BED as u32 && y as u32 + h as u32 <= BED as u32 => (w, h),
@@ -466,6 +476,11 @@ impl<P: Port + 'static> Machine for Device<P> {
         }
     }
 
+    fn set_receive_trace_sink(&mut self, sink: Option<TraceSink>, include_raster: bool) {
+        self.receive_trace_sink = sink;
+        self.trace_raster = include_raster;
+    }
+
     fn take_receive_trace(&mut self) -> ReceiveTrace {
         self.take_trace()
     }
@@ -591,7 +606,7 @@ mod tests {
     }
 
     #[test]
-    fn receive_trace_is_bounded_and_marks_truncation() {
+    fn receive_trace_is_bounded_without_a_stream_sink() {
         let mut device = script(&[]);
         Machine::set_receive_trace(&mut device, true);
         for _ in 0..MAX_TRACE_BYTES + 1 {
