@@ -1,0 +1,24 @@
+services:
+  pyghidra-mcp:
+    image: ${GHIDRA_MCP_IMAGE:-localhost/wainlux-ghidra-mcp:locked}
+    container_name: pyghidra-mcp
+    user: vscode
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=2g
+    environment:
+      HOME: /tmp/ghidra-home
+      XDG_CACHE_HOME: /tmp/cache
+      GHIDRA_INPUT_JAR: /input/Laser.jar
+      GHIDRA_PROJECT_PATH: /project
+      GHIDRA_PROJECT_NAME: wainlux-k6
+    volumes:
+      - ${GHIDRA_INPUT_JAR:-../../backup/Laser.jar}:/input/Laser.jar:ro
+      - ${GHIDRA_PROJECT_DIR:-../../backup/ghidra-project}:/project:rw
+    ports:
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped

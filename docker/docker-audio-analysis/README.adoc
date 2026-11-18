@@ -1,0 +1,26 @@
+= Audio Analysis
+
+Pinned Python and FFmpeg image for audio, report, and retained job-trace analysis.
+
+Temporary HIGH/CRITICAL findings are accepted for local analysis on a trusted operator host only, through 2027-02-14 or the next image update. Do not expose this service publicly.
+
+ifndef::single-page[]
+== Build and Scan Evidence
+
+This is the latest compact Trivy summary. Manual scan commands and CSV filters are documented in `docker/docker-trivy/README.adoc`. Any accepted findings, use limits, and expiry are stated in this image README; see ADR-029 for the exception policy.
+
+.Latest compact Trivy summary
+[source,csv]
+----
+include::trivy-report.csv[]
+----
+
+.Image Dockerfile
+[source,dockerfile]
+----
+include::Dockerfile[]
+----
+
+endif::single-page[]
+
+<!-- container-scan-evidence -->

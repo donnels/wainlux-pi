@@ -1,0 +1,11 @@
+# name|selected local tag|build context|platform|Trivy ignore file|scan policy
+# Successful updates also retain immutable sha-<image-id> and retained-<image-id> tags in the local engine.
+trivy|localhost/wainlux-trivy:0.76.2|docker/docker-trivy|||trust
+asciidoctor|localhost/wainlux-asciidoctor:locked|docker/docker-asciidoctor|||scan
+audio-analysis|localhost/wainlux-audio-analysis:local|docker/docker-audio-analysis|||scan
+bytefield|localhost/wainlux-bytefield:locked|docker/docker-bytefield|||scan
+ghidra-mcp|localhost/wainlux-ghidra-mcp:locked|docker/docker-ghidra-mcp|||scan
+mcp|localhost/wainlux-mcp:local|docker/docker-mcp|||scan
+plantuml|localhost/wainlux-plantuml:locked|docker/docker-plantuml||docker/docker-plantuml/.trivyignore|scan
+rust-toolchain|localhost/wainlux-rust-toolchain:locked|docker/docker-rust-toolchain|||scan
+laser-app|localhost/laser-app:arm|docker/docker-wainlux-rs|linux/arm/v6||scan

@@ -28,7 +28,7 @@ image::hw-cyd-28-tft.jpg[2.8-inch CYD]
 
 === Audio/display HAT
 
-The LAFVIN audio/display HAT is ordered, not installed or tested. Before use, verify original Zero W ARMv6/32-bit support, GPIO/SPI allocation, power draw, capture quality and coexistence with an NFC reader.
+The selected LAFVIN audio/display HAT is ordered, not installed or tested. Its compatibility guide lists Zero 2 W, Pi 3 B+, Pi 4 and Pi 5; it does not list the original Zero W and recommends 64-bit Raspberry Pi OS. Before use, verify ARMv6/32-bit support, GPIO/SPI allocation, power draw, capture quality, drivers and coexistence with an NFC reader. Do not run the vendor installer on the laser Pi as a probe. The [HAT guide](https://lafvin-audio-display-hat.readthedocs.io/en/latest/about_this_kit.html#compatibility-and-requirements) is the current compatibility source.
 
 == Supervised power sweep
 
@@ -39,12 +39,13 @@ The LAFVIN audio/display HAT is ordered, not installed or tested. Before use, ve
 * *Fixture:* If a locating jig is used, it must register the laser without shifting its established position. Measure and verify the actual unit before relying on a downloaded or printed fixture; published K6 trays note unit/printer dimensional variation.
 
 .To-scale projection of both adjacent 20 mm blocks, with X=20 selected for the next traced run
-image::test-power-sweep.svg[Adjacent sweep blocks and receive-traced test,align="center"]
+image::test-power-sweep.png[Adjacent sweep blocks and receive-traced test,align="center"]
 
 == Protocol investigations
 
-* *Job completion:* No signal reliably proves physical rest. Preserve the reported-100% and 90-second silence-assumption rules. Compare bounded traces and audio with attended stops before changing them; never auto-advance on silence.
-* *Pi-local capture:* Check microphone and OS support without installing packages or changing the Pi. Keep iPhone recording available.
+* *Job completion:* No signal reliably proves physical rest. Preserve the reported-100% and 90-second silence-assumption rules. Compare bounded traces and audio with attended stops before changing them; never auto-advance on silence. The current `FF FF FF FF` candidate and test procedure are in `documentation/doing-debugging.adoc`.
+* *Pi-local capture:* Check microphone and OS support without installing packages or changing the Pi. Keep iPhone recording available. Before enabling HAT capture, verify original Zero W ARMv6/32-bit support, GPIO/SPI allocation, power draw, capture quality, and coexistence with an NFC reader.
+* *Audio end estimate:* Compare audio markers, receive traces, and attended physical stops across repeated short non-marking frames and representative material runs. Quantify timing offsets, missed detections, and false activity before evaluating any change to the 90-second margin. See <<adr-027-audio-end-detection,ADR-027>> and <<adr-028-distributed-audio-analysis,ADR-028>>.
 * *Vector jobs:* The K6 driver remains raster-only. Do not infer support from reserved fields.
 ifdef::single-page[]
 Packet hypotheses and safety-gated experiments remain in `documentation/unverified-protocol-experiments.adoc`.

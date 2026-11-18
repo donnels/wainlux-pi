@@ -4,10 +4,10 @@
 Accepted; used by the K6 protocol reference.
 
 == Decision
-Keep packet layouts as EDN specifications and generated SVGs. `scripts/generate_diagrams.sh` renders the specifications in `documentation/images/` with the `docker/docker-bytefield` container.
+Keep packet layouts as EDN specifications with generated SVG and PNG views. The image build and regeneration instructions live in `docker/docker-bytefield/README.adoc` and `documentation/images/README-include.adoc`.
 
 == Consequences
 
 * EDN is the editable source; SVG is the rendered documentation asset.
 * These diagrams document observed packet layouts. They are not runtime configuration or a claim that every documented opcode is exposed by the Rust service.
-* The Pi does not need Node.js or Bytefield-SVG.
+* The Pi does not need a diagram renderer.

@@ -5,13 +5,31 @@ on:
     branches: [main]
     paths:
       - 'docker/docker-wainlux-rs/**'
+      - 'docker/docker-rust-toolchain/**'
+      - 'docker/docker-trivy/**'
       - 'cli/**'
+      - 'scripts/build_laser.sh'
+      - 'scripts/build_local_container.sh'
+      - 'scripts/update_container_image.sh'
+      - 'scripts/update_container_images.sh'
+      - 'scripts/lib/container.sh'
+      - 'docker/IMAGES.map'
+      - 'docker/IMAGES.adoc'
       - '.github/workflows/build-container-armv6.yml'
   pull_request:
     branches: [main]
     paths:
       - 'docker/docker-wainlux-rs/**'
+      - 'docker/docker-rust-toolchain/**'
+      - 'docker/docker-trivy/**'
       - 'cli/**'
+      - 'scripts/build_laser.sh'
+      - 'scripts/build_local_container.sh'
+      - 'scripts/update_container_image.sh'
+      - 'scripts/update_container_images.sh'
+      - 'scripts/lib/container.sh'
+      - 'docker/IMAGES.map'
+      - 'docker/IMAGES.adoc'
       - '.github/workflows/build-container-armv6.yml'
   workflow_dispatch:
 
@@ -27,19 +45,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Test card CLI and API examples
-        run: >-
-          docker run --rm -v "$PWD:/repo" -w /repo/cli
-          docker.io/library/rust@sha256:9daf2b244ccc30523e55cafe32edf8465671ba567d0101620e5612ccb76ea1a7
-          cargo test --locked
+      - name: Build local Rust toolchain
+        run: ./scripts/build_local_container.sh rust-toolchain
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-        with:
-          platforms: arm
+      - name: Run Rust tests and build the local ARMv6 image
+        run: ./scripts/build_laser.sh
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Scan and promote ARMv6 candidate
+        run: ./scripts/update_container_image.sh --allow-findings laser-app
 
       - name: Log in to GitHub Container Registry
         if: github.event_name != 'pull_request'
@@ -60,14 +73,13 @@ jobs:
             type=ref,event=branch
             type=ref,event=pr
 
-      - name: Build and push ARMv6 image
-        uses: docker/build-push-action@v6
-        with:
-          context: docker/docker-wainlux-rs
-          file: docker/docker-wainlux-rs/Dockerfile
-          platforms: linux/arm/v6
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Publish the scanned local image
+        if: github.event_name != 'pull_request'
+        env:
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          printf '%s\n' "$IMAGE_TAGS" | while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            docker tag localhost/laser-app:arm "$tag"
+            docker push "$tag"
+          done

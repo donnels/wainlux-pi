@@ -24,6 +24,14 @@ endif::flag-book[]
 
 Docker Compose projects for the laser service and supporting tools live here.
 
+ifdef::single-page[]
+Base image pins and dependency lockfiles are indexed in link:{repo-url}/blob/main/docker/IMAGES.adoc[Pinned Container Images].
+endif::single-page[]
+ifndef::single-page[]
+Base image pins and dependency lockfiles are indexed in link:IMAGES.adoc[Pinned Container Images].
+endif::single-page[]
+Every container definition lives under `docker/`. Explicit candidate updates block HIGH and CRITICAL findings by default; `--allow-findings` records a compact CSV summary and Dockerfile in that image's README before promotion. Image-specific exceptions are described in their README. Trivy needs database access on the first scan; see `docker-trivy/README.adoc` for manual reports.
+
 The Pi runs a prebuilt ARMv6 image. Compose does not build it.
 
 .Start the preloaded Rust service on the Pi
@@ -43,29 +51,27 @@ endif::single-page[]
 
 [WARNING]
 ====
-All tool containers must use **local Dockerfiles** with **pinned base images**. Never use `:latest` tags.
+All tool containers use **local Dockerfiles** with **digest-pinned base images**. Scripts and Compose files use those local images, never a mutable remote tag.
 
-The `:latest` tag creates unacceptable supply chain risk:
-* No version history — if `:latest` breaks, we cannot determine what version was previously working
-* No rollback path — there is no tag to revert to
-* Implicit updates — new versions may be pulled automatically, introducing breaking changes or vulnerabilities
-* Audit difficulty — cannot trace exactly what was used in historical builds
-
-With local Dockerfiles in git:
-* Git is the source of truth — all container definitions are in the repository
-* Versioned by commit — every change to a Dockerfile creates a new, auditable version
-* Rollback via git — `git checkout <commit>` restores the exact container that was used
-* Scan before merge — vulnerability scanning can be part of the CI/CD pipeline
+A digest identifies the exact base image. Lockfiles and checksums pin application dependencies and downloaded tools. The image inventory records these inputs. Candidate images are scanned before promotion; a failed scan leaves the previous local image selected.
 
 See <<adr-029-container-security,ADR-029: Local Container Builds for Supply Chain Security>> for the full rationale.
 ====
 
 == Components
 
+Each image directory has a short README describing its purpose. Files copied into an image live in that directory’s nested `docker/` folder; each description is included here.
+
+include::docker-asciidoctor/README.adoc[leveloffset=+2]
+include::docker-audio-analysis/README.adoc[leveloffset=+2]
 [[api-contract]]
 include::docker-wainlux-rs/README.adoc[leveloffset=+2]
 include::docker-mcp/README.adoc[leveloffset=+2]
 include::docker-bytefield/README.adoc[leveloffset=+2]
+include::docker-ghidra-mcp/README.adoc[leveloffset=+2]
+include::docker-plantuml/README.adoc[leveloffset=+2]
+include::docker-rust-toolchain/README.adoc[leveloffset=+2]
+include::docker-trivy/README.adoc[leveloffset=+2]
 
 ifdef::flag-book[]
 :imagesdir: {imagesdir-saved}

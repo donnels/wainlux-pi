@@ -1,0 +1,9 @@
+record,metric,value
+metadata,image_id,81575698693683f107a54137bd5b0b86a5f0b8db9375e93951e9015db999418a
+metadata,scanned_utc,2026-11-16T23:20:10Z
+count,vulnerability_critical,8
+count,vulnerability_high,372
+count,ignored_critical,0
+count,ignored_high,0
+count,secret_critical,0
+count,secret_high,0

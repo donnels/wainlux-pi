@@ -57,7 +57,7 @@ image::biz-wfl-job.png[Workflow: Card Job Lifecycle,align=center,width=80%]
 === Test analysis timeline
 
 .Test analysis timeline
-image::test-analysis-timeline.svg[Test analysis timeline,align=center,width=80%]
+image::test-analysis-timeline.png[Test analysis timeline,align=center,width=80%]
 [[image-test-audio]]
 === Phone-driven audio test through the Pi UI (implemented upload path)
 
@@ -67,47 +67,47 @@ image::test-audio.png[Phone-driven audio test through the Pi UI (implemented upl
 === Test card guide
 
 .Test card guide
-image::test-card-guide.svg[Test card guide,align=center,width=80%]
+image::test-card-guide.png[Test card guide,align=center,width=80%]
 [[image-test-card-items]]
 === Test card items
 
 .Test card items
-image::test-card-items.svg[Test card items,align=center,width=80%]
+image::test-card-items.png[Test card items,align=center,width=80%]
 [[image-test-card-placement]]
 === Test card placement
 
 .Test card placement
-image::test-card-placement.svg[Test card placement,align=center,width=80%]
+image::test-card-placement.png[Test card placement,align=center,width=80%]
 [[image-test-case-07a-limit-stairs]]
 === Test case 07a limit stairs
 
 .Test case 07a limit stairs
-image::test-case-07a-limit-stairs.svg[Test case 07a limit stairs,align=center,width=80%]
+image::test-case-07a-limit-stairs.png[Test case 07a limit stairs,align=center,width=80%]
 [[image-test-case-07c-seven-squares]]
 === Test case 07c seven squares
 
 .Test case 07c seven squares
-image::test-case-07c-seven-squares.svg[Test case 07c seven squares,align=center,width=80%]
+image::test-case-07c-seven-squares.png[Test case 07c seven squares,align=center,width=80%]
 [[image-test-case-08-blank-rows]]
 === Test case 08 blank rows
 
 .Test case 08 blank rows
-image::test-case-08-blank-rows.svg[Test case 08 blank rows,align=center,width=80%]
+image::test-case-08-blank-rows.png[Test case 08 blank rows,align=center,width=80%]
 [[image-test-case-09-corners]]
 === Test case 09 corners
 
 .Test case 09 corners
-image::test-case-09-corners.svg[Test case 09 corners,align=center,width=80%]
+image::test-case-09-corners.png[Test case 09 corners,align=center,width=80%]
 [[image-test-ladder]]
 === Test ladder
 
 .Test ladder
-image::test-ladder.svg[Test ladder,align=center,width=80%]
+image::test-ladder.png[Test ladder,align=center,width=80%]
 [[image-test-power-sweep]]
 === Test power sweep
 
 .Test power sweep
-image::test-power-sweep.svg[Test power sweep,align=center,width=80%]
+image::test-power-sweep.png[Test power sweep,align=center,width=80%]
 [[image-test-recovery]]
 === Pi-rendered recovery card and manual NFC read-back
 
@@ -134,72 +134,72 @@ image::test-seq-stage.png[One reviewed card stage - preview is not permission to
 === Prot rx 08 error
 
 .Prot rx 08 error
-image::prot-rx-08-error.svg[Prot rx 08 error,align=center,width=80%]
+image::prot-rx-08-error.png[Prot rx 08 error,align=center,width=80%]
 [[image-prot-rx-09-ack]]
 === Prot rx 09 ack
 
 .Prot rx 09 ack
-image::prot-rx-09-ack.svg[Prot rx 09 ack,align=center,width=80%]
+image::prot-rx-09-ack.png[Prot rx 09 ack,align=center,width=80%]
 [[image-prot-rx-heartbeat]]
 === Prot rx heartbeat
 
 .Prot rx heartbeat
-image::prot-rx-heartbeat.svg[Prot rx heartbeat,align=center,width=80%]
+image::prot-rx-heartbeat.png[Prot rx heartbeat,align=center,width=80%]
 [[image-prot-rx-status]]
 === Prot rx status
 
 .Prot rx status
-image::prot-rx-status.svg[Prot rx status,align=center,width=80%]
+image::prot-rx-status.png[Prot rx status,align=center,width=80%]
 [[image-prot-rx-version]]
 === Prot rx version
 
 .Prot rx version
-image::prot-rx-version.svg[Prot rx version,align=center,width=80%]
+image::prot-rx-version.png[Prot rx version,align=center,width=80%]
 [[image-prot-tx-0a-connect]]
 === Prot tx 0a connect
 
 .Prot tx 0a connect
-image::prot-tx-0a-connect.svg[Prot tx 0a connect,align=center,width=80%]
+image::prot-tx-0a-connect.png[Prot tx 0a connect,align=center,width=80%]
 [[image-prot-tx-16-stop]]
 === Prot tx 16 stop
 
 .Prot tx 16 stop
-image::prot-tx-16-stop.svg[Prot tx 16 stop,align=center,width=80%]
+image::prot-tx-16-stop.png[Prot tx 16 stop,align=center,width=80%]
 [[image-prot-tx-17-home]]
 === Prot tx 17 home
 
 .Prot tx 17 home
-image::prot-tx-17-home.svg[Prot tx 17 home,align=center,width=80%]
+image::prot-tx-17-home.png[Prot tx 17 home,align=center,width=80%]
 [[image-prot-tx-20-bounds]]
 === Prot tx 20 bounds
 
 .Prot tx 20 bounds
-image::prot-tx-20-bounds.svg[Prot tx 20 bounds,align=center,width=80%]
+image::prot-tx-20-bounds.png[Prot tx 20 bounds,align=center,width=80%]
 [[image-prot-tx-21-framing]]
 === Prot tx 21 framing
 
 .Prot tx 21 framing
-image::prot-tx-21-framing.svg[Prot tx 21 framing,align=center,width=80%]
+image::prot-tx-21-framing.png[Prot tx 21 framing,align=center,width=80%]
 [[image-prot-tx-22-data]]
 === Prot tx 22 data
 
 .Prot tx 22 data
-image::prot-tx-22-data.svg[Prot tx 22 data,align=center,width=80%]
+image::prot-tx-22-data.png[Prot tx 22 data,align=center,width=80%]
 [[image-prot-tx-23-job-header]]
 === Prot tx 23 job header
 
 .Prot tx 23 job header
-image::prot-tx-23-job-header.svg[Prot tx 23 job header,align=center,width=80%]
+image::prot-tx-23-job-header.png[Prot tx 23 job header,align=center,width=80%]
 [[image-prot-tx-24-init]]
 === Prot tx 24 init
 
 .Prot tx 24 init
-image::prot-tx-24-init.svg[Prot tx 24 init,align=center,width=80%]
+image::prot-tx-24-init.png[Prot tx 24 init,align=center,width=80%]
 [[image-prot-tx-ff-version]]
 === Prot tx ff version
 
 .Prot tx ff version
-image::prot-tx-ff-version.svg[Prot tx ff version,align=center,width=80%]
+image::prot-tx-ff-version.png[Prot tx ff version,align=center,width=80%]
 == Hardware
 
 [[image-hw-cyd-28-tft]]
@@ -251,6 +251,16 @@ image::capt-recovery-qr.png[Capt recovery qr,align=center,width=80%]
 image::capt-ui-simulator.png[Capt ui simulator,align=center,width=80%]
 == Documentation
 
+[[image-doc-container-promotion]]
+=== Container candidate build, scan, and promotion
+
+.Container candidate build, scan, and promotion
+image::doc-container-promotion.png[Container candidate build, scan, and promotion,align=center,width=80%]
+[[image-doc-docker-dir-structure]]
+=== Docker file hierarchy
+
+.Docker file hierarchy
+image::doc-docker-dir-structure.png[Docker file hierarchy,align=center,width=80%]
 [[image-doc-hierarchy]]
 === Documentation include hierarchy
 

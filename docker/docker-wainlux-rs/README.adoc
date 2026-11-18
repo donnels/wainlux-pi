@@ -1,167 +1,24 @@
-= Laser Service API
+= Wainlux Rust Service Container
 
-Standalone Pi Zero service. Clients submit content; the operator reviews exact 1-bit rasters and starts each burn separately. `GET /api` serves this contract. The browser and external clients use the same endpoints. OpenAPI 3.1 is at `GET /openapi.yaml`; Swagger UI is at `GET /docs` and enables Try It Out for GET only. License notices are in `app/assets/swagger-ui/`.
+Provides the ARMv6 laser service for the Raspberry Pi Zero W. The HTTP API contract is in `docker/app/api.adoc` and is served at `GET /api`.
 
-== Timing
+ifndef::single-page[]
+== Build and Scan Evidence
 
-Progress percentages are band-local, not full-side/card progress. `GET /api/state` exposes terminal bands in `band_timings` and the run outcome. Each band records `transfer_ms`, `setup_ms`, `wait_ms` and `elapsed_ms`. Sum them for run totals. Values are milliseconds.
+This is the latest compact Trivy summary. Manual scan commands and CSV filters are documented in `docker/docker-trivy/README.adoc`. Any accepted findings, use limits, and expiry are stated in this image README; see ADR-029 for the exception policy.
 
-After 90 seconds without a received byte, completion is assumed, not device-confirmed. The UI labels this separately; the next band event records whether the previous band was assumed complete.
-
-Each review response includes `timing.raster_generation_ms` for composing stage rasters and `timing.preview_encoding_ms` for PNG/SVG preview encoding. The browser reports its own review-request round trip; the CLI prints its client round trip separately. These boundaries overlap and must not be added as if they were disjoint server stages. Each run outcome includes `elapsed_ms`; its band measurements split K6 transfer, protocol setup and completion feedback wait. The Inspection panel shows those components and the residual outside bands. For audio upload, the response includes Pi receive/prepare/total, analyzer persistence/process/report-read/total and nested analyzer sub-phases. The browser separately reports its upload/analysis response and report-download time. Analyzer sub-phases are inside the analyzer process duration; do not sum overlapping measurements.
-
-`GET /examples/audio-analysis` serves one self-contained report generated from a real recorded 2 mm frame test. It is an interpretation example, not a benchmark, statistical baseline or proof that audible activity is machine motion. Its embedded sample is loaded only when the user expands the example in the UI.
-
-When `DEBUG=true`, each Real attempt streams its trace to a per-attempt file. The run outcome stores a compact trace summary. Use the bounded head/tail API or MCP tools to read events. The default protocol trace includes RX bytes, command boundaries, non-raster TX bytes, ACK/status/error events, job spans and timing. Out-of-band STOP and direct-write paths are not included. In-memory fallback capture remains bounded at 1,024 RX bytes and 2,048 events; the service path streams to disk up to `RUN_TRACE_MAX_BYTES` and marks a capped trace incomplete. Raster bytes are omitted unless the operator opts in before that run.
-
-Audio reports use a shared clock for the signed waveform and separate Laser RX, Host TX, Jobs / bands and Run / sync lanes. The full recording fits at 1x; up to 128x redraws a continuous min/max envelope from 2 ms signed 16-bit bins of the decoded mono 8 kHz signal. At high zoom, minor ruler ticks are 200 ms apart; fractional labels appear where pixel spacing permits. These display intervals are not a claim of sync accuracy. A draggable overview window, its resize edges, horizontal scrolling and keyboard panning replace the timeline-position slider. Amplitude accepts 0.25x through 32x with peak-relative or full-scale reference. Selecting a packet or table row retains its decoded/raw details without seeking; a separate action seeks playback. The red cursor spans every lane and reports its time and difference from the selected event. Template/review/stage and band metadata identify jobs without retaining private card content. Truncation and unavailable historical traces are explicit; missing packets or job boundaries are not reconstructed from sound. A software finish marker remains duration-aligned to the nominal request, not an observation of stopped motion.
-
-When the file trace budget fills, capture stops. Earlier events stay in the file and the summary marks it incomplete. It does not replace earlier events with later ones. This preserves a truthful record for long runs.
-
-== Run Analysis With Optional Audio
-
-`DEBUG` defaults to `true`. In this mode, every Real run streams a protocol trace to `/data/jobs/{attempt_id}/trace.jsonl`; it records received bytes, command boundaries, acknowledgements, status frames, errors and timing. It omits raster `DATA` payloads. The UI offers a per-run opt-in to capture those bytes. The UI asks for confirmation because a raster trace can reveal the burned image or QR data. `DEBUG=false` disables serial tracing and hides the raster option. `RUN_TRACE_MAX_BYTES` defaults to 4 MiB. Reaching the limit stops capture and marks the trace incomplete; it does not discard earlier events. Before a Real run, the service checks free space for the configured trace limit plus 1 MiB.
-
-When an analysis URL and token are configured, every completed run is delivered in the background, including simulator runs. Delivery uses one attempt bundle, not the full audit history. The Pi keeps the latest ten successfully delivered job folders and all pending deliveries. Retries resume from the local run log and delivery state. Device completion and later operator actions do not wait for analyzer delivery.
-
-The audio analyzer accepts `application/json` at `/api/analyze` with one `attempt_id`, its completed `run_log` record, and optional trace data. It persists a timing report without FFmpeg or audio. It reports recorded events and band timings, and marks audio absent. It never infers physical completion. A later recording upload adds audio analysis to the same attempt.
-
-The Analysis tab links reports for all completed runs when the analyzer is available. `POST /api/audio-analyses/{attempt_id}/report` backfills an older run. The analyzer stores run logs, traces, optional recordings and reports under each attempt. It keeps unpinned artifacts within a 1 GiB rolling budget and allows up to 3 GiB of pinned artifacts, within a 4 GiB total cap. Pinning requires confirmation and warns when raster data is present. Set `ANALYSIS_DATA_MAX_BYTES`, `ANALYSIS_ROLLING_MAX_BYTES` or `ANALYSIS_PINNED_MAX_BYTES` in the analyzer container to change these limits.
-
-== Audio Recording Sync
-
-For Real-mode UI runs, the checked-by-default audio cue plays a short three-tone preamble followed by six standard DTMF digits. The six digits are the last six decimal digits of the planned attempt's timestamp ID and are shown in the planned-run panel. Leave the computer's speakers audible to the phone recorder; the cue takes about 2 seconds, followed by a logged 700 ms lead before `/api/run` is requested. The `sync_marker` audit event stores the attempt ID, six-digit recording ID, cue duration, lead and request timestamp. Use the digits in the audio filename or notes to match the recording to the run log. This is a timing marker, not confirmation of laser motion or completion.
-
-A template can set `audio_recording_enabled = true` to show the optional Voice Memos confirmation for Real card stages. The card action now plans first and waits on the planned-run screen; checking recording causes the cue/marker, then the operator explicitly starts the run. After an optional upload succeeds, `/api/log` receives an `audio_analysis` event with the attempt ID, phase timings and same-origin report URL only. The Pi stores run bundles but does not retain uploaded audio or report HTML; analyzer availability does not gate ordinary burns.
-
-The operator UI's Analysis tab shows the latest ten completed runs as a timing breakdown graph and links an uploaded report when available. Audio analysis allows up to 900 seconds of processing; the Pi waits 930 seconds for the analyzer. If analysis times out, the upload returns an error, but the analyzer retains the source recording and matching run log under its attempt directory. Re-uploading from the same attempt QR retries analysis.
-== Routes
-
-This inventory is extracted from the current `app/src/lib.rs` dispatcher. `GET /openapi.yaml` is the machine-readable contract.
-
-[cols="1,2,4",options="header"]
-|===
-| Method | Path | Purpose
-| GET | `/` | Embedded operator UI
-| GET | `/api` | This API guide
-| GET | `/examples/audio-analysis` | Self-contained real timing/audio interpretation example; one run is not a benchmark
-| GET | `/openapi.yaml` | OpenAPI contract
-| GET | `/docs`, `/docs/` | Bundled Swagger UI
-| GET | `/docs/swagger-ui.css`, `/docs/swagger-ui-bundle.js` | Swagger UI assets
-| GET | `/docs/favicon-16x16.png`, `/docs/favicon-32x32.png` | Swagger UI icons
-| GET | `/assets/vsr-logo.png` | Operator UI logo
-| GET | `/api/machine`, `/api/mode`, `/api/materials`, `/api/health` | Machine profile, mode, material settings, and service health
-| GET | `/api/config` | Runtime debug capture setting
-| GET | `/api/jobs/toc?limit=N` | Compact recent job summaries
-| GET | `/api/jobs/{attempt_id}/trace/head?count=N`, `/tail?count=N` | Bounded trace window and capture metadata
-| GET | `/api/log?cursor=N&limit=N` | Paged audit events
-| GET | `/api/audio-analyses/retention` | Analyzer managed, pinned, rolling and oldest-attempt totals
-| GET | `/api/templates`, `/api/assets`, `/api/assets/tiger.png` | Templates and prepared assets
-| GET | `/api/steps` | Supported test-ladder steps
-| GET, DELETE | `/api/state` | Read state; DELETE clears idle RAM state but retains the run log
-| GET | `/api/attempt/preview` | Exact active-stage preview
-| GET | `/api/log`, `/api/pending-verdicts` | Redacted audit events (including timing-only `audio_analysis` events) and outstanding verdicts
-| POST | `/api/jobs/preview`, `/api/tests/preview` | Preview a card job or test pattern; no run
-| GET, POST, DELETE | `/api/jobs/review` | Read, submit, or discard a review
-| POST | `/api/jobs/form` | Edit a template review
-| POST | `/api/mode` | Change real/simulator mode while idle
-| POST | `/api/plan`, `/api/run`, `/api/verdict`, `/api/stop` | Plan, run, judge, or request stop
-| POST | `/api/audio-analyses` | Upload a recording for a completed Real attempt with its matching sync marker; optional analyzer
-| GET, POST | `/api/audio-analyses/{attempt_id}/report` | Read a report or request timing analysis for a completed run
-| GET | `/api/audio-analyses/{attempt_id}/retention` | List stored files, sizes and pin state
-| POST | `/api/audio-analyses/{attempt_id}/pin` | Pin or unpin retained artifacts
-| POST | `/api/audio-analyses/{attempt_id}/delete` | Delete analyzer artifacts after confirmation
-| GET | `/audio-upload/{attempt_id}` | iPhone-friendly Voice Memo file picker for a completed marked Real attempt
-| GET | `/api/audio-analyses/{attempt_id}/upload-qr.svg` | QR code linking to that attempt's phone upload page
-|===
-
-== Submit and Review
-
-Two submission forms are available. Neither opens the serial connection or starts the laser.
-
-* Producer: `POST /api/jobs/review` with a `job` object: `template`, `piece`, `backing`, `placement`, `guide`, `items`, optional `values`.
-* Template form: `POST /api/jobs/form` with `template`, `review_id` (`null` for a new idle review), `piece`, `backing`, `placement`, `guide`, and changed `fields` keyed by template field ID. Field edit policy is enforced.
-
-A template may set `audio_recording_enabled = true` to show the optional Voice Memos confirmation for Real card stages. This checkbox is not a run prerequisite when left unchecked and never requires the analyzer to be available. Checking it makes the UI play and log the attempt-ID cue; after the completed run, upload is offered only if the optional analyzer is reachable. Dedicated audio profiles retain their stricter recording requirements.
-
-Each item names a declared element `id`, `side` (`front` or `back`) and `content`.
-Content kinds are `qr` (`text` payload), `text` (`text`, `font_size_mm`, optional `font`), `wifi` (network fields) or `image` (`asset_id`).
-Positions and dimensions omitted by a producer come from the template. An image asset ID refers to prepared pixels; it is not an arbitrary URL or Pi path.
-
-.Example vCard job with a prepared logo asset
-[source,json]
+.Latest compact Trivy summary
+[source,csv]
 ----
-{
-  "job": {
-    "template": "vcard",
-    "piece": "bamboo-ntag215-light",
-    "backing": "backing-first",
-    "placement": "left",
-    "guide": false,
-    "items": [
-      {"id":"contact-qr","side":"front","content":{"kind":"qr","text":"BEGIN:VCARD\nVERSION:3.0\nFN:Jane Example\nURL:https://example.com/cv\nEND:VCARD"}},
-      {"id":"logo-back","side":"back","content":{"kind":"image","asset_id":"tiger"}}
-    ]
-  }
-}
+include::trivy-report.csv[]
 ----
 
-The response contains `review_id`, `template`, policy-projected `fields`, geometry-only `job`, `layout`, `display`, ordered `stages` and `accepted_stages`.
-Each stage has `name`, `side`, `goal`, resolved `values`, and `burns` with PNG/SVG pixels, pixel dimensions and physical position/size.
-Different sides are separate rasters, never composited together.
-`guide=true` adds an optional guide stage before the front; existing markings can be reused with `guide=false`.
-
-`GET /api/jobs/review` retrieves the current review. The UI discovers it from `GET /api/state` and loads it without a browser-file injection.
-`POST /api/jobs/form` edits and regenerates a review using its current ID. Stale IDs, undeclared fields and forbidden edits are rejected.
-`DELETE /api/jobs/review` explicitly discards an idle review; an active attempt blocks replacement/discard.
-
-== Types
-
-* `wifi-login`: network QR plus independently optional readable labels. Password is QR-only.
-* `vcard`: producer-supplied vCard text or CV URL, optional readable contact label, optional logo back. The producer owns vCard serialization/escaping and contact data; the laser does not query neocv's graph.
-* `github-recovery`: recovery payload QR on the front and login URL QR on the back. Small required-by-default captions identify “GitHub MFA recovery codes” and “GitHub login to use these codes”. Recovery codes are transport data, not printable page text. A second small, optional caption can print the login URL.
-  An optional front checklist adds 16 blank boxes (2 columns x 8 rows) beside the recovery QR for manually marking used codes. It defaults off and does not contain or encode code values. A producer opts in by submitting a `use-checklist` item with `kind: checkboxes`, `count: 16`, `columns: 2`, `box_mm: 3.5`, `gap_mm: 0.8`, and `line_mm: 0.35` at the declared `check-x` / `check-y` position.
-
-The repository's `cli/` card client only submits these same review requests. Its `inputs/wifi.json`, `inputs/github.json`, `inputs/vcard.json`, and `inputs/synthetic-codes.txt` are fictional demonstration inputs, not live credentials. `wainlux-client submit --text-file recovery-qr=FILE` loads codes from a UTF-8 file. The CLI has no PDF, QR, image or font generation; the Pi renders all card content.
-The operator can also paste codes or load a codes-only UTF-8 `.txt` file into the masked recovery field. The browser reads the file locally; clicking Preview submits the payload through the existing review API. Do not use a file that combines codes with unrelated instructions or a password.
-Fields declare optional `file_input` capability through `/api/templates`; only editable multiline fields may enable it. The browser uses that metadata for recovery-code and vCard file inputs, without template-specific form logic. File loading does not start a review or a burn; Review output submits it explicitly.
-The client submits both `recovery-qr` (front) and `login-qr` (back) items. Small front/back purpose captions are on by default and carry no secret data; `include-url-text` is off by default and can add the URL as an additional caption.
-Real recovery formats and line lengths must be previewed; overflow is rejected, not silently shrunk.
-Private payloads remain in RAM, not template files or operational logs.
-
-== Execute One Stage
-
-. Review both sides before starting. Confirm placement.
-. `POST /api/plan` with `review_id`, `stage` (zero-based) and `placement_confirmed` (`true` required for a back stage).
-. Only `POST /api/run` starts the planned stage. Send `attempt_id` equal to the returned plan ID; a mismatch is refused without replacing the plan. The browser sends it on every start. Older clients may omit it; it is not authentication. A run never advances automatically to another user stage.
-. Poll `GET /api/state`. `POST /api/stop` cancels queued driver work and requests stop; the operator confirms physical rest.
-. Record `POST /api/verdict` with `status` (`ok`, `deviation`, or `skipped` for an unperformed plan) and an observation.
-. A later stage requires accepted prior stages. Inspect the front, confirm motion stopped, flip the card and seat it against the same guide before planning the back.
-
-.Plan the reviewed front stage
-[source,json]
+.Image Dockerfile
+[source,dockerfile]
 ----
-{"review_id":"returned-review-id","stage":1,"placement_confirmed":true}
+include::Dockerfile[]
 ----
 
-An edited review clears stage acceptance. Re-running an earlier stage invalidates later acceptance. Simulator/Real mode changes clear acceptance too.
-The K6's temporary completion policy assumes completion after 90 seconds without a response; it does not prove a physical OK.
+endif::single-page[]
 
-== Trust and Lifetime
-
-This is a trusted-LAN service, not a public authenticated API. Producer/operator role separation and session leases remain open.
-Non-revealable fields are omitted from operator source projections, but visible raster/QR pixels can disclose their contents.
-Reviews and acceptance are RAM-only; restart loses them. Do not write payloads into URLs, logs or template defaults.
-
-== Clear Pi and Account State
-
-The operator UI's **Options > Clear session** control calls `DELETE /api/state`. It clears the in-memory review, planned attempt, progress, and pending outcome, drops idle device handles, and refuses while a run is active. The redacted `runs.jsonl` audit log is retained; a clear event is appended. Clearing is not a laser command and does not prove or change physical machine state.
-
-Authentication is not implemented; this remains a trusted-LAN service, so session clearing is not logout. A future sign-in/access boundary must be implemented independently and is not enforced today.
-
-== Tests
-
-Power and audio sweep previews composite the same positioned job rasters used for execution; line length and pixel rounding are not drawn by a separate schematic. Per-job powers and bed placement remain in the goal. Preview pixels do not simulate burn darkness or prove physical placement. Basic test dimensions are checked against reach before allocation, and QR-test goals omit payload text so audit logs do not retain it.
-
-`cargo test --workspace` includes real-HTTP simulator tests for both new types, asset retrieval, front/back separation, stale review handling and manual flip gating.
-`app/tests/ui.cjs` exercises the generic template editor and side controls using synthetic data. Safari/Firefox rendering still needs separate checks.
+<!-- container-scan-evidence -->

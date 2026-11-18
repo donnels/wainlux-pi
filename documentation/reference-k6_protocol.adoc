@@ -59,7 +59,7 @@ A normal machine stop also sends STOP, then FRAMING and HOME. An in-burn stop ma
 == JOB_HEADER (0x23)
 
 .K6 raster JOB_HEADER layout; vector-reserved bytes are zero in the Rust driver
-image::prot-tx-23-job-header.svg[JOB_HEADER packet layout,align="center"]
+image::prot-tx-23-job-header.png[JOB_HEADER packet layout,align="center"]
 
 All multibyte fields are big-endian. The current raster-only builder sets:
 
@@ -88,7 +88,7 @@ The 33-byte data offset, raster-only values and repeat value describe the curren
 == DATA (0x22)
 
 .K6 raster DATA layout
-image::prot-tx-22-data.svg[DATA packet layout,align="center"]
+image::prot-tx-22-data.png[DATA packet layout,align="center"]
 
 * Bytes 0-2: opcode `22` and total packet length as a big-endian `u16`.
 * Bytes 3 through the byte before the end: up to 1900 bytes of packed raster payload.
@@ -99,41 +99,41 @@ The driver drops blank edge rows and splits at long blank runs so that no transm
 == Framing, Stop and Status Diagrams
 
 .Connect
-image::prot-tx-0a-connect.svg[CONNECT packet]
+image::prot-tx-0a-connect.png[CONNECT packet]
 
 .Home
-image::prot-tx-17-home.svg[HOME packet]
+image::prot-tx-17-home.png[HOME packet]
 
 .BOUNDS
-image::prot-tx-20-bounds.svg[BOUNDS packet]
+image::prot-tx-20-bounds.png[BOUNDS packet]
 
 .FRAMING
-image::prot-tx-21-framing.svg[FRAMING packet]
+image::prot-tx-21-framing.png[FRAMING packet]
 
 .STOP
-image::prot-tx-16-stop.svg[STOP packet]
+image::prot-tx-16-stop.png[STOP packet]
 
 .INIT
-image::prot-tx-24-init.svg[INIT packet]
+image::prot-tx-24-init.png[INIT packet]
 
 .ACK and error
-image::prot-rx-09-ack.svg[ACK byte]
+image::prot-rx-09-ack.png[ACK byte]
 .Error response byte
-image::prot-rx-08-error.svg[Error byte]
+image::prot-rx-08-error.png[Error byte]
 
 .Activity and progress frames
-image::prot-rx-heartbeat.svg[Activity frame]
+image::prot-rx-heartbeat.png[Activity frame]
 .Band progress status frame
-image::prot-rx-status.svg[Progress frame]
+image::prot-rx-status.png[Progress frame]
 
 .Version request and response
-image::prot-tx-ff-version.svg[VERSION request]
+image::prot-tx-ff-version.png[VERSION request]
 .VERSION response
-image::prot-rx-version.svg[VERSION response]
+image::prot-rx-version.png[VERSION response]
 
 == Evidence Limits
 
-Packet fixtures and implementation are in `docker/docker-wainlux-rs/k6/src/protocol.rs`; sequencing and response handling are in `k6/src/device.rs`. The K6 packet SVGs are generated from the adjacent EDN sources with `scripts/generate_diagrams.sh`.
+Packet fixtures and implementation are in `docker/docker-wainlux-rs/docker/k6/src/protocol.rs`; sequencing and response handling are in `docker/docker-wainlux-rs/docker/k6/src/device.rs`. The K6 packet SVGs are generated from the adjacent EDN sources with `scripts/generate_diagrams.sh`.
 
 The Rust implementation and tests establish what this driver sends and parses.
 ifdef::single-page[]

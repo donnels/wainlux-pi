@@ -1,7 +1,6 @@
 services:
   audio-analyzer:
-    image: localhost/wainlux-audio-analysis:local
-    build: .
+    image: ${AUDIO_ANALYSIS_IMAGE:-localhost/wainlux-audio-analysis:local}
     entrypoint: ["python3", "/usr/local/bin/audio_api.py"]
     command: ["--listen", "0.0.0.0", "--port", "8090"]
     environment:

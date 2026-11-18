@@ -188,7 +188,7 @@ pub fn serve(cfg: Config) -> Result<SocketAddr, String> {
                         *worker_app.stopper.lock().unwrap_or_else(|error| error.into_inner()) = None;
                     }
                     let (timings, mut receive_trace) = {
-                        let mut state = worker_app.state.lock().unwrap();
+                        let state = worker_app.state.lock().unwrap();
                         (state.band_timings.iter().copied().map(progress_json).collect(), state.receive_trace.clone())
                     };
                     if let Some(writer) = &trace_sink {
@@ -346,7 +346,7 @@ fn handle(app: &Arc<App>, mut req: Request) {
         }
         (Method::Get, "/api") => {
             let content_type = Header::from_bytes("Content-Type", "text/plain; charset=utf-8").unwrap();
-            let _ = req.respond(Response::from_string(include_str!("../../README.adoc")).with_header(content_type));
+            let _ = req.respond(Response::from_string(include_str!("../api.adoc")).with_header(content_type));
             return;
         }
         (Method::Get, "/openapi.yaml") => {
@@ -1520,7 +1520,7 @@ fn short_text(value: &Value, limit: usize) -> Value {
 fn job_toc(app: &App, limit: usize) -> Vec<Value> {
     let entries=read_log(app);
     let verdicts=entries.iter().filter(|entry|entry["event"]=="verdict").map(|entry|(entry["id"].as_str().unwrap_or_default().to_owned(),entry.clone())).collect::<std::collections::HashMap<_,_>>();
-    let mut jobs=entries.iter().filter(|entry|entry["event"]=="ran").map(|entry| {
+    let jobs=entries.iter().filter(|entry|entry["event"]=="ran").map(|entry| {
         let attempt_id=entry["attempt"]["id"].as_str().unwrap_or_default();
         let trace=entry["outcome"]["receive_trace"].clone();
         let delivery:Value=std::fs::read_to_string(format!("{}/{attempt_id}/delivery.json",app.jobs_dir)).ok().and_then(|text|serde_json::from_str(&text).ok()).unwrap_or_else(||json!({"status":"not_configured"}));

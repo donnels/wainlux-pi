@@ -25,5 +25,5 @@ ifdef::single-page[]
 * The canonical API contract is included at <<api-contract>> and served at `GET /api`.
 endif::single-page[]
 ifndef::single-page[]
-* The canonical API contract is the service link:../../docker/docker-wainlux-rs/README.adoc[README], also served at `GET /api`.
+* The canonical API contract is link:../../docker/docker-wainlux-rs/docker/app/api.adoc[the app API document], also served at `GET /api`.
 endif::single-page[]

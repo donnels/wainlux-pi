@@ -1,0 +1,12 @@
+= PyGhidra MCP
+
+Local, loopback-only MCP wrapper for Ghidra analysis. Mount the vendor JAR read-only and keep the project under ignored `backup/`.
+
+[IMPORTANT]
+====
+**Stale as of 2026-11-16.** The pinned local image fails the current scan gate with 49 HIGH OS findings and 5 HIGH Python findings. Do not start it until this is revisited.
+====
+
+// TODO: When Ghidra analysis is needed again, check for a newer Ghidra and PyGhidra MCP release, update the pinned image digest, then rebuild, scan, and verify the MCP before starting it. Check the base distribution and package manager; an OS package upgrade does not update Ghidra itself.
+
+link:https://github.com/clearbluejar/pyghidra-mcp[Upstream project]

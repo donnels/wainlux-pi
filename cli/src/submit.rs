@@ -65,7 +65,7 @@ mod tests {
     #[test]
     fn shipped_examples_and_text_files_create_reviews_without_planning() {
         let client = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let service = client.join("../docker/docker-wainlux-rs");
+        let service = client.join("../docker/docker-wainlux-rs/docker");
         let data = std::env::temp_dir().join(format!("wainlux-client-tests-{}", std::process::id()));
         let addr = app::serve(app::Config {
             listen: "127.0.0.1:0".into(),
@@ -77,6 +77,8 @@ mod tests {
             test_catalog_path: service.join("tests.toml").to_string_lossy().into(),
             audio_analyzer_url: None,
             audio_analyzer_token: None,
+            debug: true,
+            run_trace_max_bytes: 4 * 1024 * 1024,
         }).unwrap();
         let url = format!("http://{addr}");
         for (example, element, filename, field, sides) in [

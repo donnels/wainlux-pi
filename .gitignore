@@ -8,8 +8,10 @@ backup/
 analysis/
 
 # Test renders and scratch
+/docs/
 .render-tmp/
 .tmp/
+/.container-scan-tmp.*/
 .private/
 /example.txt
 /cli/private/

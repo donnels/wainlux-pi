@@ -2,7 +2,7 @@
 # Only one program may hold /dev/ttyUSB0 at a time.
 services:
   laser-app:
-    image: localhost/laser-app:arm
+    image: ${LASER_APP_IMAGE:-localhost/laser-app:arm}
     container_name: laser-app
     # The app has no signal handler; init passes SIGTERM so stop is instant.
     init: true

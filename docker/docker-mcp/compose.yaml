@@ -1,6 +1,6 @@
 services:
   wainlux-k6-preview-mcp:
-    build: .
+    image: ${WAINLUX_MCP_IMAGE:-localhost/wainlux-mcp:local}
     container_name: wainlux-k6-preview-mcp
     environment:
       LASER_API_BASE_URL: ${LASER_API_BASE_URL:-http://127.0.0.1:8081}

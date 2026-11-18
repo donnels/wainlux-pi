@@ -21,9 +21,13 @@ Sean Donnellan triggered and verified the physical tests summarized here. This p
 | Backing board dimensions | Not measured. `backing-first` dimensions are a planning placeholder, not a physical measurement.
 |===
 
+== Pi Camera Feasibility
+
+On 2026-11-11, read-only checks on the Pi Zero W Rev 1.1 running Raspberry Pi OS 13 (kernel `6.18.60+rpt-rpi-v6`) first found camera device nodes and utilities but no enumerated camera. A later check found the OV5647 sensor (`/base/soc/i2c0mux/i2c@1/ov5647@36`) and captured a 2592x1944 JPEG with `rpicam-still`. The image was visually inspected. This confirms still capture only. Video, microphone, sustained capture load, and synchronization with a laser run remain untested. No laser job was started and no software was installed.
+
 === Backing Board Power Sweep
 
-The `backing-first` material note in `docker/docker-wainlux-rs/materials.toml` keeps the starting QR settings with the dated sweep observations. The starting profile remains power 500 / depth 10; the sweep used depth 10 and a 20 mm full-power frame plus descending-power lines.
+The `backing-first` material note in `docker/docker-wainlux-rs/docker/materials.toml` keeps the starting QR settings with the dated sweep observations. The starting profile remains power 500 / depth 10; the sweep used depth 10 and a 20 mm full-power frame plus descending-power lines.
 
 On the X=0 block, Sean reported five visible lines, a faint sixth, a partly visible seventh under magnification, and no visible marks for the last three. The frame overlapped/covered the first line. On the adjacent X=20 block, the first line was visible and the frame appeared high relative to lines matching the first block. Alignment is therefore unresolved; do not infer a calibrated power threshold from these blocks.
 
@@ -36,7 +40,7 @@ The square-based material/depth test remains pending. Keep the existing QR basel
 Sean Donnellan triggered the real-device runs and supplied the observations/verdicts below. Software status and elapsed time are reported separately from the physical observation.
 
 .Historical test ladder, climbed from rung 0 at the bottom to rung 12 at the top
-image::test-ladder.svg[Rust/K6 hardware test ladder, 0 through 12]
+image::test-ladder.png[Rust/K6 hardware test ladder, 0 through 12]
 
 [cols="1,2,3",options="header"]
 |===
@@ -58,16 +62,16 @@ image::test-ladder.svg[Rust/K6 hardware test ladder, 0 through 12]
 Rung 6 was repeated at higher values, first adjusting the slope and then fine-tuning it, and was marked OK at the time. The later 9b comparison did not agree with its apparent limit: both 77.45 mm strips deviated while the 75 mm gap and continuous strips were OK. No cause for the discrepancy is established. The 9b result is the accepted basis for the 75 mm normal Y profile; it does not measure the hard stop.
 
 .Limit stairs: requested calibration pattern, not a measured result
-image::test-case-07a-limit-stairs.svg[Limit stairs pattern]
+image::test-case-07a-limit-stairs.png[Limit stairs pattern]
 
 .Seven-square calibration pattern: 77.45 mm was provisional and later superseded
-image::test-case-07c-seven-squares.svg[Limit square pattern]
+image::test-case-07c-seven-squares.png[Limit square pattern]
 
 .Blank-row test pattern
-image::test-case-08-blank-rows.svg[Blank-row pattern]
+image::test-case-08-blank-rows.png[Blank-row pattern]
 
 .Corner test pattern at the former 77.45 mm height
-image::test-case-09-corners.svg[Corner pattern]
+image::test-case-09-corners.png[Corner pattern]
 
 == 9b: Height and Gap Comparison
 
@@ -85,14 +89,14 @@ A/B/C were one joint session on the stock base. D was a later follow-up on the s
 Sean's joint inspection found the gap and continuous pair matched at each height. The 77.45 mm pair deviated at the bottom; the 75 mm pair was OK. Decision: 75 mm normal Y working bound. This did not measure the mechanical hard stop or prove every multi-band placement.
 
 .9b four-strip comparison geometry; D was a later follow-up
-image::../../docker/docker-wainlux-rs/app/assets/test-patterns/vertical-comparison.svg[Four-strip comparison geometry; D was run as a later follow-up]
+image::../../docker/docker-wainlux-rs/docker/app/assets/test-patterns/vertical-comparison.svg[Four-strip comparison geometry; D was run as a later follow-up]
 
 == Card Result
 
 Sean reported that the first card run had a good guide, readable QR and working NFC. Printed text was too small. The subsequent larger bold text defaults have not been physically accepted in a physical run; verify them on a new supervised card before treating them as measured results.
 
 .Generic open-right card guide used on bare backing
-image::test-card-guide.svg[Generic open-right card guide]
+image::test-card-guide.png[Generic open-right card guide]
 
 == Historical Cork and PLA Close-ups
 

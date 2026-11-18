@@ -2,8 +2,6 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-IMAGE="localhost/wainlux-audio-analysis:local"
-
 source "$SCRIPT_DIR/lib/container.sh"
 
 if [[ "${1:-}" == "--help" || $# -lt 1 ]]; then
@@ -33,9 +31,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 container_engine
-if ! container_host image inspect "$IMAGE" >/dev/null 2>&1; then
-  container_host build -t "$IMAGE" "$SCRIPT_DIR/../docker/docker-audio-analysis"
-fi
+IMAGE="$(container_require_image audio-analysis)"
 
 CONTAINER_ARGS=(run --rm
   --mount "type=bind,source=$RECORDING_DIR,target=/recording,readonly"

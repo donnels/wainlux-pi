@@ -58,6 +58,7 @@ write_category() {
 
     while IFS= read -r filename; do
         [[ -n "$filename" ]] || continue
+        [[ "$filename" == *.svg && -f "$IMAGES_DIR/${filename%.svg}.png" ]] && continue
         base="${filename%.*}"
         prefix="${base%%-*}"
         [[ "$base" == README* || "$base" == style-* ]] && continue

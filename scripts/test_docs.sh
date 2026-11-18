@@ -15,13 +15,15 @@ if ! container_engine; then
   exit 1
 fi
 
+DOCS_IMAGE="$(container_require_image asciidoctor)"
+
 # Asciidoctor wrapper using container
 asciidoctor() {
   container_host run --rm \
     -v "${PROJECT_ROOT}:${PROJECT_ROOT}" \
     -w "${PROJECT_ROOT}" \
-    asciidoctor/docker-asciidoctor \
-    asciidoctor --failure-level=WARN "$@"
+    --entrypoint asciidoctor "$DOCS_IMAGE" \
+    --failure-level=WARN "$@"
 }
 
 echo "=== AsciiDoc Consistency Test ==="

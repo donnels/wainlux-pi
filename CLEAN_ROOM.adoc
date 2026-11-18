@@ -25,6 +25,7 @@ The implementation and protocol documents are based on observed bytes and hardwa
 * The analysis Copilot was instructed to return protocol behavior only. That protocol description was the only Ghidra-derived material passed to the implementation Copilot session; no source, screenshots or analysis artifacts were passed along.
 * The implementation Copilot had no Ghidra access and did not see the binary or source. It used the protocol description, packet captures and Sean Donnellan's hardware observations to write the Rust service independently.
 * This was a tool-mediated separation between analysis and implementation roles, not a formal two-human or two-team clean-room program. Describe it as performed; do not imply a stronger process.
+* The tracked PyGhidra Compose setup binds MCP to loopback, mounts `backup/Laser.jar` read-only, and stores project data under ignored `backup/ghidra-project`.
 
 == Verification
 

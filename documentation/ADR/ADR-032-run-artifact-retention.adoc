@@ -16,12 +16,12 @@ The latest 33-minute run lasted about 2,018 seconds. Its trace reached both curr
 
 === Capture Levels
 
-The `DEBUG` container variable defaults to `true`. When false, serial tracing is off and the UI hides trace controls. Provide two capture levels while debug is enabled:
+Enable serial tracing by default. Disabling debug tracing turns off serial logging and hides trace controls. Provide two capture levels while debug is enabled:
 
 * **Protocol trace (default):** stream every received byte, command boundaries, non-raster command bytes, timestamps, acknowledgements, status frames, and errors to a per-attempt artifact. Do not store `DATA` raster payloads.
 * **Raster trace (explicit opt-in):** also store the bytes sent in `DATA` payloads. Require confirmation before the job starts. These bytes can reconstruct the burned image, including QR data.
 
-The trace is append-only during a run. Finalize it with completion state, byte/event counts, and a completeness flag. A trace limit must produce an explicit incomplete result; it must never silently discard old events and call the trace complete. Make the per-run limit configurable through the laser service container environment. Use 4 MiB as the initial limit, subject to measurement against captured jobs.
+The trace is append-only during a run. Finalize it with completion state, byte/event counts, and a completeness flag. A trace limit must produce an explicit incomplete result; it must never silently discard old events and call the trace complete. Use 4 MiB as the initial per-run cap, subject to measurement against more captured jobs.
 
 === Pi Rolling Store and Delivery Queue
 
@@ -35,7 +35,7 @@ Use a size-based policy. The analyzer data directory has a 4 GiB managed-artifac
 
 When new unpinned data arrives, evict the oldest unpinned attempt artifacts until the rolling set fits. Never evict pinned data automatically. A pin operation that would exceed the pinned ceiling must fail clearly. If pinned data and in-progress uploads leave no room for a new artifact, return an explicit capacity error; the Pi retains and retries the pending bundle.
 
-Expose the limits through analyzer container environment variables. Serialize analysis writes and count output reservations before writing reports. Clean stale reservations at container startup. Store each attempt in its own directory and make pin state durable across restarts.
+Keep pin state durable across restarts.
 
 Pinning prompts for confirmation. If the attempt used raster capture, warn that the retained bytes can reveal the card image or QR data. Show which artifacts are present before confirming. Unpinning makes an artifact eligible for oldest-first eviction; it does not delete it immediately.
 
@@ -85,17 +85,6 @@ Bound the analyzer directory by bytes and evict the oldest unpinned attempts fir
 * The Pi may refuse a new run when its pending spool cannot guarantee trace storage.
 * A configured per-run trace limit cannot guarantee complete capture for arbitrarily long or high-volume jobs; reaching it must be reported as incomplete.
 
-== Operations
+== Related Documentation
 
-Operators should be able to inspect managed bytes, pinned bytes, rolling bytes, pending deliveries, and oldest retained attempt from the API or maintenance command. Do not require manual inspection inside the container overlay. Provide explicit unpin and delete actions with attempt IDs.
-
-The Pi exposes compact job summaries and bounded trace head/tail routes. Its retry worker keeps undelivered bundles. The analyzer exposes total and per-attempt retention metadata, pin/unpin, and delete routes. Pin and delete prompts list stored files; they warn when raster payload was captured.
-
-Suggested initial environment variables:
-
-* `RUN_TRACE_MAX_BYTES=4194304` on the laser service container.
-* `ANALYSIS_DATA_MAX_BYTES=4294967296` on the analyzer container.
-* `ANALYSIS_ROLLING_MAX_BYTES=1073741824` on the analyzer container.
-* `ANALYSIS_PINNED_MAX_BYTES=3221225472` on the analyzer container.
-
-The analyzer request-size limit is 64 MiB plus a 6 MiB artifact allowance and multipart overhead. The 56 MiB audio report and 16 MiB timeline report allowances count against retention before generation.
+The API contract, environment variables, upload limits, and operator controls are documented in `docker/docker-wainlux-rs/docker/app/api.adoc`.

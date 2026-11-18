@@ -1,0 +1,46 @@
+@startwbs
+!include style-plantuml.puml
+title Docker file hierarchy
+
+<style>
+wbsDiagram {
+  .repo {
+    BackgroundColor #fff/lawngreen
+  }
+  .in-scope-dir {
+    BackgroundColor #fff/blue
+  }
+  .in-scope-file {
+    BackgroundColor #fff/blue
+  }
+  .oos-dir {
+    BackgroundColor #fff/aaf
+  }
+  .oos-file {
+    BackgroundColor #fff/aaf
+  }
+}
+</style>
+
++ Repository <<repo>>
+++ docker/ <<in-scope-dir>>
++++ README.adoc <<in-scope-file>>
++++ docker-xxx/ <<in-scope-dir>>
+++++ README.adoc <<in-scope-file>>
+++++ Dockerfile <<in-scope-file>>
+++++ docker/ <<in-scope-dir>>
++++++ file xxx <<in-scope-file>>
++++++ file yyy <<in-scope-file>>
+++ documentation/ <<oos-dir>>
++++ ADR/ <<oos-dir>>
+++++ ADR-029-container-security.adoc <<oos-file>>
+++ scripts/ <<oos-dir>>
+
+legend
+    Each Docker image definition:
+    * has a readme
+    ** is included in a higher level readme
+    * separates the Dockerfile from the files that are copied to the image
+end legend
+
+@endwbs

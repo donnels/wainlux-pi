@@ -2,6 +2,8 @@
 
 This is a networked Streamable HTTP MCP server for the current Rust API. It runs separately from the laser service on a trusted operator host and never owns the serial port. The current Deck-local instance calls the Pi API over Wi-Fi and binds MCP to Deck loopback for VS Code.
 
+Temporary HIGH findings are accepted for this trusted-network use only, through 2027-02-14 or the next image update. The service has no client authentication.
+
 == Scope
 
 Tools exposed:
@@ -22,12 +24,13 @@ For log review, start with `get_job_toc` and use the returned attempt ID with th
 
 == Run
 
-Build and run the MCP container on a trusted host. When running on the Deck, point it at the Pi API and bind the published port to loopback; a Pi-hosted deployment can use the Pi-local API address instead:
+Build the MCP and analyzer images with `scripts/build_support_containers.sh`. For explicit candidate scanning and promotion, use `scripts/update_container_images.sh mcp audio-analysis`. Then start the MCP container on a trusted host. When running on the Deck, point it at the Pi API and bind the published port to loopback; a Pi-hosted deployment can use the Pi-local API address instead:
 
 .Build and start the network MCP service
 [source,bash]
 ----
-docker compose -f docker/docker-mcp/compose.yaml up -d --build
+./scripts/build_support_containers.sh
+docker compose -f docker/docker-mcp/compose.yaml up -d
 ----
 
 For a Deck-hosted service, set `LASER_API_BASE_URL=http://PI-HOST:8081` and `MCP_BIND_ADDRESS=127.0.0.1` in the Compose environment. The workspace's `.vscode/mcp.json` connects to `http://127.0.0.1:8082/mcp`.
@@ -38,4 +41,25 @@ After a successful optional audio upload, the Rust API appends an `audio_analysi
 
 == API
 
-The canonical API guide is `docker/docker-wainlux-rs/README.adoc`, served at `GET /api`. The OpenAPI 3.1 spec is served at `GET /openapi.yaml`; a Swagger UI can load that URL.
+The canonical API guide is `docker/docker-wainlux-rs/docker/app/api.adoc`, served at `GET /api`. The OpenAPI 3.1 spec is served at `GET /openapi.yaml`; a Swagger UI can load that URL.
+
+ifndef::single-page[]
+== Build and Scan Evidence
+
+This is the latest compact Trivy summary. Manual scan commands and CSV filters are documented in `docker/docker-trivy/README.adoc`. Any accepted findings, use limits, and expiry are stated in this image README; see ADR-029 for the exception policy.
+
+.Latest compact Trivy summary
+[source,csv]
+----
+include::trivy-report.csv[]
+----
+
+.Image Dockerfile
+[source,dockerfile]
+----
+include::Dockerfile[]
+----
+
+endif::single-page[]
+
+<!-- container-scan-evidence -->

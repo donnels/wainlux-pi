@@ -1,0 +1,32 @@
+@startuml
+!include style-plantuml.puml
+title Container candidate build, scan, and promotion
+
+start
+:Read the selected local tag from docker/IMAGES.map;
+:Select pinned upstream digest and locked inputs;
+:Build candidate image locally;
+:Tag candidate with unique candidate ID;
+:Record candidate image ID and source digest;
+:Scan that exact image ID;
+if (Pass, or approved expiring exception?) then (yes)
+  :Add immutable sha-<image-id> tag;
+  if (A selected image exists?) then (yes)
+    :Keep it under retained-<image-id>;
+  endif
+  :Point the mapped local tag at the candidate;
+  :Task scripts and Compose use that local tag;
+  :Run the workflow;
+  if (Operational check succeeds?) then (yes)
+    :Keep the previous image for rollback;
+  else (no)
+    :Restore the previous image with rollback_container_image.sh;
+  endif
+else (no)
+  :Do not promote candidate;
+  :Leave the selected local tag unchanged;
+  :Review findings or update pinned inputs;
+  :Build a new candidate and scan it;
+endif
+stop
+@enduml

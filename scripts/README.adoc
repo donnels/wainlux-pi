@@ -29,9 +29,15 @@ Run these commands from the repository root:
 | Command | Purpose
 | `./scripts/build_laser.sh` | Test the CLI examples and Rust service workspace, then build the ARMv6 image. Does not deploy.
 | `./scripts/deploy_laser.sh --target USER@PI-HOST --confirm` | Transfer the image and recreate an idle Pi service. Never starts a laser job.
+| `./scripts/update_container_image.sh [--rescan] [--allow-findings] IMAGE-NAME` | Explicit image maintenance: build, scan, then promote. `--allow-findings` records a compact CSV summary and the Dockerfile in the image README before permitting findings. Use `scripts/trivy-findings.jq` for package-level CSV details. See `docker/IMAGES.map`.
+| `./scripts/update_container_images.sh [--rescan] [--allow-findings] [IMAGE-NAME ...]` | Update selected images; default batch skips Ghidra. Findings fail unless the explicit override is supplied.
+| `./scripts/rollback_container_image.sh IMAGE-NAME LOCAL-VERSION-TAG` | Select a retained local image version; the replaced image is retained too.
+| `./scripts/build_support_containers.sh` | Build local MCP and audio-analysis images; no scan or promotion.
+| `./scripts/build_local_container.sh IMAGE-NAME` | Build one mapped image directly to its selected local tag; no scan, version tag, or deployment.
+| `./scripts/build_ghidra_mcp.sh` | Update the Ghidra candidate separately; a failed scan leaves the selected image intact.
 | `./scripts/analyze_laser_audio.sh RECORDING.m4a` | Analyze DTMF and candidate audio activity in a container. No laser control.
-| `./scripts/test_docs.sh` | Check AsciiDoc rendering, links, captions and PlantUML attribution.
-| `./scripts/generate_diagrams.sh` | Regenerate protocol SVGs from the EDN sources.
+| `./scripts/test_docs.sh` | Check AsciiDoc rendering, links, captions and PlantUML attribution using the selected local Asciidoctor image.
+| `./scripts/generate_diagrams.sh` | Regenerate SVG/PNG diagrams and the image catalog from checked-in sources.
 |===
 
 ifdef::single-page[]
@@ -48,7 +54,7 @@ ifndef::single-page[]
 Flatpak host command details: link:../documentation/includes/include-steamdeck-flatpack-warning.adoc[Steam Deck notes].
 endif::single-page[]
 
-The build command does not transfer or deploy the image. Deployment requires an explicit target and confirmation. Audio analysis reports candidate sound activity; it does not prove laser motion or physical rest.
+Task scripts use selected local tags and do not scan or version-tag images. `build_local_container.sh` builds directly to a selected tag. Image maintenance uses a separate candidate path; it scans an image ID, preserves the previous version, and promotes only on success unless `--allow-findings` is explicitly supplied. Failed candidates stay tagged for review. Deployment requires an explicit target and confirmation.
 
 ifdef::flag-book[]
 :imagesdir: {imagesdir-saved}

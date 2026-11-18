@@ -1,0 +1,8 @@
+{
+  "name": "wainlux-bytefield-renderer",
+  "private": true,
+  "version": "1.0.0",
+  "dependencies": {
+    "bytefield-svg": "1.12.0"
+  }
+}

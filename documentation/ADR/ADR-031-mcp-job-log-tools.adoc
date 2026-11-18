@@ -37,29 +37,4 @@ These tools inspect recorded data only. They do not run jobs, contact the laser,
 * Trace inspection is limited by the Rust service's existing receive-trace cap and event-retention policy.
 * The completion classification is derived from the recorded outcome text; it is not a new protocol interpretation.
 
-== Use
-
-1. Call `get_job_toc` to identify the latest attempt and check whether its trace is truncated.
-2. Call `get_job_trace_head` to inspect setup, acknowledgements, transfer boundaries, and the start of status reporting.
-3. Call `get_job_trace_tail` to inspect final status frames, trailing bytes, and timeout or completion events.
-4. Compare selected head/tail windows across attempts. Treat raw patterns as candidates until repeated runs and controls distinguish them from padding, retry traffic, or transport artifacts.
-
-== Next Steps: Test the End-Marker Hypothesis
-
-The hypothesis is that a received `FF FF FF FF` burst indicates job completion. The current evidence is suggestive but inconclusive: it appears after repeated 99% status frames and before a 90-second quiet timeout, while the trace labels each byte separately.
-
-Initial comparison through the new tools found the exact four-byte burst at the end of three completed runs that had reported 99%: attempt IDs `1794590848254853196-square`, `1794765656472756642-guide`, and `1794766257940146493-content`. A canceled run, `1794765487095767266-guide`, reported repeated `FF FF 00 00` frames and ended with a receive error; its retained tail did not contain the four-byte burst. This correlation supports testing the candidate, but does not prove its meaning. The successful traces still terminate through `silence_assumed`, not a decoded completion event, and two of the three traces are truncated.
-
-Perform these tests with a harmless raster on safe sacrificial material, under direct operator supervision, and with the operator UI available to verify physical rest:
-
-. Capture the full serial receive stream for several jobs with different raster sizes and durations. Record byte timestamps, job boundaries, progress frames, and physical stop time.
-. Check whether the four consecutive `FF` bytes appear at each job's end. Measure the delay from the last progress frame to the burst and from the burst to physical rest.
-. Run a job that reaches 99% but continues moving for a known interval. Check whether the same burst appears before motion stops.
-. Capture idle periods before and after jobs. Check whether four `FF` bytes occur without an active job.
-. Compare successful jobs, canceled jobs, and jobs that fail during transfer. Do not treat a pattern seen only in one outcome as a general completion marker.
-. Repeat at least three times for each relevant condition. Verify raw byte order and timing independently of the current frame decoder.
-. Only after the pattern is repeatable, implement a narrowly scoped candidate parser and test it against captured traces plus false-positive controls. Keep physical-rest confirmation until the signal has been validated.
-
-== Future Work
-
-If the Rust service's bounded trace cannot retain complete head and tail windows across larger jobs, consider explicit ring-buffer head/tail retention or a separate diagnostic capture path. Do not increase log payloads without a bounded response design.
+MCP tool usage is documented in `docker/docker-mcp/README.adoc`. The end-marker evidence and test plan are maintained in `documentation/doing-debugging.adoc`.

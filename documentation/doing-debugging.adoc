@@ -60,6 +60,23 @@ The current upload report includes the recording for playback, its decoded ID wh
 The M4A creation-time tag differed from the API marker wall clock by about 2 h 40 min even though the audio DTMF ID matched. Use the ID for association; do not treat file metadata as a physical timing reference. The analyzer uses FFmpeg 5.1.9 in its pinned container and Python standard-library Goertzel analysis for the sync ID; no audio packages are installed on the Deck.
 
 The current detector still waits 90 seconds after the final received byte. The run log, measured timings and recording playback do not prove exact physical stop.
+
+== Candidate FF End Marker
+
+`FF FF FF FF` is a candidate end marker, not a decoded completion event. It appeared at the end of three completed traces that reported 99%: `1794590848254853196-square`, `1794765656472756642-guide`, and `1794766257940146493-content`. A canceled run, `1794765487095767266-guide`, ended with a receive error and did not have the four-byte burst in its retained tail. Two successful traces were truncated. The runs still ended through the 90-second `silence_assumed` rule. This evidence does not establish marker meaning.
+
+Use `get_job_toc` to find attempts, then inspect bounded `get_job_trace_head` or `get_job_trace_tail` windows. Check the truncation flag before drawing conclusions. The MCP tool sequence and limits are in `docker/docker-mcp/README.adoc`.
+
+Test with harmless rasters on sacrificial material, under direct supervision, with the operator UI available to verify physical rest:
+
+. Capture complete receive streams for jobs with different raster sizes and durations. Record byte timestamps, job boundaries, progress frames, and physical stop time.
+. Check whether four consecutive `FF` bytes occur at job end. Measure the gaps from last progress to burst and burst to physical rest.
+. Run a job that reaches 99% and then continues moving for a known interval. Check whether the burst appears before motion stops.
+. Capture idle periods before and after jobs. Check whether four `FF` bytes occur without an active job.
+. Compare successful, canceled, and transfer-failed jobs. Repeat each relevant condition at least three times. Verify byte order and timing independently of the current decoder.
+. Keep physical-rest confirmation. Add no parser or automatic progression until the signal repeats and false-positive controls pass.
+
+If trace limits prevent complete windows, evaluate bounded head/tail retention or a separate diagnostic capture path. Do not increase response payloads without a size bound.
 ifdef::single-page[]
 See <<adr-027-audio-end-detection,ADR-027>> and <<fr-017-end-detection,FR-017>> for the evidence and decision gate.
 endif::single-page[]

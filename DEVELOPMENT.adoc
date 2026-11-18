@@ -19,7 +19,8 @@ The Dockerfile at `docker/docker-wainlux-rs/Dockerfile` is a multi-stage build o
 ----
 FROM --platform=$BUILDPLATFORM ghcr.io/rust-cross/rust-musl-cross@sha256:90fc4876d17c21346e55dfd4a344924b72c3bb38380749647461cd9595174789 AS build
 WORKDIR /w
-COPY . .
+COPY docker/ ./docker/
+WORKDIR /w/docker
 RUN RUSTFLAGS="-C target-cpu=arm1176jzf-s" \
     cargo build --release --locked -p app --target arm-unknown-linux-musleabihf
 ----
@@ -35,10 +36,10 @@ RUN RUSTFLAGS="-C target-cpu=arm1176jzf-s" \
 [source,dockerfile]
 ----
 FROM docker.io/library/alpine@sha256:bc21487101ae47172509130ee1092cc273a831968d64b617776d1f69c81e42ab
-COPY --from=build /w/target/arm-unknown-linux-musleabihf/release/laser-app /usr/local/bin/laser-app
-COPY materials.toml /etc/laser/materials.toml
-COPY tests.toml /etc/laser/tests.toml
-COPY use-cases /etc/laser/use-cases
+COPY --from=build /w/docker/target/arm-unknown-linux-musleabihf/release/laser-app /usr/local/bin/laser-app
+COPY docker/materials.toml /etc/laser/materials.toml
+COPY docker/tests.toml /etc/laser/tests.toml
+COPY docker/use-cases /etc/laser/use-cases
 ----
 
 *Why this matters:*
@@ -63,12 +64,23 @@ This script:
 . Tags the result as `localhost/laser-app:arm`
 . Automatically uses Flatpak-aware host commands (`flatpak-spawn --host` or `host-spawn`) when running in a Flatpak
 
+On a fresh engine, build the Rust toolchain with `./scripts/build_local_container.sh rust-toolchain`. To scan and promote an image update, run `./scripts/update_container_image.sh NAME`; ordinary task scripts use the selected local tag and do not rescan it.
+
 == Dev Workflow
 
 . Code on workstation (Steam Deck, laptop)
 . Test locally (simulator mode requires no K6 hardware)
 . Build: `./scripts/build_laser.sh`
 . Deploy: `./scripts/deploy_laser.sh --target sean@piz-k6.fritz.box --confirm`
+
+Deployment keeps the Pi's previous image under `localhost/laser-app:retained-sha-<image-id>`. To roll back, first select the same retained image locally, then deploy it through the normal idle-state checks:
+
+.Rollback commands
+[source,bash]
+----
+./scripts/rollback_container_image.sh laser-app localhost/laser-app:retained-sha-<image-id>
+./scripts/deploy_laser.sh --target USER@PI-HOST --confirm
+----
 
 == Local Testing (No Pi Required)
 
@@ -101,12 +113,12 @@ When running VS Code or another IDE in Flatpak:
 == See Also
 
 ifndef::single-page[]
-* link:docker/docker-wainlux-rs/README.adoc[Service API and operator workflow]
+* link:docker/docker-wainlux-rs/docker/app/api.adoc[Service API and operator workflow]
 * link:scripts/README.adoc[Repository scripts]
 * link:documentation/ADR/ADR-022-build-packaging.adoc[ARM Packaging Decision Record]
 endif::single-page[]
 ifdef::single-page[]
-* Service API and operator workflow (`docker/docker-wainlux-rs/README.adoc`)
+* Service API and operator workflow (`docker/docker-wainlux-rs/docker/app/api.adoc`)
 * Repository scripts (`scripts/README.adoc`)
 * ARM Packaging Decision Record (`documentation/ADR/ADR-022-build-packaging.adoc`)
 endif::single-page[]

@@ -3,13 +3,14 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-SERVICE_DIR="$REPO_ROOT/docker/docker-wainlux-rs"
-IMAGE="localhost/laser-app:arm"
-RUST_IMAGE="docker.io/library/rust@sha256:9daf2b244ccc30523e55cafe32edf8465671ba567d0101620e5612ccb76ea1a7"
+IMAGE=""
+RUST_IMAGE=""
 CARGO_CACHE="wainlux-pi-cargo-registry"
 CARGO_TARGET="wainlux-pi-cargo-target"
 
 source "$SCRIPT_DIR/lib/container.sh"
+IMAGE="$(container_image_ref laser-app)"
+RUST_IMAGE="$(container_image_ref rust-toolchain)"
 
 if [[ "${1:-}" == "--help" ]]; then
   printf 'Usage: %s\n\nRuns the locked CLI and Rust service tests, then builds %s for linux/arm/v6.\nThe image stays in the local container engine; nothing is deployed to the Pi.\nSet CONTAINER_ENGINE=docker or podman to override automatic detection.\n' "${BASH_SOURCE[0]##*/}" "$IMAGE"
@@ -25,8 +26,12 @@ if ! container_engine; then
   exit 1
 fi
 
+RUST_IMAGE="$(container_require_image rust-toolchain)"
+IMAGE="$(container_image_ref laser-app)"
+
 echo "Using $CONTAINER_ENGINE_SELECTED on the host."
-for manifest in cli/Cargo.toml docker/docker-wainlux-rs/Cargo.toml; do
+echo "Using selected local Rust toolchain image $RUST_IMAGE."
+for manifest in cli/Cargo.toml docker/docker-wainlux-rs/docker/Cargo.toml; do
   echo "Testing $manifest in $RUST_IMAGE..."
   container_host run --rm \
     -v "$REPO_ROOT:/repo" \
@@ -38,9 +43,6 @@ for manifest in cli/Cargo.toml docker/docker-wainlux-rs/Cargo.toml; do
 done
 
 echo "Building $IMAGE for linux/arm/v6..."
-container_host build \
-  --platform linux/arm/v6 \
-  --tag "$IMAGE" \
-  "$SERVICE_DIR"
+container_build_local laser-app
 
 echo "Built $IMAGE with $CONTAINER_ENGINE_SELECTED. No image transfer or Pi deployment was performed."

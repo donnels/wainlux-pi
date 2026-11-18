@@ -2,11 +2,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-IMAGE="localhost/laser-app:arm"
+IMAGE=""
 TARGET="${LASER_SSH_TARGET:-}"
 CONFIRM=false
 
 source "$SCRIPT_DIR/lib/container.sh"
+IMAGE="$(container_image_ref laser-app)"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -36,6 +37,7 @@ if [[ "$CONFIRM" != true ]]; then
   exit 2
 fi
 container_engine || { echo "Start Docker or Podman on the host before deploying." >&2; exit 1; }
+IMAGE="$(container_require_image laser-app)"
 
 LOCAL_IMAGE_ID="$(container_host image inspect "$IMAGE" --format '{{.Id}}')"
 LOCAL_IMAGE_ID="${LOCAL_IMAGE_ID#sha256:}"
@@ -58,14 +60,19 @@ docker inspect laser-app >/dev/null
 curl -fsS http://127.0.0.1:8081/api/state | python3 -c "import json,sys; s=json.load(sys.stdin); m=s.get(\"mode\") or {}; ok=s.get(\"running\") is False and s.get(\"attempt\") is None and s.get(\"outcome\") is None and s.get(\"review_id\") is None and m.get(\"real\") is False; print(\"API idle; Simulator mode; no attempt, outcome, or review\" if ok else \"Refusing deployment: service must be idle in Simulator mode with no attempt, outcome, or review\", file=sys.stdout if ok else sys.stderr); sys.exit(0 if ok else 1)"
 '
 
-REMOTE_IMAGE_ID="$(ssh_host "$TARGET" 'docker image inspect --format "{{.Id}}" localhost/laser-app:arm 2>/dev/null || true')"
+REMOTE_IMAGE_ID="$(ssh_host "$TARGET" "docker image inspect --format '{{.Id}}' '$IMAGE' 2>/dev/null || true")"
 REMOTE_IMAGE_ID="${REMOTE_IMAGE_ID#sha256:}"
 CONTAINER_IMAGE_ID="$(ssh_host "$TARGET" 'docker inspect --format "{{.Image}}" laser-app')"
 CONTAINER_IMAGE_ID="${CONTAINER_IMAGE_ID#sha256:}"
+if [[ "$CONTAINER_IMAGE_ID" != "$LOCAL_IMAGE_ID" ]]; then
+  RETAINED_IMAGE="${IMAGE%:*}:retained-sha-$CONTAINER_IMAGE_ID"
+  echo "Retaining the Pi's current image as $RETAINED_IMAGE..."
+  ssh_host "$TARGET" "docker tag '$CONTAINER_IMAGE_ID' '$RETAINED_IMAGE'"
+fi
 if [[ "$REMOTE_IMAGE_ID" != "$LOCAL_IMAGE_ID" ]]; then
   echo "Streaming the workstation-built image to $TARGET..."
   container_host save "$IMAGE" | gzip -1 | ssh_host "$TARGET" 'gunzip | docker load'
-  REMOTE_IMAGE_ID="$(ssh_host "$TARGET" 'docker image inspect --format "{{.Id}}" localhost/laser-app:arm')"
+  REMOTE_IMAGE_ID="$(ssh_host "$TARGET" "docker image inspect --format '{{.Id}}' '$IMAGE'")"
   REMOTE_IMAGE_ID="${REMOTE_IMAGE_ID#sha256:}"
   if [[ "$REMOTE_IMAGE_ID" != "$LOCAL_IMAGE_ID" ]]; then
     echo "Loaded image ID does not match the Deck build; refusing to restart." >&2
@@ -74,7 +81,7 @@ if [[ "$REMOTE_IMAGE_ID" != "$LOCAL_IMAGE_ID" ]]; then
 fi
 if [[ "$CONTAINER_IMAGE_ID" != "$LOCAL_IMAGE_ID" ]]; then
   echo "Recreating the Pi service from the verified image..."
-  ssh_host "$TARGET" 'cd ~/laser-app && docker compose up -d --force-recreate laser-app'
+  ssh_host "$TARGET" "cd ~/laser-app && LASER_APP_IMAGE='$IMAGE' docker compose up -d --force-recreate laser-app"
 else
   echo "The verified image is already loaded and running; no transfer or restart needed."
 fi

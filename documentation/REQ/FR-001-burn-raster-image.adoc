@@ -15,4 +15,4 @@ Compose supported card content into bounded 1-bit raster stages. A user must be 
 
 == Scope
 
-Content kinds are QR, WiFi QR, text, prepared public assets and checkboxes. Arbitrary image uploads and vector burns are not part of this contract. See the Rust service README and `app/tests/api.rs`.
+Content kinds are QR, WiFi QR, text, prepared public assets and checkboxes. Arbitrary image uploads and vector burns are not part of this contract. See `docker/docker-wainlux-rs/docker/app/api.adoc` and `docker/docker-wainlux-rs/docker/app/tests/api.rs`.

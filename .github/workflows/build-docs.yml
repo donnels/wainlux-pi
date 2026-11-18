@@ -14,9 +14,22 @@ on:
       - 'cli/README.adoc'
       - 'scripts/generate_diagrams.sh'
       - 'scripts/test_docs.sh'
+      - 'scripts/build_docs.sh'
+      - 'scripts/build_support_containers.sh'
+      - 'scripts/build_ghidra_mcp.sh'
+      - 'scripts/update_container_image.sh'
+      - 'scripts/update_container_images.sh'
+      - 'scripts/lib/container.sh'
+      - 'docker/README.adoc'
       - 'docker/docker-bytefield/**'
+      - 'docker/docker-ghidra-mcp/**'
+      - 'docker/docker-plantuml/**'
+      - 'docker/docker-asciidoctor/**'
+      - 'docker/docker-trivy/**'
+      - 'docker/IMAGES.adoc'
+      - 'docker/IMAGES.map'
       - 'docker/docker-wainlux-rs/README.adoc'
-      - 'docker/docker-wainlux-rs/app/openapi.yaml'
+      - 'docker/docker-wainlux-rs/docker/app/openapi.yaml'
       - '.github/workflows/build-docs.yml'
   pull_request:
     branches: [main]
@@ -32,81 +45,18 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Build, scan, and promote documentation tools
+        run: ./scripts/update_container_images.sh --allow-findings asciidoctor bytefield plantuml
       
-      - name: Set up Java for PlantUML
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-      
-      - name: Install PlantUML and Graphviz
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y graphviz
-          wget https://github.com/plantuml/plantuml/releases/download/v1.2024.8/plantuml-1.2024.8.jar -O plantuml.jar
-          echo "PLANTUML_JAR=$PWD/plantuml.jar" >> $GITHUB_ENV
-      
-      - name: Generate PlantUML diagrams
-        run: |
-          for file in documentation/images/*.plantuml; do
-            if [ -f "$file" ]; then
-              basename="${file%.plantuml}"
-              echo "Generating $basename.png"
-              java -jar $PLANTUML_JAR "$file"
-            fi
-          done
-      
-      - name: Set up Node.js for bytefield-svg
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      
-      - name: Install bytefield-svg
-        run: npm install -g bytefield-svg
-      
-      - name: Set up Python for gradient script
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      
-      - name: Generate bytefield diagrams
-        run: |
-          # Copy gradient script
-          cp docker/docker-bytefield/add_svg_background.py /tmp/
-          
-          # Generate SVG diagrams in documentation/images/
-          for file in documentation/images/k6-prot-*.edn; do
-            if [ -f "$file" ]; then
-              basename=$(basename "$file" .edn)
-              echo "Generating $basename.svg"
-              bytefield-svg "$file" -o "documentation/images/$basename.svg"
-              python3 /tmp/add_svg_background.py "documentation/images/$basename.svg"
-            fi
-          done
+      - name: Generate diagrams in pinned local containers
+        run: ./scripts/generate_diagrams.sh
 
       - name: Prepare output directory
         run: mkdir -p docs && cp robots.txt docs/robots.txt
       
-      - name: Build AsciiDoc HTML
-        uses: docker://asciidoctor/docker-asciidoctor:latest
-        with:
-          entrypoint: asciidoctor
-          args: >
-            -a allow-uri-read
-            -a data-uri
-            -a single-page
-            -o docs/README.html
-            README.asciidoc
-      
-      - name: Build AsciiDoc PDF
-        uses: docker://asciidoctor/docker-asciidoctor:latest
-        with:
-          entrypoint: asciidoctor-pdf
-          args: >
-            -a allow-uri-read
-            -a data-uri
-            -o docs/README.pdf
-            README.asciidoc
+      - name: Build AsciiDoc with pinned local container
+        run: ./scripts/build_docs.sh
       
       - name: Deploy to GitHub Pages
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'

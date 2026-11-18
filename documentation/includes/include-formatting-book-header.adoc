@@ -20,9 +20,6 @@
 :icons: font
 // set PDF formatting options
 :pdf-page-size: A4
-:pdf-theme: custom
-:pdf-fontsdir: fonts/
-//:pdf-style: theme.yml
 // set PDF title page with laser warning logo
 // Laser warning symbol (DIN 4844-2) by Torsten Henning, public domain via Wikimedia Commons
 :title-logo-image: image:../includes/laser-warning.svg[align=center,pdfwidth=50%]

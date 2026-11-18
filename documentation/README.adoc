@@ -34,13 +34,13 @@ The canonical build and test command is `./scripts/build_laser.sh` from the repo
 The drawings use the current measured card, K6 working reach and template geometry. The QR symbol is a generic placeholder; exact private pixels are shown only in the live app preview.
 
 .Choose a card placement before placing content
-image::test-card-placement.svg[Centered and left-aligned card placement,align="center"]
+image::test-card-placement.png[Centered and left-aligned card placement,align="center"]
 
 .Card-local item coordinates are translated to the bed
-image::test-card-items.svg[Generic QR and optional text placement,align="center"]
+image::test-card-items.png[Generic QR and optional text placement,align="center"]
 
 .First burn the U markings on bare backing; leave the card out
-image::test-card-guide.svg[U markings on bare backing without the card,align="center"]
+image::test-card-guide.png[U markings on bare backing without the card,align="center"]
 
 .Rust operator UI preview using synthetic input in simulator mode; no burn started
 image::capt-ui-simulator.png[Simulator card and raster preview,align="center"]

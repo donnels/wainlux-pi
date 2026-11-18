@@ -11,4 +11,4 @@ ureq = { version = "2", features = ["json"] }
 
 [dev-dependencies]
 tiny_http = "0.12"
-app = { path = "../docker/docker-wainlux-rs/app" }
+app = { path = "../docker/docker-wainlux-rs/docker/app" }

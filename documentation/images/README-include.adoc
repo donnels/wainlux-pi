@@ -31,18 +31,15 @@ Files are organized by TOGAF phase using the following prefix scheme:
 
 All `*.plantuml` files use the shared `style-plantuml.puml` for consistent styling.
 
-.Render all PlantUML diagrams to PNG
+.Render all diagrams in both formats
 [source,bash]
 ----
-cd documentation/images
-# Use podman/flatpak as shown in scripts/generate_diagrams.sh
-flatpak-spawn --host podman run --rm --user root -v "$(pwd):/repo" \
-  docker.io/plantuml/plantuml:latest /repo/<FILE>.plantuml
+./scripts/generate_diagrams.sh
 ----
 
 === Bytefield-SVG Diagrams
 
-Protocol diagrams (`prot-*.edn` -> `prot-*.svg`) are generated using Bytefield-SVG in the `docker/docker-bytefield/` container.
+Protocol diagrams (`prot-*.edn`) are generated as SVG using Bytefield-SVG in the `docker/docker-bytefield/` container. The same container converts every SVG in this directory to PNG. The image catalog displays PNG when both formats exist and retains SVG as the editable or source format.
 
 == Security Notes
 

@@ -10,6 +10,6 @@ The optional guide is generated only on sides that fit wholly inside reach. For 
 
 == Consequences
 
-* Materials and per-machine settings are declared in `docker/docker-wainlux-rs/materials.toml`.
+* Materials and per-machine settings are declared in `docker/docker-wainlux-rs/docker/materials.toml`.
 * Use the 80 x 75 mm profile for normal jobs. The 75 mm Y value is an operator-selected working bound; it is not an exact stop measurement.
 * The configured backing dimensions are a placeholder until the physical board is measured.

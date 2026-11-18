@@ -1,0 +1,24 @@
+= PlantUML
+
+Pinned official PlantUML CLI for local batch rendering of repository-controlled diagrams. One HIGH Guava finding is accepted under ADR-029 until 2027-02-14; do not run it as a server or feed it untrusted UML.
+
+ifndef::single-page[]
+== Build and Scan Evidence
+
+This is the latest compact Trivy summary. Manual scan commands and CSV filters are documented in `docker/docker-trivy/README.adoc`. Any accepted findings, use limits, and expiry are stated in this image README; see ADR-029 for the exception policy.
+
+.Latest compact Trivy summary
+[source,csv]
+----
+include::trivy-report.csv[]
+----
+
+.Image Dockerfile
+[source,dockerfile]
+----
+include::Dockerfile[]
+----
+
+endif::single-page[]
+
+<!-- container-scan-evidence -->
