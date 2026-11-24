@@ -134,12 +134,78 @@ fn machine_and_materials_describe_themselves() {
     assert!(ids.contains(&"bamboo-ntag215-light") && ids.contains(&"backing-first"));
 }
 
+fn yaml_mapping_key(line: &str) -> Option<(&str, &str)> {
+    if line.starts_with('{') || line.starts_with('[') {
+        return None;
+    }
+    let bytes = line.as_bytes();
+    let mut in_single = false;
+    let mut in_double = false;
+    for (index, &byte) in bytes.iter().enumerate() {
+        match byte {
+            b'\'' if !in_double => in_single = !in_single,
+            b'"' if !in_single => in_double = !in_double,
+            b':' if !in_single && !in_double => {
+                if index + 1 == bytes.len() || bytes[index + 1].is_ascii_whitespace() {
+                    let key = line[..index].trim().trim_matches(|ch| ch == '\'' || ch == '"');
+                    let rest = line[index + 1..].trim();
+                    return (!key.is_empty()).then_some((key, rest));
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+fn assert_no_duplicate_yaml_keys(document: &str) {
+    let mut scopes: Vec<(usize, std::collections::HashSet<String>)> = Vec::new();
+    let mut block_scalar_indent: Option<usize> = None;
+    for (index, raw_line) in document.lines().enumerate() {
+        let line_no = index + 1;
+        let trimmed = raw_line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        let indent = raw_line.len() - raw_line.trim_start_matches(' ').len();
+        if let Some(parent_indent) = block_scalar_indent {
+            if indent > parent_indent {
+                continue;
+            }
+            block_scalar_indent = None;
+        }
+        let (key_indent, content, is_seq_item) = if let Some(rest) = trimmed.strip_prefix("- ") {
+            (indent + 2, rest, true)
+        } else if trimmed == "-" {
+            scopes.retain(|(scope_indent, _)| *scope_indent < indent);
+            continue;
+        } else {
+            (indent, trimmed, false)
+        };
+        if is_seq_item {
+            scopes.retain(|(scope_indent, _)| *scope_indent < indent);
+        }
+        if let Some((key, value)) = yaml_mapping_key(content) {
+            scopes.retain(|(scope_indent, _)| *scope_indent <= key_indent);
+            if scopes.last().map(|(scope_indent, _)| *scope_indent) != Some(key_indent) {
+                scopes.push((key_indent, std::collections::HashSet::new()));
+            }
+            let seen = &mut scopes.last_mut().unwrap().1;
+            assert!(seen.insert(key.to_owned()), "duplicate YAML mapping key '{key}' at line {line_no}");
+            if matches!(value, ">" | ">-" | ">+" | "|" | "|-" | "|+") {
+                block_scalar_indent = Some(key_indent);
+            }
+        }
+    }
+}
+
 #[test]
 fn openapi_document_is_served_by_the_rust_api() {
     let (addr, _) = start();
     let response = ureq::get(&format!("http://{addr}/openapi.yaml")).call().unwrap();
     assert_eq!(response.header("Content-Type"), Some("application/yaml; charset=utf-8"));
     let document = response.into_string().unwrap();
+    assert_no_duplicate_yaml_keys(&document);
     assert!(document.starts_with("openapi: 3.1.0"));
     assert!(document.contains("/api/jobs/preview:"));
     assert!(!document.contains("/api/cards/import:"));
@@ -149,6 +215,7 @@ fn openapi_document_is_served_by_the_rust_api() {
     assert!(document.contains("/api/audio-analyses/{attempt_id}/report:") && document.contains("getAudioAnalysisReport"));
     assert!(document.contains("/api/audio-analyses/availability:") && document.contains("getAudioAnalyzerAvailability"));
     assert!(document.contains("maxLength: 67108864"));
+    assert!(document.contains("audio/m4a:"));
     assert!(document.contains("audio/x-m4a:"));
 }
 

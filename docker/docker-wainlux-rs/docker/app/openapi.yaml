@@ -447,7 +447,7 @@ paths:
         content:
           audio/mp4:
             schema: {type: string, format: binary, maxLength: 67108864}
-          audio/x-m4a:
+          audio/m4a:
             schema: {type: string, format: binary, maxLength: 67108864}
           audio/x-m4a:
             schema: {type: string, format: binary, maxLength: 67108864}

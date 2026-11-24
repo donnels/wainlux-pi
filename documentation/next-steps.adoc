@@ -5,6 +5,26 @@ endif::imagesdir[]
 
 These are investigation and experiment ideas, not commitments or claims of device support. Check the current implementation and tests first; use MCP Ghidra analysis when observable behavior or packet captures leave a device-side question unresolved.
 
+== Project Scope and Gaps
+
+This repository is a working proof of concept for laser control and supporting software, with clean architecture as a goal. The Rust service accepts reviewed jobs and requires an explicit operator action for each physical stage. Existing use cases include Wi-Fi access QR cards, contact cards, and MFA recovery-code QR cards. Business deployment is possible later; it is not the primary goal. See the [service API and use-case guide](../docker/docker-wainlux-rs/docker/app/api.adoc), [NFC card notes](nfc-cards.adoc), and [CLI guide](../cli/README.adoc).
+
+The recovery archive use case is specific: place MFA recovery data in a QR code and on the NFC tag on the same card. Both copies must represent the same data and be readable back. Neither the QR nor an ordinary NFC text record encrypts it. The current system can render a recovery QR, but has no integrated NFC writer or reader and does not provide a secure archive of issued code sets. The CLI accepts a local input file; operational logs redact payloads and the service does not retain a reviewed job across restart. Those controls reduce routine exposure, but are not an archive or backup design.
+
+=== Next Work
+
+. Complete a synthetic-data end-to-end check: render and scan the QR, write the same payload to a supported NFC tag, read it back, and compare the full text byte for byte. Test insufficient capacity and incompatible tags; fail without truncation or overwriting unrelated records.
+. Identify and verify the proposed HW-147 board: controller, voltage, interface, supported tags, GPIO assignment, and compatibility with the Pi. Keep NFC operations in a separate adapter and operator-confirmed flow; NFC reads or writes must never start a laser job.
+. Design the recovery-code archive before storing real code sets: define encryption at rest, key recovery, access, backup, retention, replacement/revocation, and the link between an archive version and its card/job. Keep secret values out of run logs and analysis artifacts. Use synthetic codes until this is designed and reviewed.
+. Qualify card stock, inlay position, alignment, engraving durability, QR readability, and NFC read/write after engraving. Do not laser or abrade the antenna or chip.
+. Keep business issuance, authentication for wider deployments, and business-card workflows as later scope. The API and MCP currently assume a trusted local network; do not expose them to untrusted networks.
+
+== Optional Private Experiment: Brass-Powder Inlay
+
+This is a tangential idea for private one-off cards. It is not part of the laser/software proof of concept, automated workflow, repeatability target, or industrial finishing. The project does not require manual fill, sanding, or polishing.
+
+Published woodworking examples bind metal powder in voids with thin cyanoacrylate (CA) or epoxy. The [South Auckland Woodturners Guild report](https://sawg.org.nz/julie-gannaway-filling-cracks-inlay-techniques/) discusses metal powders in voids, but its laser-groove examples use micro-pigment rather than brass powder. The [EC Fibreglass guide](https://www.ecfibreglasssupplies.co.uk/user/pdf%20guides/Metal%20Inlay%20Effect%20with%20Epoxy%20Resin%20and%20metal%20Powder.pdf) uses brass powder and epoxy in a roughly 2 mm routed recess, much deeper than the card engraving here. The [woodturning powder-inlay notes](https://blanch.org/metal-inlay-wood/) compare CA and epoxy. These sources do not establish a repeatable brass finish for shallow laser marks. Any private trial would be manual and exploratory; do not deepen engraving over an NFC inlay to accommodate filler.
+
 == Optional Hardware
 
 === NFC read/write module
@@ -44,6 +64,7 @@ image::test-power-sweep.png[Adjacent sweep blocks and receive-traced test,align=
 == Protocol investigations
 
 * *Job completion:* No signal reliably proves physical rest. Preserve the reported-100% and 90-second silence-assumption rules. Compare bounded traces and audio with attended stops before changing them; never auto-advance on silence. The current `FF FF FF FF` candidate and test procedure are in `documentation/doing-debugging.adoc`.
+* *Trace completeness:* Repeat a representative roughly 33-minute job with the current streamed trace. Verify the artifact is complete, not just the retained head/tail; record its size and check the completeness flag. The previous 2,018-second trace was truncated. Confirm the 4 MiB cap leaves headroom or adjust it before treating long-job traces as complete.
 * *Pi-local capture:* Check microphone and OS support without installing packages or changing the Pi. Keep iPhone recording available. Before enabling HAT capture, verify original Zero W ARMv6/32-bit support, GPIO/SPI allocation, power draw, capture quality, and coexistence with an NFC reader.
 * *Audio end estimate:* Compare audio markers, receive traces, and attended physical stops across repeated short non-marking frames and representative material runs. Quantify timing offsets, missed detections, and false activity before evaluating any change to the 90-second margin. See <<adr-027-audio-end-detection,ADR-027>> and <<adr-028-distributed-audio-analysis,ADR-028>>.
 * *Vector jobs:* The K6 driver remains raster-only. Do not infer support from reserved fields.
